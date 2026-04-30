@@ -127,7 +127,7 @@ func newBlockKartPrimitiveScene(scene *scene3d.Scene) *BlockKartPrimitiveScene {
 	p.Cylinder = shapes.Shape(primitive3d.ShapeDesc{Kind: primitive3d.ShapeCylinder, Segments: 16})
 	p.Cone = shapes.Shape(primitive3d.ShapeDesc{Kind: primitive3d.ShapeCone, Segments: 16})
 	p.Wedge = shapes.Shape(primitive3d.ShapeDesc{Kind: primitive3d.ShapeWedge})
-	p.RoadMat = p.material(primitive3d.MaterialRoadAsphalt, voplay.Hex(0x31363b), 0.92, 0, voplay.Color{})
+	p.RoadMat = p.material(primitive3d.MaterialRoadAsphalt, voplay.Hex(0x111820), 0.96, 0, voplay.Color{})
 	p.RoadStripeMat = p.material(primitive3d.MaterialToyPlastic, voplay.Hex(0xfffaea), 0.52, 0, voplay.Color{})
 	p.CurbRedMat = p.material(primitive3d.MaterialToyPlastic, voplay.Hex(0xff3d2c), 0.28, 0, voplay.Color{})
 	p.CurbCreamMat = p.material(primitive3d.MaterialToyPlastic, voplay.Hex(0xfff7e6), 0.28, 0, voplay.Color{})
