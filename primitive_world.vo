@@ -412,22 +412,36 @@ func primitiveTrackStartPose(track *scene3d.Track) scene3d.TrackPose {
 }
 
 func (w *World) addContinuousPrimitiveRoadVisuals(track *scene3d.Track) {
-	if track == nil {
+	if w.assets == nil || track == nil {
 		return
 	}
-	primitive := w.ensurePrimitiveScene()
-	count := primitiveTrackSampleCount(track)
-	length := track.Length()
-	step := length / float64(count)
-	for i := 0; i < count; i++ {
-		distance := float64(i) * step + step * 0.5
-		pose := track.PoseAt(distance)
-		primitive.AddStatic(primitive.RoundedBox, primitive.RoadMat, pose.Position.Add(voplay.Vec3{Y: 0.11}), pose.Rotation, voplay.Vec3{X: pose.HalfWidth*2 + 0.82, Y: 0.12, Z: step * 0.58}, voplay.Color{})
-		primitive.AddStatic(primitive.RoundedBox, primitive.RoadStripeMat, pose.Position.Add(voplay.Vec3{Y: 0.19}), pose.Rotation, voplay.Vec3{X: 0.30, Y: 0.035, Z: step * 0.34}, voplay.Color{})
-		if i % 6 == 1 {
-			primitive.AddStatic(primitive.RoundedBox, primitive.TrimMat, pose.Position.Add(voplay.Vec3{Y: 0.18}), pose.Rotation, voplay.Vec3{X: pose.HalfWidth*2 - 2.2, Y: 0.035, Z: 0.10}, voplay.Color{})
-		}
+	count := primitiveTrackSampleCount(track) * 2
+	baseMat := primitiveRoadMaterial(voplay.Hex(0x0d131a), 0.96)
+	roadMat := primitiveRoadMaterial(voplay.Hex(0x111820), 0.96)
+	lineMat := primitiveRoadMaterial(voplay.Hex(0xfffaea), 0.55)
+	grooveMat := primitiveRoadMaterial(voplay.Hex(0x070b10), 0.98)
+	baseBytes := buildPrimitiveTrackRibbonGLB(track, count, -1.15, 0.00, voplay.Hex(0x0d131a), 0.96, "primitive_road_base")
+	roadBytes := buildPrimitiveTrackRibbonGLB(track, count, 0.44, 0.10, voplay.Hex(0x111820), 0.96, "primitive_asphalt")
+	edgeBytes := buildPrimitiveTrackEdgeLinesGLB(track, count, 0.20, voplay.Hex(0xfffaea), 0.55, "primitive_edge_lines")
+	centerBytes := buildPrimitiveTrackCenterDashesGLB(track, count, 0.205, voplay.Hex(0xfffaea), 0.55, "primitive_center_dashes")
+	grooveBytes := buildPrimitiveTrackGrooveGLB(track, count, 0.195, voplay.Hex(0x070b10), 0.98, "primitive_asphalt_grooves")
+	w.assets.BeginGroup(worldAssetGroup)
+	baseModel, baseErr := w.assets.ModelBytes(voplay.BytesAssetKey("generated/primitive_road_base", baseBytes, ".glb"), baseBytes)
+	roadModel, roadErr := w.assets.ModelBytes(voplay.BytesAssetKey("generated/primitive_asphalt", roadBytes, ".glb"), roadBytes)
+	edgeModel, edgeErr := w.assets.ModelBytes(voplay.BytesAssetKey("generated/primitive_edge_lines", edgeBytes, ".glb"), edgeBytes)
+	centerModel, centerErr := w.assets.ModelBytes(voplay.BytesAssetKey("generated/primitive_center_dashes", centerBytes, ".glb"), centerBytes)
+	grooveModel, grooveErr := w.assets.ModelBytes(voplay.BytesAssetKey("generated/primitive_asphalt_grooves", grooveBytes, ".glb"), grooveBytes)
+	w.assets.EndGroup()
+	if baseErr != nil || roadErr != nil || edgeErr != nil || centerErr != nil || grooveErr != nil {
+		w.message = "Road mesh failed"
+		w.messageTimer = 3
+		return
 	}
+	w.scene.Spawn(scene3d.EntityDesc{Model: baseModel, Material: baseMat, Tag: "primitive_road_base_mesh", StaticRenderable: true, PickMode: scene3d.PickDisabled})
+	w.scene.Spawn(scene3d.EntityDesc{Model: roadModel, Material: roadMat, Tag: "primitive_asphalt_mesh", StaticRenderable: true, PickMode: scene3d.PickDisabled})
+	w.scene.Spawn(scene3d.EntityDesc{Model: grooveModel, Material: grooveMat, Tag: "primitive_asphalt_groove_mesh", StaticRenderable: true, PickMode: scene3d.PickDisabled})
+	w.scene.Spawn(scene3d.EntityDesc{Model: edgeModel, Material: lineMat, Tag: "primitive_edge_line_mesh", StaticRenderable: true, PickMode: scene3d.PickDisabled})
+	w.scene.Spawn(scene3d.EntityDesc{Model: centerModel, Material: lineMat, Tag: "primitive_center_dash_mesh", StaticRenderable: true, PickMode: scene3d.PickDisabled})
 }
 
 func primitiveRoadMaterial(color voplay.Color, roughness float64) voplay.MaterialDesc {
@@ -819,7 +833,23 @@ func (w *World) spawnPrimitiveTrackPhysics(track *scene3d.Track) {
 }
 
 func (w *World) spawnPrimitiveRoadCollisionMesh(track *scene3d.Track, count int) bool {
-	return false
+	if w.assets == nil || track == nil {
+		return false
+	}
+	collisionBytes := buildPrimitiveTrackRibbonGLB(track, count * 2, 0.82, 0.145, voplay.Hex(0x111820), 1, "primitive_road_collision")
+	w.assets.BeginGroup(worldAssetGroup)
+	collisionModel, err := w.assets.ModelBytes(voplay.BytesAssetKey("generated/primitive_road_collision", collisionBytes, ".glb"), collisionBytes)
+	w.assets.EndGroup()
+	if err != nil || collisionModel == 0 {
+		return false
+	}
+	physics := scene3d.TrimeshPhysics(collisionModel)
+	physics.Friction = 1.08
+	physics.Restitution = 0.0
+	ent := w.scene.Spawn(scene3d.EntityDesc{Model: collisionModel, Tag: "primitive_road_collision_mesh", Physics: physics, PickMode: scene3d.PickDisabled})
+	ent.Visible = false
+	w.trackResult.Entities = append(w.trackResult.Entities, ent)
+	return true
 }
 
 func (w *World) spawnPrimitiveRoadBoxPhysics(track *scene3d.Track, count int, step float64) {
