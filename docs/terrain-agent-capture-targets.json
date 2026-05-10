@@ -1,0 +1,28 @@
+{
+  "runnerUrl": "http://localhost:5174/#/runner",
+  "rule": "Save real BlockKart runner screenshots to these exact files after cycling fixed terrain views.",
+  "browserUseModule": "tools/capture_terrain_views.iab.mjs",
+  "nodeReplSnippet": "const { captureTerrainViews } = await import('/Users/wuhao/code/github/BlockKart/tools/capture_terrain_views.iab.mjs'); await captureTerrainViews(tab, { display });",
+  "views": [
+    {
+      "view": "panorama_45",
+      "f6PressesFromDefault": 1,
+      "output": "docs/images/terrain-agent-latest-panorama.png"
+    },
+    {
+      "view": "approach_cut",
+      "f6PressesFromDefault": 2,
+      "output": "docs/images/terrain-agent-latest-approach-cut.png"
+    },
+    {
+      "view": "inner_basin",
+      "f6PressesFromDefault": 3,
+      "output": "docs/images/terrain-agent-latest-inner-basin.png"
+    },
+    {
+      "view": "ridge_profile",
+      "f6PressesFromDefault": 4,
+      "output": "docs/images/terrain-agent-latest-ridge-profile.png"
+    }
+  ]
+}

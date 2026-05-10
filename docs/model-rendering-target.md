@@ -123,7 +123,7 @@ Current implementation:
   - `docs/images/render-debug-roughness.png`
   - `docs/images/render-debug-metallic.png`
   - `docs/images/render-debug-terrain-normal.png`
-- The current scenic/material showcase assets exercise glTF base color, normal, and metallic-roughness texture slots through voplay's normal model path.
+- The current BlockKart target exercises materials through the primitive scene, heightfield terrain splat layers, and low-poly kart meshes; the retired scenic showcase GLBs are no longer part of the runtime target.
 
 ### P1: Lighting And Color Foundation
 
@@ -146,7 +146,7 @@ Current implementation:
 - voplay lighting profiles now carry sky/ground hemisphere ambient, and the mesh/skinned/terrain shaders use the surface normal to blend between them.
 - voplay `MaterialDesc` now exposes engine-level `MetallicRoughness` texture override and `NormalScale`, matching the renderer's glTF PBR texture path instead of leaving roughness/metallic locked to source assets.
 - voplay heightfield terrain now supports single-material normal and metallic-roughness textures, with `normalScale`, `roughness`, and `metallic` coming from the map/track terrain data.
-- voplay terrain splat layers now use the same material path for layer albedo, normal, metallic-roughness, UV scale, and normal scale; BlockKart's scenic terrain exercises that path with grass, meadow, dirt, and rock layers.
+- voplay terrain splat layers now use the same material path for layer albedo, normal, metallic-roughness, UV scale, and normal scale; BlockKart's primitive heightfield terrain exercises that path with grass, meadow, dirt, and rock layers.
 - BlockKart keeps shadows enabled through the kart racing profile, with softened stylized contact shadows.
 - Lit proof after the first shadow-strength pass is saved at `docs/images/render-p1-lit-shadow-strength.png`.
 - Lit proof after the hemisphere ambient pass is saved at `docs/images/render-p1-hemisphere-ambient.png`.
@@ -168,14 +168,9 @@ Exit criteria:
 
 Current implementation:
 
-- `tools/generate_scenic_track.mjs` now generates the first hero trackside marker/showcase from rounded procedural GLB geometry instead of plain cube blocks.
-- The hero marker uses separate authored material classes for glossy red/blue/yellow paint, rubber tires, light/dark metal, cream paint, black paint, asphalt, and foliage.
-- The red and blue paint materials now include albedo, normal, and metallic-roughness textures, so the hero asset exercises the same glTF material path as the rest of the scene.
-- The tire stacks on the hero marker and trackside barriers have been rebuilt as horizontal stacked tire meshes matching the concept reference composition: red, cream, grey, and dark rubber variants, black inner holes, raised inner ribs, sidewall wear textures, and outer groove geometry.
-- The hero marker appears both inside `assets/maps/scenic_track/scenic_props.glb` and as standalone showcase assets:
-  - `assets/models/scenic/corner_marker_showcase.glb`
-  - `assets/models/scenic/material_showcase.glb`
-- BlockKart exposes an F5 hero inspection camera so the asset can be judged close-up through the normal runner instead of only from the racing chase camera.
+- BlockKart now builds the target scene through primitive layers, heightfield terrain, generated road ribbons, and low-poly kart primitives instead of the retired scenic GLB prop package.
+- The current runtime has no authored GLB scene assets; terrain, roadside detail, and kart visuals are built from heightfield terrain, generated road ribbons, and retained primitive layers.
+- BlockKart exposes F5/F6 inspection cameras so terrain, grass, road edges, and primitive props can be judged through the normal runner instead of only from the racing chase camera.
 - Current proof screenshots are saved at:
   - `docs/images/hero-marker-lit.png`
   - `docs/images/hero-marker-lit-lighting-pass.png`

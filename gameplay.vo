@@ -8,6 +8,7 @@ import (
 
 const (
 	collectibleRadius = 3.35
+	collectibleRadiusSq = collectibleRadius * collectibleRadius
 	checkpointRadius = 14.0
 )
 
@@ -26,12 +27,14 @@ type Checkpoint struct {
 	Yaw float64
 	Label string
 	Radius float64
+	RadiusSq float64
 	Reached bool
 }
 
 type BoostPad struct {
 	Position voplay.Vec3
 	Radius float64
+	RadiusSq float64
 }
 
 type MovingObstacle struct {
@@ -63,11 +66,19 @@ func (w *World) addCollectibleLine(start, end voplay.Vec3, count int, tag string
 }
 
 func (w *World) addCheckpoint(position, respawn voplay.Vec3, yaw float64, label string) {
-	w.checkpoints = append(w.checkpoints, &Checkpoint{Position: position, Respawn: respawn, Yaw: yaw, Label: label, Radius: checkpointRadius})
+	w.checkpoints = append(w.checkpoints, newCheckpoint(position, respawn, yaw, label, checkpointRadius))
 }
 
 func (w *World) addBoostPad(position voplay.Vec3, radius float64) {
-	w.boostPads = append(w.boostPads, &BoostPad{Position: position, Radius: radius})
+	w.boostPads = append(w.boostPads, newBoostPad(position, radius))
+}
+
+func newCheckpoint(position, respawn voplay.Vec3, yaw float64, label string, radius float64) *Checkpoint {
+	return &Checkpoint{Position: position, Respawn: respawn, Yaw: yaw, Label: label, Radius: radius, RadiusSq: radius * radius}
+}
+
+func newBoostPad(position voplay.Vec3, radius float64) *BoostPad {
+	return &BoostPad{Position: position, Radius: radius, RadiusSq: radius * radius}
 }
 
 func (w *World) addMovingObstacle(position, scale, axis voplay.Vec3, amplitude, speed, phase float64, tag string) {
@@ -79,15 +90,16 @@ func (w *World) addMovingObstacle(position, scale, axis voplay.Vec3, amplitude, 
 }
 
 func (w *World) updateGameplay(dt float64) {
-	if !w.finished {
-		w.courseTime += dt
-	}
 	w.messageTimer = maxFloat(0, w.messageTimer - dt)
+	w.boostTimer = maxFloat(0, w.boostTimer - dt)
+	if w.finished {
+		return
+	}
+	w.courseTime += dt
 	w.updateMovingObstacles()
 	w.updateCollectibles()
 	w.updateBoostPads()
 	w.updateRaceProgress()
-	w.boostTimer = maxFloat(0, w.boostTimer - dt)
 }
 
 func (w *World) updateMovingObstacles() {
@@ -113,7 +125,7 @@ func (w *World) updateCollectibles() {
 		if item == nil || item.Collected {
 			continue
 		}
-		if playerPos.Distance(item.Position) > collectibleRadius {
+		if distanceSqVec3(playerPos, item.Position) > collectibleRadiusSq {
 			continue
 		}
 		item.Collected = true
@@ -137,7 +149,7 @@ func (w *World) updateBoostPads() {
 		if pad == nil {
 			continue
 		}
-		if playerPos.Distance(pad.Position) > pad.Radius {
+		if distanceSqVec3(playerPos, pad.Position) > pad.RadiusSq {
 			continue
 		}
 		if w.boostTimer < 0.25 {
@@ -159,7 +171,8 @@ func (w *World) updateRaceProgress() {
 	if checkpoint == nil {
 		return
 	}
-	if w.player.Position().Distance(checkpoint.Position) > checkpoint.Radius {
+	playerPos := w.player.Position()
+	if distanceSqVec3(playerPos, checkpoint.Position) > checkpoint.RadiusSq {
 		return
 	}
 	checkpoint.Reached = true
@@ -173,11 +186,7 @@ func (w *World) updateRaceProgress() {
 			w.nextGateLabel = "Done"
 			w.message = "Race complete!"
 			w.messageTimer = 99
-			w.player.SetVelocity(voplay.Vec3{})
-			if w.vehicle != nil {
-				w.vehicle.Speed = 0
-			}
-			w.kartSpeed = 0
+			w.stopKartForFinish()
 			return
 		}
 		w.lap++
@@ -194,8 +203,6 @@ func (w *World) updateRaceProgress() {
 	}
 	w.nextCheckpoint++
 	w.refreshNextGateLabel()
-	w.message = "Gate: " + checkpoint.Label
-	w.messageTimer = 1.0
 }
 
 func (w *World) refreshNextGateLabel() {
@@ -216,7 +223,7 @@ func (w *World) refreshNextGateLabel() {
 
 func (w *World) respawnAtCheckpoint() {
 	w.setKartPose(w.checkpointPosition, w.checkpointYaw)
-	w.updateRacingCamera(0)
+	w.updateRacingCamera(0, false)
 	w.message = "Back to " + w.checkpointLabel
 	w.messageTimer = 1.2
 }
@@ -275,6 +282,13 @@ func showEntity(e *scene3d.Entity) {
 	if e != nil {
 		e.Visible = true
 	}
+}
+
+func distanceSqVec3(a, b voplay.Vec3) float64 {
+	dx := a.X - b.X
+	dy := a.Y - b.Y
+	dz := a.Z - b.Z
+	return dx * dx + dy * dy + dz * dz
 }
 
 func maxFloat(a, b float64) float64 {

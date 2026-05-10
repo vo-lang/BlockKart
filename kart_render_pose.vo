@@ -1,0 +1,75 @@
+package main
+
+import "github.com/vo-lang/voplay"
+
+type KartRenderSample struct {
+	Position voplay.Vec3
+	Rotation voplay.Quat
+	Velocity voplay.Vec3
+	Speed float64
+}
+
+type KartRenderPose struct {
+	initialized bool
+	valid bool
+	prev KartRenderSample
+	curr KartRenderSample
+	render KartRenderSample
+}
+
+func NewKartRenderSample(position voplay.Vec3, rotation voplay.Quat, velocity voplay.Vec3, speed float64) KartRenderSample {
+	return KartRenderSample{Position: position, Rotation: rotation.Normalize(), Velocity: velocity, Speed: speed}
+}
+
+func (p *KartRenderPose) Initialized() bool {
+	return p.initialized
+}
+
+func (p *KartRenderPose) Reset(position voplay.Vec3, rotation voplay.Quat) KartRenderSample {
+	sample := NewKartRenderSample(position, rotation, voplay.Vec3{}, 0)
+	p.prev = sample
+	p.curr = sample
+	p.render = sample
+	p.initialized = true
+	p.valid = true
+	return sample
+}
+
+func (p *KartRenderPose) BeginStep() {
+	if !p.initialized {
+		return
+	}
+	p.prev = p.curr
+}
+
+func (p *KartRenderPose) Commit(sample KartRenderSample) {
+	sample.Rotation = sample.Rotation.Normalize()
+	if !p.initialized {
+		p.prev = sample
+		p.curr = sample
+		p.render = sample
+		p.initialized = true
+		p.valid = true
+		return
+	}
+	p.curr = sample
+}
+
+func (p *KartRenderPose) Interpolate(alpha float64) KartRenderSample {
+	if !p.initialized {
+		return KartRenderSample{}
+	}
+	t := clampFloat(alpha, 0, 1)
+	p.render = KartRenderSample{
+		Position: p.prev.Position.Lerp(p.curr.Position, t),
+		Rotation: p.prev.Rotation.Slerp(p.curr.Rotation, t).Normalize(),
+		Velocity: p.prev.Velocity.Lerp(p.curr.Velocity, t),
+		Speed: p.prev.Speed + (p.curr.Speed - p.prev.Speed) * t,
+	}
+	p.valid = true
+	return p.render
+}
+
+func (p *KartRenderPose) RenderSample() (KartRenderSample, bool) {
+	return p.render, p.valid
+}

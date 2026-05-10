@@ -1,0 +1,78 @@
+{
+  "recipe": {
+    "id": "primitive_concept_v2",
+    "name": "BlockKart primitive concept terrain v2 explicit loop",
+    "referenceImage": "docs/images/terrain-closed-loop-concept-v1.png",
+    "terrainSize": {
+      "width": 1127,
+      "depth": 1127,
+      "minY": -4,
+      "maxY": 34
+    },
+    "track": {
+      "pointCount": 16,
+      "width": 18,
+      "shoulderWidth": 11.5
+    },
+    "landformCount": 16,
+    "landformCounts": {
+      "radial_mound": 9,
+      "radial_valley": 1,
+      "oriented_valley": 2,
+      "oriented_hill": 4
+    },
+    "editObject": "terrain/recipes/primitive_concept_v1.json"
+  },
+  "loopMode": "full",
+  "sourceRecipe": "terrain/recipes/primitive_concept_v1.json",
+  "runtimeAssets": [
+    "assets/maps/primitive_track/heightmap_large.png",
+    "assets/maps/primitive_track/terrain_splat_large.png"
+  ],
+  "conceptReference": "docs/images/terrain-closed-loop-concept-v1.png",
+  "heightStats": {
+    "minY": -3.88,
+    "maxY": 27.916,
+    "range": 31.796,
+    "meanY": 8.513,
+    "stdDevY": 6.731
+  },
+  "heroCrossSection": {
+    "averageByLateral": {
+      "0": 0.332,
+      "16": 2.277,
+      "28": 2.969,
+      "42": 3.594,
+      "64": 4.307,
+      "96": 6.249,
+      "-96": 7.653,
+      "-64": 4.542,
+      "-42": 3.622,
+      "-28": 2.989,
+      "-16": 2.289
+    },
+    "deltasFromRoad": {
+      "0": 0,
+      "16": 1.945,
+      "28": 2.637,
+      "42": 3.262,
+      "64": 3.975,
+      "96": 5.917,
+      "-96": 7.321,
+      "-64": 4.21,
+      "-42": 3.29,
+      "-28": 2.657,
+      "-16": 1.957
+    }
+  },
+  "heroSegment": {
+    "startDistance": 0,
+    "centerDistance": 374.81852861638356,
+    "endDistance": 874.5765667715617,
+    "intent": "first pass must establish the concept-like closed loop silhouette, inner basin, and outer highland masses"
+  },
+  "notes": [
+    "These numbers only describe the heightmap. Acceptance still requires real runner screenshots from fixed views.",
+    "Use deltasFromRoad to decide whether the road corridor has enough ditch, bank, and hill mass before visual capture."
+  ]
+}

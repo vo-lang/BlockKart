@@ -9,8 +9,10 @@ type PlayState struct {
 	world *World
 	elapsed float64
 	debugOverlayVisible bool
+	debugPerfStatsOwned bool
 	renderDebugMode int
 	heroCameraVisible bool
+	renderPrepared bool
 }
 
 func NewPlayState() *PlayState {
@@ -19,9 +21,10 @@ func NewPlayState() *PlayState {
 
 func (s *PlayState) Enter(g *voplay.GameCtx) {
 	s.elapsed = 0
+	s.renderPrepared = false
+	s.debugPerfStatsOwned = false
 	bindGameActions(g)
 	s.world = NewWorld(g)
-	s.applyDebugOverlay(g)
 	if s.world != nil {
 		s.world.SetRenderDebugMode(s.renderDebugMode)
 		s.world.SetHeroCameraVisible(s.heroCameraVisible)
@@ -29,7 +32,10 @@ func (s *PlayState) Enter(g *voplay.GameCtx) {
 }
 
 func (s *PlayState) Exit(g *voplay.GameCtx) {
-	g.HideDebugOverlay()
+	if s.debugPerfStatsOwned {
+		g.DisablePerfStats()
+		s.debugPerfStatsOwned = false
+	}
 	if s.world != nil {
 		s.world.Close()
 		s.world = nil
@@ -38,13 +44,19 @@ func (s *PlayState) Exit(g *voplay.GameCtx) {
 
 func (s *PlayState) FixedUpdate(g *voplay.GameCtx, dt float64) {
 	s.elapsed += dt
+	if !s.renderPrepared {
+		return
+	}
 	if s.world == nil {
 		return
 	}
-	s.world.FixedUpdate(g, dt)
+	s.world.FixedUpdate(g, dt, s.debugOverlayVisible)
 }
 
 func (s *PlayState) Update(g *voplay.GameCtx, dt float64) {
+	if !s.renderPrepared {
+		return
+	}
 	if g.Actions.IsPressed("toggle_debug_overlay") {
 		s.debugOverlayVisible = !s.debugOverlayVisible
 		s.applyDebugOverlay(g)
@@ -64,10 +76,13 @@ func (s *PlayState) Update(g *voplay.GameCtx, dt float64) {
 			s.world.SetHeroCameraVisible(s.heroCameraVisible)
 		}
 	}
+	if g.Actions.IsPressed("cycle_terrain_camera") && s.world != nil {
+		s.world.CycleTerrainCameraView()
+	}
 	if s.world == nil {
 		return
 	}
-	s.world.Update(g, dt)
+	s.world.Update(g, dt, s.debugOverlayVisible)
 }
 
 func (s *PlayState) Draw(g *voplay.GameCtx) {
@@ -77,16 +92,31 @@ func (s *PlayState) Draw(g *voplay.GameCtx) {
 	}
 	g.Draw.ClearColor(clearColor)
 	if s.world != nil {
+		if !s.renderPrepared {
+			s.world.PrepareRender(g)
+			s.renderPrepared = true
+			s.applyDebugOverlay(g)
+			return
+		}
 		s.world.Draw(g, s.debugOverlayVisible)
 	}
 }
 
 func (s *PlayState) applyDebugOverlay(g *voplay.GameCtx) {
-	if s.debugOverlayVisible {
-		g.ShowDebugOverlay()
+	if s.debugOverlayVisible || blockKartPerfStatsEnabled {
+		snapshot := g.GetPerfSnapshot()
+		if snapshot.Enabled {
+			s.debugPerfStatsOwned = false
+			return
+		}
+		s.debugPerfStatsOwned = true
+		g.EnablePerfStats(voplay.PerfModeStats)
 		return
 	}
-	g.HideDebugOverlay()
+	if s.debugPerfStatsOwned {
+		g.DisablePerfStats()
+		s.debugPerfStatsOwned = false
+	}
 }
 
 func bindGameActions(g *voplay.GameCtx) {
@@ -94,4 +124,5 @@ func bindGameActions(g *voplay.GameCtx) {
 	g.Actions.Rebind("toggle_debug_overlay", voplay.KeyBinding("F3"))
 	g.Actions.Rebind("cycle_render_debug", voplay.KeyBinding("F4"))
 	g.Actions.Rebind("toggle_hero_camera", voplay.KeyBinding("F5"))
+	g.Actions.Rebind("cycle_terrain_camera", voplay.KeyBinding("F6"))
 }

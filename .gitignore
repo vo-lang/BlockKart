@@ -1,5 +1,21 @@
 **/.vo-cache/
 vo.work
 target/
+*.vob
 .DS_Store
 **/.DS_Store
+
+# Terrain authoring scratch captures. Keep curated review images referenced by docs.
+docs/images/terrain-agent-current-*.png
+docs/images/terrain-agent-f6-probe-*.png
+docs/images/terrain-agent-fresh-*.png
+docs/images/terrain-agent-playwright-*.png
+docs/images/terrain-agent-latest-start.png
+docs/images/terrain-agent-latest-first-bend.png
+docs/images/terrain-agent-latest-road-edge.png
+docs/images/terrain-agent-latest-overlook.png
+docs/images/terrain-heightmap-pass-*.png
+docs/images/terrain-material-preview-latest.png
+docs/images/terrain-self-check-*.png
+docs/images/terrain-track-default-runner.png
+docs/images/terrain-track-shape-review.png

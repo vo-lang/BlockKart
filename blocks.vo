@@ -9,32 +9,6 @@ func (w *World) buildLevel() {
 	w.buildPrimitiveLevel()
 }
 
-func (w *World) spawnStaticBox(position voplay.Vec3, rotation voplay.Quat, scale voplay.Vec3, tint voplay.Color, tag string) *scene3d.Entity {
-	return w.scene.Spawn(scene3d.EntityDesc{Position: position, Rotation: rotation, Scale: scale, Model: w.cubeModel, Tint: tint, TintSet: true, Tag: tag, Physics: boxPhysics(scale)})
-}
-
-func (w *World) spawnStaticModel(model voplay.ModelID, position voplay.Vec3, rotation voplay.Quat, scale voplay.Vec3, tint voplay.Color, tag string) *scene3d.Entity {
-	physics := scene3d.TrimeshPhysics(model)
-	physics.Friction = 0.9
-	return w.scene.Spawn(scene3d.EntityDesc{Position: position, Rotation: rotation, Scale: scale, Model: model, Tint: tint, TintSet: true, Tag: tag, Physics: physics})
-}
-
 func boxPhysics(scale voplay.Vec3) *scene3d.Physics {
 	return &scene3d.Physics{Type: scene3d.Static, Collider: scene3d.Box(scale.X * 0.5, scale.Y * 0.5, scale.Z * 0.5), Layer: voplay.CollisionLayerDefault, Mask: voplay.CollisionMaskAll, Friction: 0.72, Restitution: 0.02}
-}
-
-func (w *World) spawnVisualBox(position voplay.Vec3, rotation voplay.Quat, scale voplay.Vec3, tint voplay.Color, tag string) *scene3d.Entity {
-	return w.spawnVisualModel(w.cubeModel, position, rotation, scale, tint, tag)
-}
-
-func (w *World) spawnVisualCylinder(position voplay.Vec3, rotation voplay.Quat, scale voplay.Vec3, tint voplay.Color, tag string) *scene3d.Entity {
-	return w.spawnVisualModel(w.cylinderModel, position, rotation, scale, tint, tag)
-}
-
-func (w *World) spawnVisualModel(model voplay.ModelID, position voplay.Vec3, rotation voplay.Quat, scale voplay.Vec3, tint voplay.Color, tag string) *scene3d.Entity {
-	return w.scene.Spawn(scene3d.EntityDesc{Position: position, Rotation: rotation, Scale: scale, Model: model, Tint: tint, TintSet: true, Tag: tag})
-}
-
-func (w *World) spawnDecoSphere(position, scale voplay.Vec3, tint voplay.Color, tag string) *scene3d.Entity {
-	return w.spawnVisualModel(w.sphereModel, position, voplay.QuatIdentity(), scale, tint, tag)
 }

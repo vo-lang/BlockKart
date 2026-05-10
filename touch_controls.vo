@@ -28,11 +28,11 @@ func (ui *TouchDriveUI) Read(g *voplay.GameCtx) TouchDriveSnapshot {
 	if ui.theme == (voplay.TouchControlTheme{}) {
 		ui.theme = blockKartTouchTheme()
 	}
-	ui.visible = g != nil && voplay.IsCompactTouchLayout(g.Width, g.Height)
+	ui.visible = g != nil && voplay.IsCompactTouchLayout(g.Screen.Width, g.Screen.Height)
 	if !ui.visible || g == nil || g.Input == nil {
 		return TouchDriveSnapshot{}
 	}
-	layout := blockKartTouchLayout(g.Width, g.Height)
+	layout := blockKartTouchLayout(g.Screen)
 	ui.stickRadius = layout.StickRadius
 	ui.stick = voplay.ReadTouchStick(g.Input, layout.StickArea, layout.StickCenter, layout.StickRadius)
 	ui.gas = voplay.ReadTouchButton(g.Input, layout.Gas)
@@ -85,9 +85,21 @@ type blockKartTouchLayoutState struct {
 	Reset voplay.Rect
 }
 
-func blockKartTouchLayout(width, height int) blockKartTouchLayoutState {
-	w := float64(width)
-	h := float64(height)
+func blockKartTouchLayout(screen voplay.ScreenMetrics) blockKartTouchLayoutState {
+	if blockKartIsPortraitLayout(screen.Width, screen.Height) {
+		return blockKartPortraitTouchLayout(screen)
+	}
+	return blockKartLandscapeTouchLayout(screen)
+}
+
+func blockKartIsPortraitLayout(width, height int) bool {
+	return height > 0 && float64(height) > float64(width) * 1.16
+}
+
+func blockKartLandscapeTouchLayout(metrics voplay.ScreenMetrics) blockKartTouchLayoutState {
+	screen := metrics.Rect()
+	w := screen.W
+	h := screen.H
 	shortSide := w
 	if h < shortSide {
 		shortSide = h
@@ -103,16 +115,64 @@ func blockKartTouchLayout(width, height int) blockKartTouchLayoutState {
 	if stickAreaY < h * 0.42 {
 		stickAreaY = h * 0.42
 	}
-	gas := voplay.Rect{X: w - margin - button, Y: h - margin - button, W: button, H: button}
+	gas := voplay.AnchorScreenRect(screen, voplay.AnchorBottomRight, button, button, voplay.ScreenInsets{Right: margin, Bottom: margin})
 	brake := voplay.Rect{X: gas.X - button * 0.88, Y: gas.Y + button * 0.10, W: button * 0.82, H: button * 0.82}
 	drift := voplay.Rect{X: gas.X - small * 1.42, Y: gas.Y - small * 0.94, W: small, H: small}
 	boost := voplay.Rect{X: gas.X + button * 0.16, Y: gas.Y - small * 1.12, W: small, H: small}
 	resetSize := 50.0 * scale
-	reset := voplay.Rect{X: w - margin - resetSize, Y: 136.0 * scale, W: resetSize, H: resetSize}
+	reset := voplay.AnchorScreenRect(screen, voplay.AnchorTopRight, resetSize, resetSize, voplay.ScreenInsets{Top: 136.0 * scale, Right: margin})
 	if reset.Y + reset.H > gas.Y - 12 {
 		reset.Y = gas.Y - reset.H - 14
 	}
 	return blockKartTouchLayoutState{StickArea: voplay.Rect{X: 0, Y: stickAreaY, W: w * 0.52, H: h - stickAreaY}, StickCenter: stickCenter, StickRadius: stickRadius, Gas: gas, Brake: brake, Drift: drift, Boost: boost, Reset: reset}
+}
+
+func blockKartPortraitTouchLayout(metrics voplay.ScreenMetrics) blockKartTouchLayoutState {
+	screen := metrics.Rect()
+	w := screen.W
+	h := screen.H
+	scale := metrics.Layout().ShortSideScale(430.0, 0.78, 1.08)
+	margin := 18.0 * scale
+	stickRadius := 52.0 * scale
+	button := 66.0 * scale
+	small := 54.0 * scale
+	bottomPad := 42.0 * scale
+	if h > 760 {
+		bottomPad = 58.0 * scale
+	}
+	stickY := h - bottomPad - stickRadius
+	minStickY := h * 0.76
+	if stickY < minStickY {
+		stickY = minStickY
+	}
+	stickSize := stickRadius * 2
+	stickRect := voplay.AnchorScreenRect(screen, voplay.AnchorBottomLeft, stickSize, stickSize, voplay.ScreenInsets{Left: margin + 4 * scale, Bottom: h - stickY - stickRadius})
+	stickCenterX, stickCenterY := stickRect.Center()
+	stickCenter := voplay.Vec2{X: stickCenterX, Y: stickCenterY}
+	gasY := h - bottomPad - button
+	if gasY < h * 0.73 {
+		gasY = h * 0.73
+	}
+	gas := voplay.AnchorScreenRect(screen, voplay.AnchorBottomRight, button, button, voplay.ScreenInsets{Right: margin, Bottom: h - gasY - button})
+	brakeSize := button * 0.82
+	brake := voplay.Rect{X: gas.X - brakeSize * 0.96, Y: gas.Y + button * 0.18, W: brakeSize, H: brakeSize}
+	drift := voplay.Rect{X: gas.X - small * 1.22, Y: gas.Y - small * 1.00, W: small, H: small}
+	boost := voplay.Rect{X: gas.X + button * 0.10, Y: gas.Y - small * 1.12, W: small, H: small}
+	resetSize := 42.0 * scale
+	resetY := 84.0 * scale
+	if resetY < 74 {
+		resetY = 74
+	}
+	reset := voplay.AnchorScreenRect(screen, voplay.AnchorTopRight, resetSize, resetSize, voplay.ScreenInsets{Top: resetY, Right: margin})
+	stickAreaY := h * 0.58
+	maxStickAreaY := stickCenter.Y - stickRadius * 1.8
+	if stickAreaY > maxStickAreaY {
+		stickAreaY = maxStickAreaY
+	}
+	if stickAreaY < h * 0.46 {
+		stickAreaY = h * 0.46
+	}
+	return blockKartTouchLayoutState{StickArea: voplay.Rect{X: 0, Y: stickAreaY, W: w * 0.50, H: h - stickAreaY}, StickCenter: stickCenter, StickRadius: stickRadius, Gas: gas, Brake: brake, Drift: drift, Boost: boost, Reset: reset}
 }
 
 func blockKartTouchTheme() voplay.TouchControlTheme {

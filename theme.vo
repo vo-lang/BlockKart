@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"github.com/vo-lang/voplay"
 	"github.com/vo-lang/voplay/scene3d"
 )
@@ -45,22 +44,20 @@ type WorldTheme struct {
 }
 
 func defaultWorldTheme() WorldTheme {
-	return WorldTheme{SkyColor: voplay.Hex(0x68d9ff), FogColor: voplay.Hex(0xbdeeff), AmbientColor: voplay.Hex(0x7aa8c8), GroundColor: voplay.Hex(0x72d941), PathColor: voplay.Hex(0x5f707e), BridgeColor: voplay.Hex(0xf7c76b), WallColor: voplay.Hex(0x7d93b6), RailColor: voplay.Hex(0xffffff), RampColor: voplay.Hex(0xffb72e), AccentColor: voplay.Hex(0xffe032), BarrierColor: voplay.Hex(0x304d82), HazardColor: voplay.Hex(0xff3154), CheckpointColor: voplay.Hex(0x25e8d0), BannerColor: voplay.Hex(0xff405a), SupportColor: voplay.Hex(0xa7b7d0), GoalColor: voplay.Hex(0xff4056), GoalTrimColor: voplay.Hex(0xffe032), PlayerColor: voplay.Hex(0x008cff), KartTrimColor: voplay.Hex(0xfff46b), DriverColor: voplay.Hex(0xff3d48), WheelColor: voplay.Hex(0x202838), BoostColor: voplay.Hex(0x21dfff), TrackMarkColor: voplay.Hex(0xffffff), TreeTrunkColor: voplay.Hex(0xaa6a2e), TreeLeafColor: voplay.Hex(0x26cf51), BushColor: voplay.Hex(0x30d64f), CloudColor: voplay.Hex(0xffffff), CloudShadowColor: voplay.Hex(0xe8f6ff), OrbColor: voplay.Hex(0xff7fc9), HudPanelColor: voplay.Hex(0x10233d), HudShadowColor: voplay.Hex(0x08111e), HudTrimColor: voplay.Hex(0x3b7eff), HudTextColor: voplay.Hex(0xffffff), HudSubtextColor: voplay.Hex(0xd9efff), HudAccentTextColor: voplay.Hex(0xfff2b0)}
+	return WorldTheme{SkyColor: voplay.Hex(0x58cfff), FogColor: voplay.Hex(0xafefff), AmbientColor: voplay.Hex(0x84bdd8), GroundColor: voplay.Hex(0x5f9b3c), PathColor: voplay.Hex(0x2b3032), BridgeColor: voplay.Hex(0xd7a95c), WallColor: voplay.Hex(0x7d93b6), RailColor: voplay.Hex(0xf4efe0), RampColor: voplay.Hex(0xe69c24), AccentColor: voplay.Hex(0xe7c82f), BarrierColor: voplay.Hex(0x304d82), HazardColor: voplay.Hex(0xff3154), CheckpointColor: voplay.Hex(0x25e8d0), BannerColor: voplay.Hex(0xff405a), SupportColor: voplay.Hex(0xa7b7d0), GoalColor: voplay.Hex(0xff4056), GoalTrimColor: voplay.Hex(0xe7c82f), PlayerColor: voplay.Hex(0x008cff), KartTrimColor: voplay.Hex(0xffe36b), DriverColor: voplay.Hex(0xff3d48), WheelColor: voplay.Hex(0x202838), BoostColor: voplay.Hex(0x21dfff), TrackMarkColor: voplay.Hex(0xf4efe0), TreeTrunkColor: voplay.Hex(0x855325), TreeLeafColor: voplay.Hex(0x347f38), BushColor: voplay.Hex(0x437f36), CloudColor: voplay.Hex(0xffffff), CloudShadowColor: voplay.Hex(0xd9eff8), OrbColor: voplay.Hex(0xff7fc9), HudPanelColor: voplay.Hex(0x10233d), HudShadowColor: voplay.Hex(0x08111e), HudTrimColor: voplay.Hex(0x3b7eff), HudTextColor: voplay.Hex(0xffffff), HudSubtextColor: voplay.Hex(0xd9efff), HudAccentTextColor: voplay.Hex(0xfff2b0)}
 }
 
 func applyWorldTheme(theme WorldTheme, scene *scene3d.Scene) {
 	scene.Camera.Fov = 64
 	profile := scene3d.KartRacingLightingProfile()
-	profile.Ambient = voplay.Color{R: 0.56, G: 0.66, B: 0.74, A: 1}
-	profile.AmbientGround = voplay.Color{R: 0.26, G: 0.34, B: 0.24, A: 1}
-	profile.Lights = []scene3d.Light{{Type: scene3d.DirectionalLight, Direction: voplay.Vec3{X: -0.48, Y: 0.72, Z: -0.50}.Normalize(), Color: voplay.Hex(0xfff0b8), Intensity: 1.88}, {Type: scene3d.DirectionalLight, Direction: voplay.Vec3{X: 0.58, Y: 0.32, Z: 0.34}.Normalize(), Color: voplay.Hex(0xa8dcff), Intensity: 0.32}}
-	profile.Fog.Color = theme.FogColor
-	profile.Fog.Start = 230
-	profile.Fog.End = 520
-	profile.ColorGrading = scene3d.ColorGradingConfig{ToneMap: scene3d.ToneMapACES, Exposure: 1.32, Contrast: 1.10, Saturation: 1.32}
-	profile.ShadowsEnabled = true
-	profile.ShadowResolution = 1024
-	profile.ShadowStrength = 0.44
+	profile.Ambient = voplay.Color{R: 0.47, G: 0.56, B: 0.56, A: 1}
+	profile.AmbientGround = voplay.Color{R: 0.25, G: 0.32, B: 0.25, A: 1}
+	profile.Lights = []scene3d.Light{{Type: scene3d.DirectionalLight, Direction: voplay.Vec3{X: -0.56, Y: 0.68, Z: -0.46}.Normalize(), Color: voplay.Hex(0xffd79a), Intensity: 2.48}, {Type: scene3d.DirectionalLight, Direction: voplay.Vec3{X: 0.48, Y: 0.30, Z: 0.52}.Normalize(), Color: voplay.Hex(0x8fcaff), Intensity: 0.12}}
+	profile.Fog.Color = voplay.Color{R: 0.66, G: 0.84, B: 0.84, A: 1}
+	profile.Fog.Start = 300
+	profile.Fog.End = 980
+	profile.ColorGrading = scene3d.ColorGradingConfig{ToneMap: scene3d.ToneMapACES, Exposure: 1.08, Contrast: 1.08, Saturation: 1.02}
+	applyBlockKartRenderBudget(&profile, defaultBlockKartRenderBudget())
 	scene.ApplyLightingProfile(profile)
 }
 
@@ -98,9 +95,53 @@ type WorldHUDState struct {
 	PerfFixedSteps int
 	PerfSlowFrames int
 	PerfSlowLogs int
+	PerfWorkSlowFrames int
+	PerfWorkSlowLogs int
 	PerfLastSlowReason string
 	PerfLastSlowFrameMs float64
 	PerfLastSlowLogicMs float64
+	PerfLastWorkSlowReason string
+	PerfLastWorkSlowFrameMs float64
+	PerfLastWorkSlowLogicMs float64
+	PerfWindowFrames int
+	PerfWindowSlowFrames int
+	PerfWindowLastSlowGapFrames int
+	PerfWindowLastSlowGapMs float64
+	PerfWindowWorkSlowFrames int
+	PerfWindowLastWorkSlowGapFrames int
+	PerfWindowLastWorkSlowGapMs float64
+	PerfFrameP50Ms float64
+	PerfFrameP90Ms float64
+	PerfFrameP99Ms float64
+	PerfLogicP50Ms float64
+	PerfLogicP90Ms float64
+	PerfLogicP99Ms float64
+	PerfAdvanceP90Ms float64
+	PerfDrawP90Ms float64
+	PerfDrawP99Ms float64
+	PerfRenderFrame int
+	PerfRenderLoopMs float64
+	PerfRenderPaceWaitMs float64
+	PerfRenderReplyWaitMs float64
+	PerfRenderSubmitMs float64
+	PerfRenderDisplayPulseMs float64
+	PerfRenderDrawBytes int
+	PerfRenderFrameDivisor int
+	PerfRenderAttribution string
+	PerfRenderWindowFrames int
+	PerfRenderWindowSlowFrames int
+	PerfRenderWindowLastSlowGapFrames int
+	PerfRenderWindowLastSlowGapMs float64
+	PerfRenderCadenceSlowFrames int
+	PerfRenderReplySlowFrames int
+	PerfRenderSubmitSlowFrames int
+	PerfRenderUnattributedSlowFrames int
+	PerfRenderLoopP50Ms float64
+	PerfRenderLoopP90Ms float64
+	PerfRenderLoopP99Ms float64
+	PerfRenderPaceWaitP90Ms float64
+	PerfRenderReplyWaitP90Ms float64
+	PerfRenderSubmitP90Ms float64
 	SceneActive int
 	SceneVisible int
 	SceneCulled int
@@ -124,42 +165,83 @@ type WorldHUDState struct {
 	WheelCount int
 	WheelMaxSlip float64
 	WheelMaxCompression float64
+	CameraTargetStep float64
+	CameraTargetStepMax float64
+	CameraTargetResidual float64
+	CameraTargetResidualMax float64
+	CameraTargetYStep float64
+	CameraTargetYStepMax float64
+	CameraSpeedStep float64
+	CameraSpeedStepMax float64
+	DebugLines [18]string
+	DebugLineCount int
 }
 
 func drawWorldHUD(theme *WorldTheme, g *voplay.GameCtx, hud *WorldHUDState) {
-	if voplay.IsCompactTouchLayout(g.Width, g.Height) {
+	if voplay.IsCompactTouchLayout(g.Screen.Width, g.Screen.Height) {
 		drawCompactWorldHUD(theme, g, hud)
 		return
 	}
-	drawHudPanel(g.Draw, theme, 24, 22, 430, 112, 0.88)
-	g.Draw.DrawRect(24, 22, 430, 10, theme.HudTrimColor)
-	g.Draw.DrawText("BlockKart", 42, 58, 30, theme.HudTextColor)
-	g.Draw.DrawText("Primitive Track", 42, 86, 20, theme.HudAccentTextColor)
-	g.Draw.DrawText("Retained primitive render path", 42, 112, 18, theme.HudSubtextColor)
-	courseX := float64(g.Width - 330 - 24)
-	if courseX < 24 {
-		courseX = 24
+	screen := g.Screen.Rect()
+	normalSceneHUD := !hud.DebugOverlayVisible && hud.RenderDebugMode == scene3d.RenderDebugLit && !hud.HeroCameraVisible && !hud.Finished
+	if normalSceneHUD {
+		if hud.Boosting {
+			boostPanel := voplay.AnchorScreenRect(screen, voplay.AnchorTopRight, 126, 32, voplay.ScreenInsets{Right: 24, Top: 22})
+			drawHudPanel(g.Draw, theme, boostPanel.X, boostPanel.Y, boostPanel.W, boostPanel.H, 0.58)
+			g.Draw.DrawRect(boostPanel.X, boostPanel.Y, boostPanel.W, 5, theme.BoostColor.WithAlpha(0.82))
+			g.Draw.DrawText("BOOST", boostPanel.X + 27, boostPanel.Y + 24, 18, theme.HudTextColor.WithAlpha(0.86))
+		}
+		if hud.Drifting || hud.DriftCharge > 0 {
+			driftPanel := voplay.AnchorScreenRect(screen, voplay.AnchorTopRight, 164, 36, voplay.ScreenInsets{Right: 24, Top: 62})
+			charge := clampFloat(hud.DriftCharge / kartSuperTurboCharge, 0, 1)
+			label := "DRIFT"
+			fillColor := theme.BoostColor
+			if hud.DriftCharge >= kartSuperTurboCharge {
+				label = "SUPER"
+				fillColor = theme.GoalTrimColor
+			} else if hud.DriftCharge >= kartMiniTurboCharge {
+				label = "MINI"
+				fillColor = theme.AccentColor
+			}
+			drawHudPanel(g.Draw, theme, driftPanel.X, driftPanel.Y, driftPanel.W, driftPanel.H, 0.58)
+			g.Draw.DrawText(label, driftPanel.X + 13, driftPanel.Y + 24, 16, theme.HudTextColor.WithAlpha(0.86))
+			g.Draw.DrawRect(driftPanel.X + 72, driftPanel.Y + 14, 76, 8, theme.HudShadowColor.WithAlpha(0.26))
+			g.Draw.DrawRect(driftPanel.X + 72, driftPanel.Y + 14, 76 * charge, 8, fillColor.WithAlpha(0.86))
+		}
+		if hud.MessageTimer > 0 {
+			msgPanel := voplay.AnchorScreenRect(screen, voplay.AnchorTop, 260, 34, voplay.ScreenInsets{Top: 24})
+			drawHudPanel(g.Draw, theme, msgPanel.X, msgPanel.Y, msgPanel.W, msgPanel.H, 0.42)
+			g.Draw.DrawText(hud.Message, msgPanel.X + 20, msgPanel.Y + 24, 18, theme.HudTextColor.WithAlpha(0.82))
+		}
+		return
 	}
-	drawHudPanel(g.Draw, theme, courseX, 22, 330, 100, 0.86)
-	g.Draw.DrawRect(courseX, 22, 330, 8, theme.GoalTrimColor)
-	g.Draw.DrawText("Time " + formatTime(hud.Time), courseX + 18, 54, 24, theme.HudTextColor)
-	g.Draw.DrawText("Speed " + itoa(int(hud.Speed + 0.5)), courseX + 18, 82, 20, theme.HudAccentTextColor)
-	g.Draw.DrawText("Generated primitive scene", courseX + 18, 108, 18, theme.HudSubtextColor)
-	bottomPanelY := float64(g.Height - 48)
-	bottomTextY := float64(g.Height - 26)
-	drawHudPanel(g.Draw, theme, 24, bottomPanelY, 820, 28, 0.72)
-	g.Draw.DrawText("W gas   S brake/reverse   A/D steer   Space drift   R restart   F3 stats   F4 material view   F5 inspect", 38, bottomTextY, 16, theme.HudSubtextColor)
+	topPanel := voplay.AnchorScreenRect(screen, voplay.AnchorTopLeft, 430, 112, voplay.ScreenInsets{Left: 24, Top: 22})
+	drawHudPanel(g.Draw, theme, topPanel.X, topPanel.Y, topPanel.W, topPanel.H, 0.88)
+	g.Draw.DrawRect(topPanel.X, topPanel.Y, topPanel.W, 10, theme.HudTrimColor)
+	g.Draw.DrawText("BlockKart", topPanel.X + 18, topPanel.Y + 36, 30, theme.HudTextColor)
+	g.Draw.DrawText("Primitive Track", topPanel.X + 18, topPanel.Y + 64, 20, theme.HudAccentTextColor)
+	g.Draw.DrawText("Retained primitive render path", topPanel.X + 18, topPanel.Y + 90, 18, theme.HudSubtextColor)
+	coursePanel := voplay.AnchorScreenRect(screen, voplay.AnchorTopRight, 330, 100, voplay.ScreenInsets{Right: 24, Top: 22})
+	if coursePanel.X < topPanel.X + topPanel.W + 18 {
+		coursePanel.X = topPanel.X
+		coursePanel.Y = topPanel.Y + topPanel.H + 12
+	}
+	drawHudPanel(g.Draw, theme, coursePanel.X, coursePanel.Y, coursePanel.W, coursePanel.H, 0.86)
+	g.Draw.DrawRect(coursePanel.X, coursePanel.Y, coursePanel.W, 8, theme.GoalTrimColor)
+	g.Draw.DrawText("Time " + formatTime(hud.Time), coursePanel.X + 18, coursePanel.Y + 32, 24, theme.HudTextColor)
+	g.Draw.DrawText("Speed " + itoa(int(hud.Speed + 0.5)), coursePanel.X + 18, coursePanel.Y + 60, 20, theme.HudAccentTextColor)
+	g.Draw.DrawText("Generated primitive scene", coursePanel.X + 18, coursePanel.Y + 86, 18, theme.HudSubtextColor)
+	bottomPanel := voplay.AnchorScreenRect(screen, voplay.AnchorBottomLeft, 820, 28, voplay.ScreenInsets{Left: 24, Bottom: 20})
+	drawHudPanel(g.Draw, theme, bottomPanel.X, bottomPanel.Y, bottomPanel.W, bottomPanel.H, 0.72)
+	g.Draw.DrawText("W gas   S brake/reverse   A/D steer   Space drift   R restart   F3 stats   F4 material view   F5 inspect", bottomPanel.X + 14, bottomPanel.Y + 22, 16, theme.HudSubtextColor)
 	if hud.Boosting {
-		boostX := float64(g.Width - 180)
-		drawHudPanel(g.Draw, theme, boostX, 134, 140, 36, 0.82)
-		g.Draw.DrawRect(boostX, 134, 140, 6, theme.BoostColor)
-		g.Draw.DrawText("BOOST", boostX + 32, 162, 22, theme.HudTextColor)
+		boostPanel := voplay.AnchorScreenRect(screen, voplay.AnchorTopRight, 140, 36, voplay.ScreenInsets{Right: 40, Top: 134})
+		drawHudPanel(g.Draw, theme, boostPanel.X, boostPanel.Y, boostPanel.W, boostPanel.H, 0.82)
+		g.Draw.DrawRect(boostPanel.X, boostPanel.Y, boostPanel.W, 6, theme.BoostColor)
+		g.Draw.DrawText("BOOST", boostPanel.X + 32, boostPanel.Y + 28, 22, theme.HudTextColor)
 	}
 	if hud.Drifting || hud.DriftCharge > 0 {
-		driftX := float64(g.Width - 224)
-		if driftX < 24 {
-			driftX = 24
-		}
+		driftPanel := voplay.AnchorScreenRect(screen, voplay.AnchorTopRight, 184, 42, voplay.ScreenInsets{Right: 40, Top: 178})
 		charge := clampFloat(hud.DriftCharge / kartSuperTurboCharge, 0, 1)
 		label := "DRIFT"
 		fillColor := theme.BoostColor
@@ -170,85 +252,73 @@ func drawWorldHUD(theme *WorldTheme, g *voplay.GameCtx, hud *WorldHUDState) {
 			label = "MINI"
 			fillColor = theme.AccentColor
 		}
-		drawHudPanel(g.Draw, theme, driftX, 178, 184, 42, 0.82)
-		g.Draw.DrawText(label, driftX + 16, 205, 18, theme.HudTextColor)
-		g.Draw.DrawRect(driftX + 80, 193, 82, 10, theme.HudShadowColor.WithAlpha(0.3))
-		g.Draw.DrawRect(driftX + 80, 193, 82 * charge, 10, fillColor)
+		drawHudPanel(g.Draw, theme, driftPanel.X, driftPanel.Y, driftPanel.W, driftPanel.H, 0.82)
+		g.Draw.DrawText(label, driftPanel.X + 16, driftPanel.Y + 27, 18, theme.HudTextColor)
+		g.Draw.DrawRect(driftPanel.X + 80, driftPanel.Y + 15, 82, 10, theme.HudShadowColor.WithAlpha(0.3))
+		g.Draw.DrawRect(driftPanel.X + 80, driftPanel.Y + 15, 82 * charge, 10, fillColor)
 	}
 	if hud.DebugOverlayVisible {
 		debugX := 24.0
 		debugY := 190.0
-		debugW := 520.0
-		debugH := 252.0
+		debugW := 700.0
+		debugH := 414.0
 		drawHudPanel(g.Draw, theme, debugX, debugY, debugW, debugH, 0.80)
 		g.Draw.DrawRect(debugX, debugY, debugW, 6, theme.AccentColor)
 		lineY := debugY + 27
 		lineH := 20.0
-		g.Draw.DrawText("F3 perf  fps " + formatHudFloat(hud.PerfFPS, 1) + "  frame " + formatHudMs(hud.PerfFrameMs) + " / budget " + formatHudMs(hud.PerfBudgetMs) + "  logic " + formatHudMs(hud.PerfLogicMs), debugX + 14, lineY, 15, theme.HudTextColor)
-		lineY += lineH
-		g.Draw.DrawText("slow " + itoa(hud.PerfSlowFrames) + " logs " + itoa(hud.PerfSlowLogs) + " last " + hud.PerfLastSlowReason + " " + formatHudMs(hud.PerfLastSlowFrameMs) + " logic " + formatHudMs(hud.PerfLastSlowLogicMs), debugX + 14, lineY, 15, theme.HudSubtextColor)
-		lineY += lineH
-		g.Draw.DrawText("max frame " + formatHudMs(hud.PerfMaxFrameMs) + "  max logic " + formatHudMs(hud.PerfMaxLogicMs) + "  fixed steps " + itoa(hud.PerfFixedSteps), debugX + 14, lineY, 15, theme.HudSubtextColor)
-		lineY += lineH
-		g.Draw.DrawText("bytes draw " + formatHudBytes(hud.PerfDrawBytes) + "  submit " + formatHudBytes(hud.PerfSubmitBytes), debugX + 14, lineY, 15, theme.HudSubtextColor)
-		lineY += lineH + 3
-		g.Draw.DrawText("phase input/advance/draw/overlay " + formatHudMs(hud.PerfInputMs) + "/" + formatHudMs(hud.PerfAdvanceMs) + "/" + formatHudMs(hud.PerfDrawMs) + "/" + formatHudMs(hud.PerfOverlayMs), debugX + 14, lineY, 15, theme.HudSubtextColor)
-		lineY += lineH + 3
-		g.Draw.DrawText("scene active/visible/culled/model " + itoa(hud.SceneActive) + "/" + itoa(hud.SceneVisible) + "/" + itoa(hud.SceneCulled) + "/" + itoa(hud.SceneModels), debugX + 14, lineY, 15, theme.HudTextColor)
-		lineY += lineH
-		g.Draw.DrawText("scene upsert/destroy/batch/groups " + itoa(hud.SceneUpserts) + "/" + itoa(hud.SceneDestroyed) + "/" + itoa(hud.SceneBatchEligible) + "/" + itoa(hud.SceneBatchGroups), debugX + 14, lineY, 15, theme.HudSubtextColor)
-		lineY += lineH
-		g.Draw.DrawText("scene cpu flush " + formatHudMs(hud.SceneFlushMs) + "  frame " + formatHudMs(hud.SceneFrameMs) + "  track ents " + itoa(hud.TrackEntities), debugX + 14, lineY, 15, theme.HudSubtextColor)
-		lineY += lineH + 3
-		g.Draw.DrawText("primitive inst visible/total " + itoa(hud.PrimitiveVisibleInstances) + "/" + itoa(hud.PrimitiveInstances) + "  chunks " + itoa(hud.PrimitiveVisibleChunks) + "/" + itoa(hud.PrimitiveChunks), debugX + 14, lineY, 15, theme.HudTextColor)
-		lineY += lineH
-		g.Draw.DrawText("primitive groups/draws/upload " + itoa(hud.PrimitiveGroups) + "/" + itoa(hud.PrimitiveDrawCalls) + "/" + formatHudBytes(hud.PrimitiveUploadBytes), debugX + 14, lineY, 15, theme.HudSubtextColor)
-		lineY += lineH + 3
-		g.Draw.DrawText("vehicle grounded " + boolHud(hud.VehicleGrounded) + "  wheels " + itoa(hud.WheelContacts) + "/" + itoa(hud.WheelCount) + "  slip " + formatHudFloat(hud.WheelMaxSlip, 2) + "  comp " + formatHudFloat(hud.WheelMaxCompression, 2), debugX + 14, lineY, 15, theme.HudTextColor)
+		for i := 0; i < hud.DebugLineCount; i++ {
+			lineColor := theme.HudSubtextColor
+			if debugHudPrimaryLine(i) {
+				lineColor = theme.HudTextColor
+			}
+			g.Draw.DrawText(hud.DebugLines[i], debugX + 14, lineY, 15, lineColor)
+			lineY += lineH
+			if i == 3 || i == 7 || i == 10 || i == 13 || i == 15 {
+				lineY += 3
+			}
+		}
 	}
 	if hud.RenderDebugMode != scene3d.RenderDebugLit {
 		viewW := 240.0
-		viewX := (float64(g.Width) - viewW) * 0.5
-		if viewX < 24 {
-			viewX = 24
-		}
-		drawHudPanel(g.Draw, theme, viewX, 22, viewW, 42, 0.84)
-		g.Draw.DrawRect(viewX, 22, viewW, 6, theme.AccentColor)
-		g.Draw.DrawText("View " + renderDebugLabel(hud.RenderDebugMode), viewX + 18, 52, 20, theme.HudTextColor)
+		viewPanel := voplay.AnchorScreenRect(screen, voplay.AnchorTop, viewW, 42, voplay.ScreenInsets{Top: 22})
+		drawHudPanel(g.Draw, theme, viewPanel.X, viewPanel.Y, viewPanel.W, viewPanel.H, 0.84)
+		g.Draw.DrawRect(viewPanel.X, viewPanel.Y, viewPanel.W, 6, theme.AccentColor)
+		g.Draw.DrawText("View " + renderDebugLabel(hud.RenderDebugMode), viewPanel.X + 18, viewPanel.Y + 30, 20, theme.HudTextColor)
 	}
 	if hud.HeroCameraVisible {
 		viewW := 260.0
-		viewX := (float64(g.Width) - viewW) * 0.5
-		if viewX < 24 {
-			viewX = 24
-		}
-		drawHudPanel(g.Draw, theme, viewX, 70, viewW, 36, 0.82)
-		g.Draw.DrawRect(viewX, 70, viewW, 5, theme.GoalTrimColor)
-		g.Draw.DrawText("Hero inspect camera", viewX + 18, 96, 18, theme.HudTextColor)
+		viewPanel := voplay.AnchorScreenRect(screen, voplay.AnchorTop, viewW, 36, voplay.ScreenInsets{Top: 70})
+		drawHudPanel(g.Draw, theme, viewPanel.X, viewPanel.Y, viewPanel.W, viewPanel.H, 0.82)
+		g.Draw.DrawRect(viewPanel.X, viewPanel.Y, viewPanel.W, 5, theme.GoalTrimColor)
+		g.Draw.DrawText("Hero inspect camera", viewPanel.X + 18, viewPanel.Y + 26, 18, theme.HudTextColor)
 	}
 	if hud.MessageTimer > 0 && !hud.Finished {
 		msgW := 340.0
-		msgX := (float64(g.Width) - msgW) * 0.5
-		drawHudPanel(g.Draw, theme, msgX, 132, msgW, 42, 0.82)
-		g.Draw.DrawRect(msgX, 132, msgW, 6, theme.AccentColor)
-		g.Draw.DrawText(hud.Message, msgX + 24, 162, 22, theme.HudTextColor)
+		msgPanel := voplay.AnchorScreenRect(screen, voplay.AnchorTop, msgW, 42, voplay.ScreenInsets{Top: 132})
+		drawHudPanel(g.Draw, theme, msgPanel.X, msgPanel.Y, msgPanel.W, msgPanel.H, 0.82)
+		g.Draw.DrawRect(msgPanel.X, msgPanel.Y, msgPanel.W, 6, theme.AccentColor)
+		g.Draw.DrawText(hud.Message, msgPanel.X + 24, msgPanel.Y + 30, 22, theme.HudTextColor)
 	}
 	if hud.Finished {
 		panelW := 430.0
 		panelH := 170.0
-		panelX := (float64(g.Width) - panelW) * 0.5
-		panelY := (float64(g.Height) - panelH) * 0.5
-		drawHudPanel(g.Draw, theme, panelX, panelY, panelW, panelH, 0.92)
-		g.Draw.DrawRect(panelX, panelY, panelW, 10, theme.GoalTrimColor)
-		g.Draw.DrawText("RACE COMPLETE!", panelX + 64, panelY + 52, 34, theme.HudAccentTextColor)
-		g.Draw.DrawText("Time " + formatTime(hud.FinishTime), panelX + 54, panelY + 92, 24, theme.HudTextColor)
-		g.Draw.DrawText("Items " + itoa(hud.Collected) + "/" + itoa(hud.TotalCollectibles), panelX + 54, panelY + 122, 22, theme.HudSubtextColor)
-		g.Draw.DrawText("Press R to race again", panelX + 54, panelY + 150, 20, theme.HudAccentTextColor)
+		panel := voplay.AnchorScreenRect(screen, voplay.AnchorCenter, panelW, panelH, voplay.ScreenInsets{})
+		drawHudPanel(g.Draw, theme, panel.X, panel.Y, panel.W, panel.H, 0.92)
+		g.Draw.DrawRect(panel.X, panel.Y, panel.W, 10, theme.GoalTrimColor)
+		g.Draw.DrawText("RACE COMPLETE!", panel.X + 64, panel.Y + 52, 34, theme.HudAccentTextColor)
+		g.Draw.DrawText("Time " + formatTime(hud.FinishTime), panel.X + 54, panel.Y + 92, 24, theme.HudTextColor)
+		g.Draw.DrawText("Items " + itoa(hud.Collected) + "/" + itoa(hud.TotalCollectibles), panel.X + 54, panel.Y + 122, 22, theme.HudSubtextColor)
+		g.Draw.DrawText("Press R to race again", panel.X + 54, panel.Y + 150, 20, theme.HudAccentTextColor)
 	}
 }
 
 func drawCompactWorldHUD(theme *WorldTheme, g *voplay.GameCtx, hud *WorldHUDState) {
-	w := float64(g.Width)
+	if blockKartIsPortraitLayout(g.Screen.Width, g.Screen.Height) {
+		drawPortraitWorldHUD(theme, g, hud)
+		return
+	}
+	w := float64(g.Screen.Width)
+	screen := g.Screen.Rect()
 	leftW := 214.0
 	if w < 430 {
 		leftW = w * 0.50 - 20
@@ -263,27 +333,27 @@ func drawCompactWorldHUD(theme *WorldTheme, g *voplay.GameCtx, hud *WorldHUDStat
 	if rightW < 126 {
 		rightW = 126
 	}
-	rightX := w - rightW - 14
-	drawHudPanel(g.Draw, theme, 12, 12, leftW, 82, 0.82)
-	g.Draw.DrawRect(12, 12, leftW, 6, theme.HudTrimColor)
-	g.Draw.DrawText("BlockKart", 24, 42, 21, theme.HudTextColor)
-	g.Draw.DrawText("Lap " + itoa(hud.Lap) + "/" + itoa(hud.TotalLaps) + "  Items " + itoa(hud.Collected) + "/" + itoa(hud.TotalCollectibles), 24, 70, 15, theme.HudAccentTextColor)
-	drawHudPanel(g.Draw, theme, rightX, 12, rightW, 82, 0.82)
-	g.Draw.DrawRect(rightX, 12, rightW, 6, theme.GoalTrimColor)
-	g.Draw.DrawText(itoa(int(hud.Speed + 0.5)) + " km/h", rightX + 14, 42, 20, theme.HudTextColor)
-	g.Draw.DrawText(formatTime(hud.Time), rightX + 14, 70, 16, theme.HudAccentTextColor)
+	leftPanel := voplay.AnchorScreenRect(screen, voplay.AnchorTopLeft, leftW, 82, voplay.ScreenInsets{Left: 12, Top: 12})
+	rightPanel := voplay.AnchorScreenRect(screen, voplay.AnchorTopRight, rightW, 82, voplay.ScreenInsets{Right: 14, Top: 12})
+	drawHudPanel(g.Draw, theme, leftPanel.X, leftPanel.Y, leftPanel.W, leftPanel.H, 0.82)
+	g.Draw.DrawRect(leftPanel.X, leftPanel.Y, leftPanel.W, 6, theme.HudTrimColor)
+	g.Draw.DrawText("BlockKart", leftPanel.X + 12, leftPanel.Y + 30, 21, theme.HudTextColor)
+	g.Draw.DrawText("Lap " + itoa(hud.Lap) + "/" + itoa(hud.TotalLaps) + "  Items " + itoa(hud.Collected) + "/" + itoa(hud.TotalCollectibles), leftPanel.X + 12, leftPanel.Y + 58, 15, theme.HudAccentTextColor)
+	drawHudPanel(g.Draw, theme, rightPanel.X, rightPanel.Y, rightPanel.W, rightPanel.H, 0.82)
+	g.Draw.DrawRect(rightPanel.X, rightPanel.Y, rightPanel.W, 6, theme.GoalTrimColor)
+	g.Draw.DrawText(itoa(int(hud.Speed + 0.5)) + " km/h", rightPanel.X + 14, rightPanel.Y + 30, 20, theme.HudTextColor)
+	g.Draw.DrawText(formatTime(hud.Time), rightPanel.X + 14, rightPanel.Y + 58, 16, theme.HudAccentTextColor)
 	if hud.Boosting {
 		boostW := 116.0
-		boostX := w - boostW - 14
-		drawHudPanel(g.Draw, theme, boostX, 102, boostW, 32, 0.80)
-		g.Draw.DrawRect(boostX, 102, boostW, 5, theme.BoostColor)
-		g.Draw.DrawText("BOOST", boostX + 24, 126, 17, theme.HudTextColor)
+		boostPanel := voplay.AnchorScreenRect(screen, voplay.AnchorTopRight, boostW, 32, voplay.ScreenInsets{Right: 14, Top: 102})
+		drawHudPanel(g.Draw, theme, boostPanel.X, boostPanel.Y, boostPanel.W, boostPanel.H, 0.80)
+		g.Draw.DrawRect(boostPanel.X, boostPanel.Y, boostPanel.W, 5, theme.BoostColor)
+		g.Draw.DrawText("BOOST", boostPanel.X + 24, boostPanel.Y + 24, 17, theme.HudTextColor)
 	}
 	if hud.Drifting || hud.DriftCharge > 0 {
 		charge := clampFloat(hud.DriftCharge / kartSuperTurboCharge, 0, 1)
 		barW := 128.0
-		barX := 12.0
-		barY := 102.0
+		barPanel := voplay.AnchorScreenRect(screen, voplay.AnchorTopLeft, barW, 34, voplay.ScreenInsets{Left: 12, Top: 102})
 		label := "DRIFT"
 		fillColor := theme.BoostColor
 		if hud.DriftCharge >= kartSuperTurboCharge {
@@ -293,27 +363,27 @@ func drawCompactWorldHUD(theme *WorldTheme, g *voplay.GameCtx, hud *WorldHUDStat
 			label = "MINI"
 			fillColor = theme.AccentColor
 		}
-		drawHudPanel(g.Draw, theme, barX, barY, barW, 34, 0.80)
-		g.Draw.DrawText(label, barX + 12, barY + 23, 15, theme.HudTextColor)
-		g.Draw.DrawRect(barX + 62, barY + 14, 52, 8, theme.HudShadowColor.WithAlpha(0.3))
-		g.Draw.DrawRect(barX + 62, barY + 14, 52 * charge, 8, fillColor)
+		drawHudPanel(g.Draw, theme, barPanel.X, barPanel.Y, barPanel.W, barPanel.H, 0.80)
+		g.Draw.DrawText(label, barPanel.X + 12, barPanel.Y + 23, 15, theme.HudTextColor)
+		g.Draw.DrawRect(barPanel.X + 62, barPanel.Y + 14, 52, 8, theme.HudShadowColor.WithAlpha(0.3))
+		g.Draw.DrawRect(barPanel.X + 62, barPanel.Y + 14, 52 * charge, 8, fillColor)
 	}
 	if hud.MessageTimer > 0 && !hud.Finished {
 		msgW := w - 56
 		if msgW > 320 {
 			msgW = 320
 		}
-		msgX := (w - msgW) * 0.5
-		drawHudPanel(g.Draw, theme, msgX, 142, msgW, 38, 0.84)
-		g.Draw.DrawRect(msgX, 142, msgW, 5, theme.AccentColor)
-		g.Draw.DrawText(hud.Message, msgX + 18, 168, 18, theme.HudTextColor)
+		msgPanel := voplay.AnchorScreenRect(screen, voplay.AnchorTop, msgW, 38, voplay.ScreenInsets{Top: 142})
+		drawHudPanel(g.Draw, theme, msgPanel.X, msgPanel.Y, msgPanel.W, msgPanel.H, 0.84)
+		g.Draw.DrawRect(msgPanel.X, msgPanel.Y, msgPanel.W, 5, theme.AccentColor)
+		g.Draw.DrawText(hud.Message, msgPanel.X + 18, msgPanel.Y + 26, 18, theme.HudTextColor)
 	}
 	if hud.RenderDebugMode != scene3d.RenderDebugLit {
 		viewW := 180.0
-		viewX := (w - viewW) * 0.5
-		drawHudPanel(g.Draw, theme, viewX, 98, viewW, 32, 0.82)
-		g.Draw.DrawRect(viewX, 98, viewW, 5, theme.AccentColor)
-		g.Draw.DrawText("View " + renderDebugLabel(hud.RenderDebugMode), viewX + 14, 122, 16, theme.HudTextColor)
+		viewPanel := voplay.AnchorScreenRect(screen, voplay.AnchorTop, viewW, 32, voplay.ScreenInsets{Top: 98})
+		drawHudPanel(g.Draw, theme, viewPanel.X, viewPanel.Y, viewPanel.W, viewPanel.H, 0.82)
+		g.Draw.DrawRect(viewPanel.X, viewPanel.Y, viewPanel.W, 5, theme.AccentColor)
+		g.Draw.DrawText("View " + renderDebugLabel(hud.RenderDebugMode), viewPanel.X + 14, viewPanel.Y + 24, 16, theme.HudTextColor)
 	}
 	if hud.Finished {
 		panelW := w - 46
@@ -321,14 +391,96 @@ func drawCompactWorldHUD(theme *WorldTheme, g *voplay.GameCtx, hud *WorldHUDStat
 			panelW = 350
 		}
 		panelH := 150.0
-		panelX := (w - panelW) * 0.5
-		panelY := (float64(g.Height) - panelH) * 0.5
-		drawHudPanel(g.Draw, theme, panelX, panelY, panelW, panelH, 0.92)
-		g.Draw.DrawRect(panelX, panelY, panelW, 8, theme.GoalTrimColor)
-		g.Draw.DrawText("RACE COMPLETE", panelX + 36, panelY + 46, 25, theme.HudAccentTextColor)
-		g.Draw.DrawText("Time " + formatTime(hud.FinishTime), panelX + 36, panelY + 82, 20, theme.HudTextColor)
-		g.Draw.DrawText("Items " + itoa(hud.Collected) + "/" + itoa(hud.TotalCollectibles), panelX + 36, panelY + 112, 18, theme.HudSubtextColor)
-		g.Draw.DrawText("Tap RST to race again", panelX + 36, panelY + 138, 16, theme.HudAccentTextColor)
+		panel := voplay.AnchorScreenRect(screen, voplay.AnchorCenter, panelW, panelH, voplay.ScreenInsets{})
+		drawHudPanel(g.Draw, theme, panel.X, panel.Y, panel.W, panel.H, 0.92)
+		g.Draw.DrawRect(panel.X, panel.Y, panel.W, 8, theme.GoalTrimColor)
+		g.Draw.DrawText("RACE COMPLETE", panel.X + 36, panel.Y + 46, 25, theme.HudAccentTextColor)
+		g.Draw.DrawText("Time " + formatTime(hud.FinishTime), panel.X + 36, panel.Y + 82, 20, theme.HudTextColor)
+		g.Draw.DrawText("Items " + itoa(hud.Collected) + "/" + itoa(hud.TotalCollectibles), panel.X + 36, panel.Y + 112, 18, theme.HudSubtextColor)
+		g.Draw.DrawText("Tap RST to race again", panel.X + 36, panel.Y + 138, 16, theme.HudAccentTextColor)
+	}
+}
+
+func drawPortraitWorldHUD(theme *WorldTheme, g *voplay.GameCtx, hud *WorldHUDState) {
+	w := float64(g.Screen.Width)
+	screen := g.Screen.Rect()
+	panelInset := 10.0
+	panelW := w - panelInset * 2
+	if panelW < 280 {
+		panelInset = 6
+		panelW = w - panelInset * 2
+	}
+	panelH := 60.0
+	panel := voplay.AnchorScreenRect(screen, voplay.AnchorTop, panelW, panelH, voplay.ScreenInsets{Top: 10})
+	titleSize := clampFloat(w / 25.0, 14, 18)
+	metaSize := clampFloat(w / 34.0, 11, 14)
+	drawHudPanel(g.Draw, theme, panel.X, panel.Y, panel.W, panel.H, 0.82)
+	g.Draw.DrawRect(panel.X, panel.Y, panel.W, 6, theme.HudTrimColor)
+	g.Draw.DrawText("BlockKart", panel.X + 12, panel.Y + 27, titleSize, theme.HudTextColor)
+	speedX := panel.X + panel.W - 116
+	if panelW < 340 {
+		speedX = panel.X + panel.W - 102
+	}
+	g.Draw.DrawText(itoa(int(hud.Speed + 0.5)) + " km/h", speedX, panel.Y + 27, titleSize, theme.HudTextColor)
+	g.Draw.DrawText("Lap " + itoa(hud.Lap) + "/" + itoa(hud.TotalLaps) + "  Items " + itoa(hud.Collected) + "/" + itoa(hud.TotalCollectibles), panel.X + 12, panel.Y + 50, metaSize, theme.HudAccentTextColor)
+	g.Draw.DrawText(formatTime(hud.Time), panel.X + panel.W - 74, panel.Y + 50, metaSize, theme.HudAccentTextColor)
+	statusY := panel.Y + panel.H + 8
+	if hud.Drifting || hud.DriftCharge > 0 {
+		charge := clampFloat(hud.DriftCharge / kartSuperTurboCharge, 0, 1)
+		barW := 118.0
+		barPanel := voplay.AnchorScreenRect(screen, voplay.AnchorTopLeft, barW, 32, voplay.ScreenInsets{Left: panelInset, Top: statusY})
+		label := "DRIFT"
+		fillColor := theme.BoostColor
+		if hud.DriftCharge >= kartSuperTurboCharge {
+			label = "SUPER"
+			fillColor = theme.GoalTrimColor
+		} else if hud.DriftCharge >= kartMiniTurboCharge {
+			label = "MINI"
+			fillColor = theme.AccentColor
+		}
+		drawHudPanel(g.Draw, theme, barPanel.X, barPanel.Y, barPanel.W, barPanel.H, 0.80)
+		g.Draw.DrawText(label, barPanel.X + 11, barPanel.Y + 22, 14, theme.HudTextColor)
+		g.Draw.DrawRect(barPanel.X + 60, barPanel.Y + 13, 46, 8, theme.HudShadowColor.WithAlpha(0.3))
+		g.Draw.DrawRect(barPanel.X + 60, barPanel.Y + 13, 46 * charge, 8, fillColor)
+	}
+	if hud.Boosting {
+		boostW := 102.0
+		boostPanel := voplay.AnchorScreenRect(screen, voplay.AnchorTop, boostW, 32, voplay.ScreenInsets{Top: statusY})
+		drawHudPanel(g.Draw, theme, boostPanel.X, boostPanel.Y, boostPanel.W, boostPanel.H, 0.80)
+		g.Draw.DrawRect(boostPanel.X, boostPanel.Y, boostPanel.W, 5, theme.BoostColor)
+		g.Draw.DrawText("BOOST", boostPanel.X + 19, boostPanel.Y + 22, 15, theme.HudTextColor)
+	}
+	if hud.MessageTimer > 0 && !hud.Finished {
+		msgW := w - 40
+		if msgW > 320 {
+			msgW = 320
+		}
+		msgY := statusY + 40
+		msgPanel := voplay.AnchorScreenRect(screen, voplay.AnchorTop, msgW, 36, voplay.ScreenInsets{Top: msgY})
+		drawHudPanel(g.Draw, theme, msgPanel.X, msgPanel.Y, msgPanel.W, msgPanel.H, 0.84)
+		g.Draw.DrawRect(msgPanel.X, msgPanel.Y, msgPanel.W, 5, theme.AccentColor)
+		g.Draw.DrawText(hud.Message, msgPanel.X + 16, msgPanel.Y + 25, 17, theme.HudTextColor)
+	}
+	if hud.RenderDebugMode != scene3d.RenderDebugLit {
+		viewW := 164.0
+		viewPanel := voplay.AnchorScreenRect(screen, voplay.AnchorTop, viewW, 32, voplay.ScreenInsets{Top: statusY})
+		drawHudPanel(g.Draw, theme, viewPanel.X, viewPanel.Y, viewPanel.W, viewPanel.H, 0.82)
+		g.Draw.DrawRect(viewPanel.X, viewPanel.Y, viewPanel.W, 5, theme.AccentColor)
+		g.Draw.DrawText("View " + renderDebugLabel(hud.RenderDebugMode), viewPanel.X + 12, viewPanel.Y + 22, 15, theme.HudTextColor)
+	}
+	if hud.Finished {
+		panelW := w - 42
+		if panelW > 340 {
+			panelW = 340
+		}
+		panelH := 150.0
+		finishedPanel := voplay.AnchorScreenRect(screen, voplay.AnchorCenter, panelW, panelH, voplay.ScreenInsets{})
+		drawHudPanel(g.Draw, theme, finishedPanel.X, finishedPanel.Y, finishedPanel.W, finishedPanel.H, 0.92)
+		g.Draw.DrawRect(finishedPanel.X, finishedPanel.Y, finishedPanel.W, 8, theme.GoalTrimColor)
+		g.Draw.DrawText("RACE COMPLETE", finishedPanel.X + 32, finishedPanel.Y + 46, 24, theme.HudAccentTextColor)
+		g.Draw.DrawText("Time " + formatTime(hud.FinishTime), finishedPanel.X + 32, finishedPanel.Y + 82, 19, theme.HudTextColor)
+		g.Draw.DrawText("Items " + itoa(hud.Collected) + "/" + itoa(hud.TotalCollectibles), finishedPanel.X + 32, finishedPanel.Y + 112, 17, theme.HudSubtextColor)
+		g.Draw.DrawText("Tap RST to race again", finishedPanel.X + 32, finishedPanel.Y + 138, 15, theme.HudAccentTextColor)
 	}
 }
 
@@ -338,28 +490,53 @@ func drawHudPanel(d *voplay.DrawCtx, theme *WorldTheme, x, y, width, height floa
 }
 
 func formatTime(seconds float64) string {
-	return fmt.Sprintf("%.1fs", seconds)
+	return formatFixed(seconds, 1) + "s"
 }
 
 func formatHudFloat(value float64, digits int) string {
 	if digits <= 1 {
-		return fmt.Sprintf("%.1f", value)
+		return formatFixed(value, 1)
 	}
-	return fmt.Sprintf("%.2f", value)
+	return formatFixed(value, 2)
 }
 
 func formatHudMs(value float64) string {
-	return fmt.Sprintf("%.2fms", value)
+	return formatFixed(value, 2) + "ms"
 }
 
 func formatHudBytes(value int) string {
 	if value >= 1024 * 1024 {
-		return fmt.Sprintf("%.2fMB", float64(value) / (1024.0 * 1024.0))
+		return formatFixed(float64(value) / (1024.0 * 1024.0), 2) + "MB"
 	}
 	if value >= 1024 {
-		return fmt.Sprintf("%.1fKB", float64(value) / 1024.0)
+		return formatFixed(float64(value) / 1024.0, 1) + "KB"
 	}
 	return itoa(value) + "B"
+}
+
+func formatFixed(value float64, digits int) string {
+	sign := ""
+	if value < 0 {
+		sign = "-"
+		value = -value
+	}
+	scale := 1
+	for i := 0; i < digits; i++ {
+		scale *= 10
+	}
+	scaled := int(value * float64(scale) + 0.5)
+	if digits <= 0 {
+		return sign + itoa(scaled)
+	}
+	whole := scaled / scale
+	frac := scaled - whole * scale
+	if digits == 1 {
+		return sign + itoa(whole) + "." + itoa(frac)
+	}
+	if frac < 10 {
+		return sign + itoa(whole) + ".0" + itoa(frac)
+	}
+	return sign + itoa(whole) + "." + itoa(frac)
 }
 
 func boolHud(value bool) string {
@@ -367,6 +544,10 @@ func boolHud(value bool) string {
 		return "yes"
 	}
 	return "no"
+}
+
+func debugHudPrimaryLine(i int) bool {
+	return i == 0 || i == 3 || i == 6 || i == 9 || i == 12 || i == 15 || i == 17
 }
 
 func renderDebugLabel(mode int) string {

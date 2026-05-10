@@ -2,8 +2,7 @@ package main
 
 import (
 	"math"
-	"os"
-	"path/filepath"
+	"time"
 	"github.com/vo-lang/voplay"
 	"github.com/vo-lang/voplay/scene3d"
 )
@@ -20,6 +19,21 @@ const (
 	kartMiniTurboDuration = 0.75
 	kartSuperTurboDuration = 1.35
 	kartSpawnRideHeight = 1.16
+	// Soft edge assist keeps the kart body on the road without spawning wall colliders.
+	kartRoadEdgeAssistCenterInset = 1.15
+	kartRoadEdgeAssistSoftZone = 1.15
+	kartRoadEdgeAssistMaxPushSpeed = 9.5
+	kartRoadEdgeAssistVelocityBlend = 11.0
+	kartRoadEdgeAssistOutwardDamping = 0.92
+	kartRoadEdgeAssistImpactSpeed = 3.4
+	kartRoadEdgeAssistPositionBlend = 6.5
+	kartRoadEdgeAssistMaxCorrection = 0.18
+	kartRoadEdgeAssistPostMaxCorrection = 0.36
+	kartRoadEdgeAssistSnapOverflow = 1.35
+	kartRoadEdgeAssistLift = 0.08
+	kartPhysicsIdleSleepWarmupFrames = 30
+	kartPhysicsIdleLinearSleepSpeedSq = 0.0025
+	kartPhysicsIdleAngularSleepSpeedSq = 0.0004
 	raceLapCount = 3
 	playerResetY = -25.0
 )
@@ -43,13 +57,13 @@ type World struct {
 	theme WorldTheme
 	assets *voplay.Assets
 	assetGroup string
-	trackAssetGroup string
-	assetPackPath string
+	primitiveMap *scene3d.MapPreparedAsset
 	track *scene3d.Track
 	trackResult *scene3d.TrackSpawnResult
 	primitive *BlockKartPrimitiveScene
 	racingDebugOverlay *scene3d.RacingDebugOverlay
 	heroCameraVisible bool
+	terrainCameraView int
 	checkpointPosition voplay.Vec3
 	checkpointYaw float64
 	checkpointLabel string
@@ -64,14 +78,9 @@ type World struct {
 	kartYaw float64
 	kartSpeed float64
 	lastSteer float64
-	kartPrevRenderPosition voplay.Vec3
-	kartCurrRenderPosition voplay.Vec3
-	kartPrevRenderRotation voplay.Quat
-	kartCurrRenderRotation voplay.Quat
-	kartRenderPoseInitialized bool
-	kartRenderPosition voplay.Vec3
-	kartRenderRotation voplay.Quat
-	kartRenderPoseValid bool
+	roadEdgeAssistActive bool
+	cameraTelemetry CameraTargetTelemetry
+	kartRenderPose KartRenderPose
 	boostTimer float64
 	driftCharge float64
 	drifting bool
@@ -83,21 +92,6 @@ type World struct {
 	boostPads []*BoostPad
 	obstacles []*MovingObstacle
 	cubeModel voplay.ModelID
-	cylinderModel voplay.ModelID
-	sphereModel voplay.ModelID
-	kartBodyModel voplay.ModelID
-	kartWheelModel voplay.ModelID
-	kartChassis *scene3d.Entity
-	kartNose *scene3d.Entity
-	kartCabin *scene3d.Entity
-	kartDriver *scene3d.Entity
-	kartSpoiler *scene3d.Entity
-	kartBumper *scene3d.Entity
-	kartExhaustLeft *scene3d.Entity
-	kartExhaustRight *scene3d.Entity
-	kartFlameLeft *scene3d.Entity
-	kartFlameRight *scene3d.Entity
-	kartWheels []*scene3d.Entity
 	kartChassisPrimitive *PrimitivePart
 	kartNosePrimitive *PrimitivePart
 	kartCabinPrimitive *PrimitivePart
@@ -108,25 +102,56 @@ type World struct {
 	kartExhaustRightPrimitive *PrimitivePart
 	kartFlameLeftPrimitive *PrimitivePart
 	kartFlameRightPrimitive *PrimitivePart
+	kartPrimitiveVisualState PrimitiveKartVisualState
+	kartPrimitiveVisualStateValid bool
 	kartWheelPrimitives []*PrimitivePart
 	kartBodyPrimitiveParts []PrimitiveKartBodyPart
 	kartWheelVisuals []PrimitiveKartWheelVisual
+	lastVehicleInput scene3d.VehicleInput
+	physicsIdleFrames int
+	perfAnalyzer BlockKartPerfAnalyzer
+	fixedProfiler BlockKartFixedStepProfiler
+	perfSnapshotPollFrame int
+	debugHudLines [18]string
+	debugHudLineCount int
+	debugHudFrame int
+}
+
+type roadEdgeAssistSample struct {
+	Point scene3d.TrackPoint
+	Right voplay.Vec3
+	Inward voplay.Vec3
+	EdgeHalfWidth float64
+	AssistStart float64
+	LateralAbs float64
+	Side float64
 }
 
 func NewWorld(g *voplay.GameCtx) *World {
+	prof := newBlockKartStartupProfiler("BlockKart world")
 	w := &World{scene: scene3d.New(), startPosition: voplay.Vec3{X: 0, Y: 1.1, Z: 98}, theme: defaultWorldTheme(), totalLaps: raceLapCount, lap: 1}
+	prof.Mark("alloc")
 	w.checkpointPosition = w.startPosition
 	w.checkpointLabel = "Start"
 	w.nextGateLabel = "Gate 1"
 	w.configureScene()
+	prof.Mark("configureScene")
 	w.loadAssets(g.Assets)
+	prof.Mark("loadAssets")
 	w.loadModels()
+	prof.Mark("loadModels")
 	w.buildLevel()
+	prof.Mark("buildLevel")
 	w.setupRacingInput(g)
+	prof.Mark("setupRacingInput")
 	w.spawnPlayer()
+	prof.Mark("spawnPlayer")
 	w.setupVehicleAudio()
+	prof.Mark("setupVehicleAudio")
 	w.setupCamera()
+	prof.Mark("setupCamera")
 	w.restartRun()
+	prof.Mark("restartRun")
 	return w
 }
 
@@ -146,61 +171,14 @@ func (w *World) setupRacingInput(g *voplay.GameCtx) {
 
 func (w *World) loadModels() {
 	w.cubeModel = scene3d.CubeMesh()
-	w.cylinderModel = scene3d.CylinderMesh(16)
-	w.sphereModel = scene3d.SphereMesh(18)
 }
 
-func (w *World) loadKartModelAssets() {
-	if w.assets == nil {
-		return
-	}
-	if w.assetGroup == "" {
-		w.assetGroup = worldAssetGroup
-	}
-	w.assets.BeginGroup(worldAssetGroup)
-	body, bodyErr := loadModelAsset(w.assets, "models/kart/kart_body.glb")
-	wheel, wheelErr := loadModelAsset(w.assets, "models/kart/kart_wheel.glb")
-	w.assets.EndGroup()
-	if bodyErr == nil && wheelErr == nil {
-		w.kartBodyModel = body
-		w.kartWheelModel = wheel
-	}
-}
-
-func loadModelAsset(assets *voplay.Assets, rel string) (voplay.ModelID, error) {
-	var lastErr error
-	model, err := assets.Model(rel)
-	if err == nil {
-		return model, nil
-	}
-	lastErr = err
-	for _, root := range assetRootCandidates() {
-		path := filepath.Join([]string{root, rel})
-		model, err = assets.Model(path)
-		if err == nil {
-			return model, nil
-		}
-		lastErr = err
-	}
-	return 0, lastErr
+func loadTextureAsset(assets *voplay.Assets, rel string) (voplay.TextureID, error) {
+	return assets.Texture(blockKartAssetPath(rel))
 }
 
 func loadAudioAsset(assets *voplay.Assets, rel string) (voplay.AudioClipID, error) {
-	var lastErr error
-	clip, err := assets.Audio(rel)
-	if err == nil {
-		return clip, nil
-	}
-	lastErr = err
-	for _, root := range assetRootCandidates() {
-		path := filepath.Join([]string{root, rel})
-		clip, err = assets.Audio(path)
-		if err == nil {
-			return clip, nil
-		}
-		lastErr = err
-	}
-	return 0, lastErr
+	return assets.Audio(blockKartAssetPath(rel))
 }
 
 func (w *World) loadAssets(assets *voplay.Assets) {
@@ -208,9 +186,12 @@ func (w *World) loadAssets(assets *voplay.Assets) {
 		return
 	}
 	w.assets = assets
-	w.assetPackPath = mountSkyboxPack(assets)
+	packErr := assets.Mount(blockKartAssetPath("blockkart.vpak"), 100)
+	if packErr != nil {
+		panic("BlockKart asset pack mount failed: " + packErr.Error())
+	}
 	assets.BeginGroup(worldAssetGroup)
-	skybox, err := loadSkybox(assets, w.assetPackPath != "")
+	skybox, err := loadSkybox(assets)
 	if err == nil {
 		w.scene.Skybox = skybox
 	}
@@ -222,72 +203,12 @@ func (w *World) loadAssets(assets *voplay.Assets) {
 	w.assetGroup = worldAssetGroup
 }
 
-func mountSkyboxPack(assets *voplay.Assets) string {
-	for _, root := range assetRootCandidates() {
-		path := filepath.Join([]string{root, "blockkart.vpak"})
-		err := assets.Mount(path, 0)
-		if err == nil {
-			return path
-		}
-	}
-	return ""
+func loadSkybox(assets *voplay.Assets) (voplay.CubemapID, error) {
+	return assets.Cubemap(blockKartAssetPath("skybox/right.png"), blockKartAssetPath("skybox/left.png"), blockKartAssetPath("skybox/top.png"), blockKartAssetPath("skybox/bottom.png"), blockKartAssetPath("skybox/front.png"), blockKartAssetPath("skybox/back.png"))
 }
 
-func loadSkybox(assets *voplay.Assets, hasPack bool) (voplay.CubemapID, error) {
-	if hasPack {
-		skybox, err := loadSkyboxFromPack(assets)
-		if err == nil {
-			return skybox, nil
-		}
-	}
-	return loadSkyboxFromFileCandidates(assets)
-}
-
-func loadSkyboxFromPack(assets *voplay.Assets) (voplay.CubemapID, error) {
-	return assets.Cubemap("skybox/right.png", "skybox/left.png", "skybox/top.png", "skybox/bottom.png", "skybox/front.png", "skybox/back.png")
-}
-
-func loadSkyboxFromFileCandidates(assets *voplay.Assets) (voplay.CubemapID, error) {
-	var lastErr error
-	for _, root := range assetRootCandidates() {
-		prefix := filepath.Join([]string{root, "skybox"}) + "/"
-		skybox, err := loadSkyboxFromFiles(assets, prefix)
-		if err == nil {
-			return skybox, nil
-		}
-		lastErr = err
-	}
-	return 0, lastErr
-}
-
-func loadSkyboxFromFiles(assets *voplay.Assets, prefix string) (voplay.CubemapID, error) {
-	return assets.Cubemap(prefix + "right.png", prefix + "left.png", prefix + "top.png", prefix + "bottom.png", prefix + "front.png", prefix + "back.png")
-}
-
-func assetRootCandidates() []string {
-	roots := []string{}
-	if len(os.Args) > 0 {
-		entryDir := filepath.Dir(os.Args[0])
-		if entryDir != "" && entryDir != "." && entryDir != "/" {
-			roots = appendAssetRoot(roots, filepath.Join([]string{entryDir, "assets"}))
-		}
-	}
-	roots = appendAssetRoot(roots, "assets")
-	roots = appendAssetRoot(roots, "BlockKart/assets")
-	roots = appendAssetRoot(roots, "/BlockKart/assets")
-	return roots
-}
-
-func appendAssetRoot(roots []string, root string) []string {
-	if root == "" {
-		return roots
-	}
-	for _, existing := range roots {
-		if existing == root {
-			return roots
-		}
-	}
-	return append(roots, root)
+func blockKartAssetPath(rel string) string {
+	return "assets/" + rel
 }
 
 func (w *World) spawnPlayer() {
@@ -296,9 +217,18 @@ func (w *World) spawnPlayer() {
 	w.vehicle = scene3d.NewVehicle(w.player, scene3d.DefaultKartVehicleConfig())
 	w.kartController = scene3d.NewKartController(w.vehicle, w.track, scene3d.DefaultKartControllerConfig())
 	w.vehicle.SetPose(w.startPosition, w.startYaw)
+	w.primeIdleStartPhysicsSleep()
 	w.resetKartRenderPose(w.startPosition, w.kartRotation())
 	w.spawnKartVisuals()
 	w.syncKartVisuals()
+}
+
+func (w *World) primeIdleStartPhysicsSleep() {
+	if w.vehicle == nil {
+		return
+	}
+	w.vehicle.Grounded = true
+	w.physicsIdleFrames = kartPhysicsIdleSleepWarmupFrames
 }
 
 func (w *World) spawnKartVisuals() {
@@ -307,11 +237,11 @@ func (w *World) spawnKartVisuals() {
 
 func (w *World) setupCamera() {
 	w.camera = scene3d.NewRacingCamera()
-	w.camera.BaseDistance = 15.8
-	w.camera.MaxDistance = 24.0
-	w.camera.Height = 8.6
-	w.camera.TargetHeight = 2.45
-	w.camera.LookaheadBase = 11.8
+	w.camera.BaseDistance = 22.4
+	w.camera.MaxDistance = 33.0
+	w.camera.Height = 9.8
+	w.camera.TargetHeight = 1.95
+	w.camera.LookaheadBase = 16.2
 	w.camera.LookaheadSpeedScale = 0.14
 	w.camera.DistanceSpeedScale = 0.055
 	w.camera.DriftOffset = 1.45
@@ -322,7 +252,7 @@ func (w *World) setupCamera() {
 	w.camera.BoostFovKick = 3.2
 	w.camera.CollisionEnabled = false
 	w.camera.CollisionOffset = 0.72
-	w.updateRacingCamera(0)
+	w.updateRacingCamera(0, false)
 }
 
 func (w *World) setupVehicleAudio() {
@@ -352,27 +282,109 @@ func (w *World) setupVehicleAudio() {
 	}
 }
 
-func (w *World) FixedUpdate(g *voplay.GameCtx, dt float64) {
+func (w *World) FixedUpdate(g *voplay.GameCtx, dt float64, debugOverlayVisible bool) {
+	profileFixedStep := debugOverlayVisible || blockKartFixedPhaseConsoleReports || blockKartPerfReports
+	fixedStart := time.Time{}
+	phaseStart := time.Time{}
+	phaseStats := BlockKartFixedPhaseStats{}
+	if profileFixedStep {
+		fixedStart = time.Now()
+		phaseStart = fixedStart
+	}
 	w.updateTouchControls(g)
+	if profileFixedStep {
+		now := time.Now()
+		phaseStats.TouchMs = blockKartElapsedMs(phaseStart, now)
+		phaseStart = now
+	}
 	if g.Actions.IsPressed("reset") || w.touchResetPressed {
 		w.restartRun()
+		if profileFixedStep {
+			now := time.Now()
+			phaseStats.ResetMs = blockKartElapsedMs(phaseStart, now)
+			phaseStats.TotalMs = blockKartElapsedMs(fixedStart, now)
+			w.fixedProfiler.Record(phaseStats)
+		}
 		return
 	}
 	w.updateGameplay(dt)
+	if profileFixedStep {
+		now := time.Now()
+		phaseStats.GameplayMs = blockKartElapsedMs(phaseStart, now)
+		phaseStart = now
+	}
 	if w.finished {
-		w.beginKartPhysicsStep()
-		w.scene.StepAndSyncPhysics(dt)
-		w.endKartPhysicsStep()
-		w.updateVehicleAudio()
+		w.updateIdleVehicleAudio()
+		if profileFixedStep {
+			now := time.Now()
+			phaseStats.AudioMs = blockKartElapsedMs(phaseStart, now)
+			phaseStats.TotalMs = blockKartElapsedMs(fixedStart, now)
+			w.fixedProfiler.Record(phaseStats)
+		}
 		return
 	}
 	w.applyKartDrive(g, dt)
+	if profileFixedStep {
+		now := time.Now()
+		phaseStats.DriveMs = blockKartElapsedMs(phaseStart, now)
+		phaseStart = now
+	}
+	w.applyKartRoadEdgeAssist(dt)
+	if profileFixedStep {
+		now := time.Now()
+		phaseStats.AssistMs = blockKartElapsedMs(phaseStart, now)
+		phaseStart = now
+	}
+	shouldSleep := w.shouldSleepKartPhysics()
+	if profileFixedStep {
+		now := time.Now()
+		phaseStats.SleepMs = blockKartElapsedMs(phaseStart, now)
+		phaseStart = now
+	}
+	if shouldSleep {
+		w.physicsIdleFrames++
+		if w.physicsIdleFrames >= kartPhysicsIdleSleepWarmupFrames {
+			w.updateVehicleAudio()
+			if profileFixedStep {
+				now := time.Now()
+				phaseStats.Slept = true
+				phaseStats.AudioMs = blockKartElapsedMs(phaseStart, now)
+				phaseStats.TotalMs = blockKartElapsedMs(fixedStart, now)
+				w.fixedProfiler.Record(phaseStats)
+			}
+			return
+		}
+	} else {
+		w.physicsIdleFrames = 0
+	}
 	w.beginKartPhysicsStep()
 	w.scene.StepAndSyncPhysics(dt)
+	if profileFixedStep {
+		now := time.Now()
+		phaseStats.PhysicsMs = blockKartElapsedMs(phaseStart, now)
+		phaseStart = now
+	}
+	w.resolveKartRoadEdgeAssistPose()
 	w.endKartPhysicsStep()
+	if profileFixedStep {
+		now := time.Now()
+		phaseStats.ResolveMs = blockKartElapsedMs(phaseStart, now)
+		phaseStart = now
+	}
 	w.updateVehicleAudio()
+	if profileFixedStep {
+		now := time.Now()
+		phaseStats.AudioMs = blockKartElapsedMs(phaseStart, now)
+		phaseStart = now
+	}
 	if w.player.Position().Y < playerResetY {
 		w.respawnAtCheckpoint()
+	}
+	if profileFixedStep {
+		now := time.Now()
+		phaseStats.ResetMs = blockKartElapsedMs(phaseStart, now)
+		phaseStats.TotalMs = blockKartElapsedMs(fixedStart, now)
+		w.fixedProfiler.Record(phaseStats)
 	}
 }
 
@@ -391,11 +403,13 @@ func (w *World) applyKartDrive(g *voplay.GameCtx, dt float64) {
 		input = mergeRacingInput(input, w.touchInput)
 	}
 	vehicleInput := input.VehicleInput()
+	w.lastVehicleInput = vehicleInput
 	boosting := w.boostTimer > 0 || input.Boost
 	vehicleInput.Boost = boosting
+	w.lastVehicleInput = vehicleInput
 	w.lastSteer = input.Steer
 	if w.kartController != nil {
-		state := w.kartController.Update(scene3d.KartInput{Throttle: vehicleInput.Throttle, Steer: vehicleInput.Steer, Drift: vehicleInput.Drift, Boost: boosting}, dt)
+		state := w.kartController.UpdateFromSyncedState(scene3d.KartInput{Throttle: vehicleInput.Throttle, Steer: vehicleInput.Steer, Drift: vehicleInput.Drift, Boost: boosting}, dt)
 		if state.SuperTurboReleased {
 			w.boostTimer = maxFloat(w.boostTimer, kartSuperTurboDuration)
 			w.message = "Super mini-turbo!"
@@ -421,6 +435,161 @@ func (w *World) applyKartDrive(g *voplay.GameCtx, dt float64) {
 	w.drifting = driftHeld
 	w.kartYaw = w.vehicle.Yaw
 	w.kartSpeed = w.vehicle.Speed
+}
+
+func (w *World) shouldSleepKartPhysics() bool {
+	if w.player == nil || w.vehicle == nil {
+		return false
+	}
+	if w.boostTimer > 0 || w.drifting || w.roadEdgeAssistActive {
+		return false
+	}
+	input := w.lastVehicleInput
+	if math.Abs(input.Throttle) > 0.001 || math.Abs(input.Steer) > 0.001 || input.Drift || input.Boost {
+		return false
+	}
+	if math.Abs(w.kartSpeed) > 0.05 {
+		return false
+	}
+	if !w.vehicle.Grounded && w.physicsIdleFrames < kartPhysicsIdleSleepWarmupFrames {
+		return false
+	}
+	if w.player.Velocity().LengthSq() > kartPhysicsIdleLinearSleepSpeedSq {
+		return false
+	}
+	if w.player.AngularVelocity().LengthSq() > kartPhysicsIdleAngularSleepSpeedSq {
+		return false
+	}
+	return true
+}
+
+func (w *World) applyKartRoadEdgeAssist(dt float64) {
+	if dt <= 0 || w.track == nil || w.player == nil || w.vehicle == nil {
+		w.roadEdgeAssistActive = false
+		return
+	}
+	pos := w.player.Position()
+	sample, ok := w.sampleRoadEdgeAssist(pos)
+	if !ok {
+		w.roadEdgeAssistActive = false
+		return
+	}
+	if sample.LateralAbs <= sample.AssistStart {
+		w.roadEdgeAssistActive = false
+		return
+	}
+	enteringAssist := !w.roadEdgeAssistActive
+	w.roadEdgeAssistActive = true
+	t := clampFloat((sample.LateralAbs - sample.AssistStart) / kartRoadEdgeAssistSoftZone, 0, 1)
+	strength := t * t * (3 - 2 * t)
+	vel := w.player.Velocity()
+	outwardSpeed := vel.Dot(sample.Right) * sample.Side
+	if outwardSpeed > 0 {
+		vel = vel.Sub(sample.Right.Scale(sample.Side * outwardSpeed * kartRoadEdgeAssistOutwardDamping * strength))
+	}
+	inwardSpeed := vel.Dot(sample.Inward)
+	targetInwardSpeed := kartRoadEdgeAssistMaxPushSpeed * strength
+	if enteringAssist && targetInwardSpeed < kartRoadEdgeAssistImpactSpeed {
+		targetInwardSpeed = kartRoadEdgeAssistImpactSpeed
+	}
+	if inwardSpeed < targetInwardSpeed {
+		blend := clampFloat(kartRoadEdgeAssistVelocityBlend * dt, 0, 1)
+		vel = vel.Add(sample.Inward.Scale((targetInwardSpeed - inwardSpeed) * blend))
+	}
+	w.player.SetVelocity(vel)
+	corrected := pos
+	changed := false
+	penetration := sample.LateralAbs - sample.EdgeHalfWidth
+	if penetration > 0 {
+		correction := clampFloat(penetration * kartRoadEdgeAssistPositionBlend * dt, 0, kartRoadEdgeAssistMaxCorrection)
+		if correction > 0 {
+			corrected = corrected.Add(sample.Inward.Scale(correction))
+			changed = true
+		}
+	}
+	if sample.LateralAbs > sample.EdgeHalfWidth + kartRoadEdgeAssistSnapOverflow {
+		corrected = sample.Point.Position.Add(sample.Right.Scale(sample.Side * (sample.EdgeHalfWidth - kartRoadEdgeAssistSoftZone * 0.45)))
+		corrected.Y = pos.Y
+		changed = true
+	}
+	lifted := false
+	corrected, lifted = w.liftKartAboveRoadEdge(corrected, sample)
+	if changed || lifted {
+		w.player.SetPosition(corrected)
+	}
+}
+
+func (w *World) resolveKartRoadEdgeAssistPose() {
+	if w.track == nil || w.player == nil {
+		return
+	}
+	pos := w.player.Position()
+	sample, ok := w.sampleRoadEdgeAssist(pos)
+	if !ok || sample.LateralAbs <= sample.AssistStart {
+		return
+	}
+	corrected := pos
+	changed := false
+	if sample.LateralAbs > sample.EdgeHalfWidth {
+		correction := clampFloat(sample.LateralAbs - sample.EdgeHalfWidth, 0, kartRoadEdgeAssistPostMaxCorrection)
+		if correction > 0 {
+			corrected = corrected.Add(sample.Inward.Scale(correction))
+			changed = true
+		}
+	}
+	lifted := false
+	corrected, lifted = w.liftKartAboveRoadEdge(corrected, sample)
+	if changed || lifted {
+		w.player.SetPosition(corrected)
+	}
+}
+
+func (w *World) liftKartAboveRoadEdge(pos voplay.Vec3, sample roadEdgeAssistSample) (voplay.Vec3, bool) {
+	minY := roadEdgeAssistMinY(sample)
+	if pos.Y >= minY {
+		return pos, false
+	}
+	pos.Y = minY
+	w.clearKartDownwardVelocity()
+	return pos, true
+}
+
+func roadEdgeAssistMinY(sample roadEdgeAssistSample) float64 {
+	return sample.Point.Position.Y + kartSpawnRideHeight + kartRoadEdgeAssistLift
+}
+
+func (w *World) clearKartDownwardVelocity() {
+	if w.player == nil {
+		return
+	}
+	vel := w.player.Velocity()
+	if vel.Y >= 0 {
+		return
+	}
+	vel.Y = 0
+	w.player.SetVelocity(vel)
+}
+
+func (w *World) sampleRoadEdgeAssist(pos voplay.Vec3) (roadEdgeAssistSample, bool) {
+	if w.track == nil {
+		return roadEdgeAssistSample{}, false
+	}
+	cp := w.track.ClosestPoint(pos)
+	if cp.HalfWidth <= kartRoadEdgeAssistCenterInset || cp.Right.LengthSq() == 0 {
+		return roadEdgeAssistSample{}, false
+	}
+	right := cp.Right
+	right.Y = 0
+	if right.LengthSq() == 0 {
+		return roadEdgeAssistSample{}, false
+	}
+	right = right.Normalize()
+	side := 1.0
+	if cp.LateralDistance < 0 {
+		side = -1.0
+	}
+	edgeHalfWidth := cp.HalfWidth - kartRoadEdgeAssistCenterInset
+	return roadEdgeAssistSample{Point: cp, Right: right, Inward: right.Scale(-side), EdgeHalfWidth: edgeHalfWidth, AssistStart: edgeHalfWidth - kartRoadEdgeAssistSoftZone, LateralAbs: math.Abs(cp.LateralDistance), Side: side}, true
 }
 
 func (w *World) updateDriftBoost(driftHeld, driftCharging bool, steer, dt float64) {
@@ -459,8 +628,11 @@ func (w *World) kartRotation() voplay.Quat {
 func (w *World) setKartPose(position voplay.Vec3, yaw float64) {
 	w.kartYaw = yaw
 	w.kartSpeed = 0
+	w.roadEdgeAssistActive = false
+	w.physicsIdleFrames = 0
 	if w.kartController != nil {
 		w.kartController.Respawn(scene3d.TrackPose{Position: position, Yaw: yaw})
+		w.primeIdleStartPhysicsSleep()
 		w.resetKartRenderPose(position, w.kartRotation())
 		w.drifting = false
 		w.syncKartVisuals()
@@ -468,6 +640,7 @@ func (w *World) setKartPose(position voplay.Vec3, yaw float64) {
 	}
 	if w.vehicle != nil {
 		w.vehicle.SetPose(position, yaw)
+		w.primeIdleStartPhysicsSleep()
 		w.resetKartRenderPose(position, w.kartRotation())
 		w.drifting = false
 		w.syncKartVisuals()
@@ -480,6 +653,30 @@ func (w *World) setKartPose(position voplay.Vec3, yaw float64) {
 	}
 	w.resetKartRenderPose(position, w.kartRotation())
 	w.syncKartVisuals()
+}
+
+func (w *World) stopKartForFinish() {
+	w.boostTimer = 0
+	w.driftCharge = 0
+	w.drifting = false
+	w.wasDrifting = false
+	w.kartSpeed = 0
+	w.roadEdgeAssistActive = false
+	if w.player != nil {
+		w.player.SetVelocity(voplay.Vec3{})
+		w.player.SetAngularVelocity(voplay.Vec3{})
+		w.resetKartRenderPose(w.player.Position(), w.kartRotation())
+	}
+	if w.vehicle != nil {
+		w.vehicle.Speed = 0
+		w.vehicle.SteerAngle = 0
+		w.vehicle.WheelSpin = 0
+		w.vehicle.Drifting = false
+	}
+	if w.kartController != nil {
+		w.kartController.BoostTimer = 0
+		w.kartController.DriftCharge = 0
+	}
 }
 
 func (w *World) activateBoost(duration float64) {
@@ -503,30 +700,6 @@ func (w *World) syncKartVisuals() {
 func (w *World) syncKartVisualsAt(pos voplay.Vec3, rot voplay.Quat) {
 	if w.kartChassisPrimitive != nil {
 		w.syncPrimitiveKartVisuals(pos, rot)
-		return
-	}
-	w.syncKartPart(w.kartChassis, pos, rot, voplay.Vec3{Y: -0.02})
-	w.syncKartPart(w.kartNose, pos, rot, voplay.Vec3{Y: 0.08, Z: -1.18})
-	w.syncKartPart(w.kartCabin, pos, rot, voplay.Vec3{Y: 0.43, Z: 0.1})
-	w.syncKartPart(w.kartDriver, pos, rot, voplay.Vec3{Y: 0.94, Z: -0.06})
-	w.syncKartPart(w.kartSpoiler, pos, rot, voplay.Vec3{Y: 0.54, Z: 1.42})
-	w.syncKartPart(w.kartBumper, pos, rot, voplay.Vec3{Y: -0.02, Z: -1.46})
-	w.syncKartPart(w.kartExhaustLeft, pos, rot, voplay.Vec3{X: -0.56, Y: 0.1, Z: 1.55})
-	w.syncKartPart(w.kartExhaustRight, pos, rot, voplay.Vec3{X: 0.56, Y: 0.1, Z: 1.55})
-	w.syncKartPart(w.kartFlameLeft, pos, rot, voplay.Vec3{X: -0.56, Y: 0.08, Z: 1.98})
-	w.syncKartPart(w.kartFlameRight, pos, rot, voplay.Vec3{X: 0.56, Y: 0.08, Z: 1.98})
-	boostVisible := w.isBoosting()
-	if w.kartFlameLeft != nil {
-		w.kartFlameLeft.Visible = boostVisible
-	}
-	if w.kartFlameRight != nil {
-		w.kartFlameRight.Visible = boostVisible
-	}
-	if len(w.kartWheels) >= 4 {
-		w.syncKartWheel(w.kartWheels[0], pos, rot, voplay.Vec3{X: -1.02, Y: 0.12, Z: -0.78}, true, 0)
-		w.syncKartWheel(w.kartWheels[1], pos, rot, voplay.Vec3{X: 1.02, Y: 0.12, Z: -0.78}, true, 1)
-		w.syncKartWheel(w.kartWheels[2], pos, rot, voplay.Vec3{X: -1.02, Y: 0.12, Z: 0.82}, false, 2)
-		w.syncKartWheel(w.kartWheels[3], pos, rot, voplay.Vec3{X: 1.02, Y: 0.12, Z: 0.82}, false, 3)
 	}
 }
 
@@ -536,13 +709,30 @@ func (w *World) updateVehicleAudio() {
 	}
 	input := scene3d.VehicleAudioInputFromVehicle(w.vehicle)
 	input.Boost = w.isBoosting()
+	if w.kartController != nil {
+		state := w.kartController.State()
+		if state.SurfaceID != "" {
+			if !state.SurfaceOnRoad {
+				input.SurfaceAmount = 1
+			}
+			w.vehicleAudio.Update(input)
+			return
+		}
+	}
 	if w.track != nil && w.player != nil {
 		surface := w.track.SurfaceAt(w.player.Position())
-		if !surface.OnRoad || surface.Kind == scene3d.TrackSurfaceOffroad {
+		if !surface.OnRoad {
 			input.SurfaceAmount = 1
 		}
 	}
 	w.vehicleAudio.Update(input)
+}
+
+func (w *World) updateIdleVehicleAudio() {
+	if w.vehicleAudio == nil {
+		return
+	}
+	w.vehicleAudio.Update(scene3d.VehicleAudioInput{})
 }
 
 func (w *World) kartVisualRotation() voplay.Quat {
@@ -552,39 +742,28 @@ func (w *World) kartVisualRotation() voplay.Quat {
 	return w.kartRotation()
 }
 
-func (w *World) syncKartPart(part *scene3d.Entity, pos voplay.Vec3, rot voplay.Quat, local voplay.Vec3) {
-	w.syncKartPartWithRotation(part, pos, rot, local, rot)
+func blockKartElapsedMs(start time.Time, end time.Time) float64 {
+	return float64(end.Sub(start).Nanoseconds()) / 1000000.0
 }
 
-func (w *World) syncKartPartWithRotation(part *scene3d.Entity, pos voplay.Vec3, rot voplay.Quat, local voplay.Vec3, partRot voplay.Quat) {
-	if part == nil {
-		return
-	}
-	part.SetPosition(pos.Add(rot.RotateVec3(local)))
-	part.SetRotation(partRot)
+type blockKartStartupProfiler struct {
+	label string
+	start time.Time
+	last time.Time
 }
 
-func (w *World) syncKartWheel(part *scene3d.Entity, pos voplay.Vec3, rot voplay.Quat, local voplay.Vec3, steer bool, wheelIndex int) {
-	if part == nil {
+func newBlockKartStartupProfiler(label string) *blockKartStartupProfiler {
+	now := time.Now()
+	return &blockKartStartupProfiler{label: label, start: now, last: now}
+}
+
+func (p *blockKartStartupProfiler) Mark(phase string) {
+	if p == nil || !blockKartPerfReports {
 		return
 	}
-	wheelRot := rot
-	wheelPos := pos.Add(rot.RotateVec3(local))
-	if w.vehicle != nil {
-		steerAngle := w.vehicle.SteerAngle
-		spin := w.vehicle.WheelSpin
-		if state, ok := w.vehicle.WheelState(wheelIndex); ok {
-			wheelPos = state.Center
-			steerAngle = state.Steering
-			spin = state.Rotation
-		}
-		if steer {
-			wheelRot = wheelRot.Mul(voplay.QuatFromAxisAngle(voplay.Vec3{Y: 1}, -steerAngle))
-		}
-		wheelRot = wheelRot.Mul(voplay.QuatFromAxisAngle(voplay.Vec3{X: 1}, spin))
-	}
-	part.SetPosition(wheelPos)
-	part.SetRotation(wheelRot)
+	now := time.Now()
+	println(p.label + " startup phase=" + phase + " delta=" + formatHudMs(blockKartElapsedMs(p.last, now)) + " total=" + formatHudMs(blockKartElapsedMs(p.start, now)))
+	p.last = now
 }
 
 func moveTowardsFloat(current, target, maxDelta float64) float64 {
@@ -615,19 +794,23 @@ func clampFloat(v, lo, hi float64) float64 {
 	return v
 }
 
-func (w *World) Update(g *voplay.GameCtx, dt float64) {
+func (w *World) Update(g *voplay.GameCtx, dt float64, debugOverlayVisible bool) {
 	w.updateKartRenderPose(g.Alpha)
-	w.updateRacingCamera(dt)
+	w.updateRacingCamera(dt, debugOverlayVisible)
 	w.scene.UpdateAudio()
 	w.scene.UpdateEmitters(dt)
 	w.scene.TickAnimations(dt)
-	if w.racingDebugOverlay != nil {
+	if debugOverlayVisible && w.racingDebugOverlay != nil {
 		w.racingDebugOverlay.Update(w.scene)
 	}
 }
 
-func (w *World) updateRacingCamera(dt float64) {
+func (w *World) updateRacingCamera(dt float64, debugOverlayVisible bool) {
 	if w.camera == nil || w.scene == nil {
+		return
+	}
+	if w.terrainCameraView > 0 {
+		w.updateTerrainCaptureCamera()
 		return
 	}
 	if w.heroCameraVisible {
@@ -637,15 +820,20 @@ func (w *World) updateRacingCamera(dt float64) {
 	target := scene3d.RacingCameraTarget{Position: w.startPosition, Forward: voplay.QuatFromAxisAngle(voplay.Vec3{Y: 1}, w.startYaw).RotateVec3(voplay.Vec3{Z: -1})}
 	if w.vehicle != nil {
 		target = scene3d.RacingCameraTargetFromVehicle(w.vehicle)
-		if w.kartRenderPoseValid {
-			target.Position = w.kartRenderPosition
-			target.Forward = w.kartRenderRotation.RotateVec3(voplay.Vec3{Z: -1})
+		if sample, ok := w.kartRenderPose.RenderSample(); ok {
+			target.Position = sample.Position
+			target.Forward = sample.Rotation.RotateVec3(voplay.Vec3{Z: -1})
+			target.Velocity = sample.Velocity
+			target.Speed = sample.Speed
 		}
 		target.Position = w.stabilizedCameraTargetPosition(target.Position)
 	}
 	target.Boost = w.isBoosting()
 	if w.drifting {
 		target.Drift = w.lastSteer
+	}
+	if debugOverlayVisible {
+		w.cameraTelemetry.Record(target, dt)
 	}
 	w.camera.UpdateCamera(&w.scene.Camera, w.scene, target, dt)
 }
@@ -654,9 +842,12 @@ func (w *World) stabilizedCameraTargetPosition(position voplay.Vec3) voplay.Vec3
 	if w.track == nil {
 		return position
 	}
-	distance := w.track.DistanceAlongTrack(position)
-	pose := w.track.PoseAt(distance)
-	position.Y = pose.Position.Y + kartSpawnRideHeight
+	point := w.track.ClosestPoint(position)
+	pose := w.track.PoseAt(point.Distance)
+	minY := pose.Position.Y + kartSpawnRideHeight
+	if position.Y < minY {
+		position.Y = minY
+	}
 	return position
 }
 
@@ -664,12 +855,11 @@ func (w *World) beginKartPhysicsStep() {
 	if w.player == nil {
 		return
 	}
-	if !w.kartRenderPoseInitialized {
+	if !w.kartRenderPose.Initialized() {
 		w.resetKartRenderPose(w.player.Position(), w.kartVisualRotation())
 		return
 	}
-	w.kartPrevRenderPosition = w.kartCurrRenderPosition
-	w.kartPrevRenderRotation = w.kartCurrRenderRotation
+	w.kartRenderPose.BeginStep()
 }
 
 func (w *World) endKartPhysicsStep() {
@@ -678,40 +868,38 @@ func (w *World) endKartPhysicsStep() {
 	}
 	pos := w.player.Position()
 	rot := w.kartVisualRotation()
-	if !w.kartRenderPoseInitialized {
+	vel := w.player.Velocity()
+	speed := w.currentKartRenderSpeed()
+	sample := NewKartRenderSample(pos, rot, vel, speed)
+	if !w.kartRenderPose.Initialized() {
 		w.resetKartRenderPose(pos, rot)
 		return
 	}
-	w.kartCurrRenderPosition = pos
-	w.kartCurrRenderRotation = rot
+	w.kartRenderPose.Commit(sample)
 }
 
 func (w *World) resetKartRenderPose(pos voplay.Vec3, rot voplay.Quat) {
-	rot = rot.Normalize()
-	w.kartPrevRenderPosition = pos
-	w.kartCurrRenderPosition = pos
-	w.kartPrevRenderRotation = rot
-	w.kartCurrRenderRotation = rot
-	w.kartRenderPosition = pos
-	w.kartRenderRotation = rot
-	w.kartRenderPoseInitialized = true
-	w.kartRenderPoseValid = true
+	sample := w.kartRenderPose.Reset(pos, rot)
+	w.syncKartVisualsAt(sample.Position, sample.Rotation)
+	w.cameraTelemetry.ResetAnchor()
 }
 
 func (w *World) updateKartRenderPose(alpha float64) {
 	if w.player == nil {
 		return
 	}
-	if !w.kartRenderPoseInitialized {
+	if !w.kartRenderPose.Initialized() {
 		w.resetKartRenderPose(w.player.Position(), w.kartVisualRotation())
 	}
-	t := clampFloat(alpha, 0, 1)
-	pos := w.kartPrevRenderPosition.Lerp(w.kartCurrRenderPosition, t)
-	rot := w.kartPrevRenderRotation.Slerp(w.kartCurrRenderRotation, t).Normalize()
-	w.kartRenderPosition = pos
-	w.kartRenderRotation = rot
-	w.kartRenderPoseValid = true
-	w.syncKartVisualsAt(pos, rot)
+	sample := w.kartRenderPose.Interpolate(alpha)
+	w.syncKartVisualsAt(sample.Position, sample.Rotation)
+}
+
+func (w *World) currentKartRenderSpeed() float64 {
+	if w.vehicle != nil {
+		return w.vehicle.Speed
+	}
+	return w.kartSpeed
 }
 
 func (w *World) updateHeroInspectionCamera() {
@@ -721,19 +909,105 @@ func (w *World) updateHeroInspectionCamera() {
 	target := voplay.Vec3{X: 76, Y: 5.4, Z: 113}
 	position := voplay.Vec3{X: 91, Y: 10.2, Z: 98}
 	if w.track != nil {
-		pose := w.track.PoseAt(31)
-		target = pose.Position.Add(pose.Right.Scale(pose.HalfWidth + 8.8)).Add(voplay.Vec3{Y: 0.95})
-		position = target.Sub(pose.Right.Scale(4.8)).Sub(pose.Forward.Scale(4.2)).Add(voplay.Vec3{Y: 2.25})
+		pose := w.track.PoseAt(48)
+		target = pose.Position.Sub(pose.Right.Scale(pose.HalfWidth + 34.0)).Add(voplay.Vec3{Y: 4.8})
+		position = target.Add(pose.Right.Scale(24.0)).Sub(pose.Forward.Scale(32.0)).Add(voplay.Vec3{Y: 27.0})
 	}
 	w.scene.Camera.LookAt(position, target)
-	w.scene.Camera.Fov = 34
+	w.scene.Camera.Fov = 42
+}
+
+func (w *World) CycleTerrainCameraView() int {
+	w.terrainCameraView++
+	if w.terrainCameraView > 4 {
+		w.terrainCameraView = 0
+	}
+	return w.terrainCameraView
+}
+
+func (w *World) updateTerrainCaptureCamera() {
+	if w.scene == nil {
+		return
+	}
+	if w.track == nil {
+		w.scene.Camera.LookAt(voplay.Vec3{X: 0, Y: 58, Z: 96}, voplay.Vec3{X: 0, Y: 0, Z: 0})
+		w.scene.Camera.Fov = 48
+		return
+	}
+	start := w.track.DistanceAlongTrack(w.startPosition)
+	length := w.track.Length()
+	if length <= 0 {
+		length = 1
+	}
+	if w.terrainCameraView == 1 {
+		target := voplay.Vec3{X: 0, Y: 0.0, Z: 1}
+		position := voplay.Vec3{X: 0, Y: 950, Z: 0}
+		w.scene.Camera.LookAt(position, target)
+		w.scene.Camera.Fov = 62
+		return
+	}
+	if w.terrainCameraView == 2 {
+		pose := w.track.PoseAt(start + length * 0.02)
+		target := pose.Position.Add(pose.Forward.Scale(92)).Add(voplay.Vec3{Y: 5.0})
+		position := pose.Position.Sub(pose.Forward.Scale(178)).Sub(pose.Right.Scale(34)).Add(voplay.Vec3{Y: 104})
+		w.scene.Camera.LookAt(position, target)
+		w.scene.Camera.Fov = 54
+		return
+	}
+	if w.terrainCameraView == 3 {
+		target := voplay.Vec3{X: 12, Y: 1.6, Z: -8}
+		position := voplay.Vec3{X: 440, Y: 185, Z: 305}
+		w.scene.Camera.LookAt(position, target)
+		w.scene.Camera.Fov = 56
+		return
+	}
+	target := voplay.Vec3{X: -36, Y: 2.8, Z: 6}
+	position := voplay.Vec3{X: -485, Y: 170, Z: 255}
+	w.scene.Camera.LookAt(position, target)
+	w.scene.Camera.Fov = 55
 }
 
 func (w *World) Draw(g *voplay.GameCtx, debugOverlayVisible bool) {
 	w.scene.Draw(g.Draw)
-	hud := w.hudState(debugOverlayVisible, g.DebugOverlayStats())
+	perf := voplay.DebugOverlayStats{}
+	if debugOverlayVisible {
+		perf = g.DebugOverlayStats()
+	}
+	perfSnapshot := voplay.PerfSnapshot{}
+	if debugOverlayVisible || w.shouldPollPerfSnapshotForConsoleReport() {
+		perfSnapshot = g.GetPerfSnapshot()
+	}
+	if w.perfAnalyzer.ShouldReport(perfSnapshot) {
+		w.perfAnalyzer.Report(perfSnapshot, w.fixedProfiler.Stats(), g.Screen)
+	}
+	if w.terrainCameraView > 0 {
+		return
+	}
+	hud := w.hudState(debugOverlayVisible, perf, perfSnapshot)
+	if debugOverlayVisible {
+		w.updateDebugHUDLines(&hud, perfSnapshot)
+	}
 	drawWorldHUD(&w.theme, g, &hud)
 	w.touchControls.Draw(g.Draw)
+}
+
+func (w *World) shouldPollPerfSnapshotForConsoleReport() bool {
+	if !blockKartPerfReports {
+		return false
+	}
+	w.perfSnapshotPollFrame++
+	firstReportFrame := blockKartPerfWarmupFrames + blockKartPerfWindowFrames
+	if w.perfSnapshotPollFrame < firstReportFrame {
+		return false
+	}
+	return (w.perfSnapshotPollFrame - firstReportFrame) % blockKartPerfSnapshotPollFrames == 0
+}
+
+func (w *World) PrepareRender(g *voplay.GameCtx) {
+	if w == nil || w.scene == nil || g == nil || g.Draw == nil {
+		return
+	}
+	w.scene.Prepare(g.Draw)
 }
 
 func (w *World) updateTouchControls(g *voplay.GameCtx) {
@@ -747,7 +1021,7 @@ func (w *World) resetPlayer() {
 	w.respawnAtCheckpoint()
 }
 
-func (w *World) hudState(debugOverlayVisible bool, perf voplay.DebugOverlayStats) WorldHUDState {
+func (w *World) hudState(debugOverlayVisible bool, perf voplay.DebugOverlayStats, perfSnapshot voplay.PerfSnapshot) WorldHUDState {
 	if w.vehicle != nil {
 		w.kartSpeed = w.vehicle.Speed
 	}
@@ -762,6 +1036,8 @@ func (w *World) hudState(debugOverlayVisible bool, perf voplay.DebugOverlayStats
 	primitiveUploadBytes := 0
 	if w.scene != nil {
 		renderDebugMode = w.scene.RenderDebugMode
+	}
+	if debugOverlayVisible && w.scene != nil {
 		stats = w.scene.RenderStats()
 		primitiveStats := w.scene.PrimitiveStats()
 		primitiveInstances = primitiveStats.TotalInstances
@@ -773,7 +1049,7 @@ func (w *World) hudState(debugOverlayVisible bool, perf voplay.DebugOverlayStats
 		primitiveUploadBytes = primitiveStats.UploadBytes
 	}
 	trackEntities := 0
-	if w.trackResult != nil {
+	if debugOverlayVisible && w.trackResult != nil {
 		trackEntities = len(w.trackResult.Entities)
 	}
 	vehicleGrounded := false
@@ -781,7 +1057,7 @@ func (w *World) hudState(debugOverlayVisible bool, perf voplay.DebugOverlayStats
 	wheelCount := 0
 	wheelMaxSlip := 0.0
 	wheelMaxCompression := 0.0
-	if w.vehicle != nil {
+	if debugOverlayVisible && w.vehicle != nil {
 		vehicleGrounded = w.vehicle.Grounded
 		wheelCount = w.vehicle.WheelCount()
 		for i := 0; i < wheelCount; i++ {
@@ -804,7 +1080,166 @@ func (w *World) hudState(debugOverlayVisible bool, perf voplay.DebugOverlayStats
 			}
 		}
 	}
-	return WorldHUDState{Time: w.courseTime, FinishTime: w.finishTime, Collected: w.collected, TotalCollectibles: len(w.collectibles), Checkpoint: w.checkpointLabel, NextGate: w.nextGateLabel, Lap: w.lap, TotalLaps: w.totalLaps, Speed: math.Abs(w.kartSpeed), Boosting: w.isBoosting(), Drifting: w.drifting, DriftCharge: w.driftCharge, Message: w.message, MessageTimer: w.messageTimer, Finished: w.finished, DebugOverlayVisible: debugOverlayVisible, RenderDebugMode: renderDebugMode, HeroCameraVisible: w.heroCameraVisible, PerfFPS: perf.FPS, PerfFrameMs: perf.FrameMs, PerfLogicMs: perf.LogicMs, PerfInputMs: perf.InputMs, PerfAdvanceMs: perf.AdvanceMs, PerfDrawMs: perf.DrawMs, PerfOverlayMs: perf.OverlayMs, PerfBudgetMs: perf.FrameBudgetMs, PerfMaxFrameMs: perf.MaxFrameMs, PerfMaxLogicMs: perf.MaxLogicMs, PerfDrawBytes: perf.DrawBytes, PerfSubmitBytes: perf.SubmitBytes, PerfFixedSteps: perf.FixedSteps, PerfSlowFrames: perf.SlowFrames, PerfSlowLogs: perf.SlowLogs, PerfLastSlowReason: perf.LastSlowReason, PerfLastSlowFrameMs: perf.LastSlowFrameMs, PerfLastSlowLogicMs: perf.LastSlowLogicMs, SceneActive: stats.ActiveEntities, SceneVisible: stats.VisibleEntities, SceneCulled: stats.CulledEntities, SceneModels: stats.ModelEntities, SceneUpserts: stats.UpsertedObjects, SceneDestroyed: stats.DestroyedObjects, SceneBatchEligible: stats.BatchEligibleObjects, SceneBatchGroups: stats.BatchGroups, SceneFlushMs: stats.FlushCpuMs, SceneFrameMs: stats.FrameCpuMs, TrackEntities: trackEntities, PrimitiveInstances: primitiveInstances, PrimitiveVisibleInstances: primitiveVisibleInstances, PrimitiveChunks: primitiveChunks, PrimitiveVisibleChunks: primitiveVisibleChunks, PrimitiveGroups: primitiveGroups, PrimitiveDrawCalls: primitiveDrawCalls, PrimitiveUploadBytes: primitiveUploadBytes, VehicleGrounded: vehicleGrounded, WheelContacts: wheelContacts, WheelCount: wheelCount, WheelMaxSlip: wheelMaxSlip, WheelMaxCompression: wheelMaxCompression}
+	camera := w.cameraTelemetry.Snapshot()
+	hud := WorldHUDState{
+		Time: w.courseTime,
+		FinishTime: w.finishTime,
+		Collected: w.collected,
+		TotalCollectibles: len(w.collectibles),
+		Checkpoint: w.checkpointLabel,
+		NextGate: w.nextGateLabel,
+		Lap: w.lap,
+		TotalLaps: w.totalLaps,
+		Speed: math.Abs(w.kartSpeed),
+		Boosting: w.isBoosting(),
+		Drifting: w.drifting,
+		DriftCharge: w.driftCharge,
+		Message: w.message,
+		MessageTimer: w.messageTimer,
+		Finished: w.finished,
+		DebugOverlayVisible: debugOverlayVisible,
+		RenderDebugMode: renderDebugMode,
+		HeroCameraVisible: w.heroCameraVisible,
+		PerfFPS: perf.FPS,
+		PerfFrameMs: perf.FrameMs,
+		PerfLogicMs: perf.LogicMs,
+		PerfInputMs: perf.InputMs,
+		PerfAdvanceMs: perf.AdvanceMs,
+		PerfDrawMs: perf.DrawMs,
+		PerfOverlayMs: perf.OverlayMs,
+		PerfBudgetMs: perf.FrameBudgetMs,
+		PerfMaxFrameMs: perf.MaxFrameMs,
+		PerfMaxLogicMs: perf.MaxLogicMs,
+		PerfDrawBytes: perf.DrawBytes,
+		PerfSubmitBytes: perf.SubmitBytes,
+		PerfFixedSteps: perf.FixedSteps,
+		PerfSlowFrames: perf.SlowFrames,
+		PerfSlowLogs: perf.SlowLogs,
+		PerfWorkSlowFrames: perf.WorkSlowFrames,
+		PerfWorkSlowLogs: perf.WorkSlowLogs,
+		PerfLastSlowReason: perf.LastSlowReason,
+		PerfLastSlowFrameMs: perf.LastSlowFrameMs,
+		PerfLastSlowLogicMs: perf.LastSlowLogicMs,
+		PerfLastWorkSlowReason: perf.LastWorkSlowReason,
+		PerfLastWorkSlowFrameMs: perf.LastWorkSlowFrameMs,
+		PerfLastWorkSlowLogicMs: perf.LastWorkSlowLogicMs,
+		PerfWindowFrames: perf.WindowFrames,
+		PerfWindowSlowFrames: perf.WindowSlowFrames,
+		PerfWindowLastSlowGapFrames: perf.WindowLastSlowGapFrames,
+		PerfWindowLastSlowGapMs: perf.WindowLastSlowGapMs,
+		PerfWindowWorkSlowFrames: perf.WindowWorkSlowFrames,
+		PerfWindowLastWorkSlowGapFrames: perf.WindowLastWorkSlowGapFrames,
+		PerfWindowLastWorkSlowGapMs: perf.WindowLastWorkSlowGapMs,
+		PerfFrameP50Ms: perf.FrameP50Ms,
+		PerfFrameP90Ms: perf.FrameP90Ms,
+		PerfFrameP99Ms: perf.FrameP99Ms,
+		PerfLogicP50Ms: perf.LogicP50Ms,
+		PerfLogicP90Ms: perf.LogicP90Ms,
+		PerfLogicP99Ms: perf.LogicP99Ms,
+		PerfAdvanceP90Ms: perf.AdvanceP90Ms,
+		PerfDrawP90Ms: perf.DrawP90Ms,
+		PerfDrawP99Ms: perf.DrawP99Ms,
+		PerfRenderFrame: perf.RenderFrame,
+		PerfRenderLoopMs: perf.RenderLoopMs,
+		PerfRenderPaceWaitMs: perf.RenderPaceWaitMs,
+		PerfRenderReplyWaitMs: perf.RenderReplyWaitMs,
+		PerfRenderSubmitMs: perf.RenderSubmitMs,
+		PerfRenderDisplayPulseMs: perf.RenderDisplayPulseMs,
+		PerfRenderDrawBytes: perf.RenderDrawBytes,
+		PerfRenderFrameDivisor: perf.RenderFrameDivisor,
+		PerfRenderAttribution: perf.RenderAttribution,
+		PerfRenderWindowFrames: perf.RenderWindowFrames,
+		PerfRenderWindowSlowFrames: perf.RenderWindowSlowFrames,
+		PerfRenderWindowLastSlowGapFrames: perf.RenderWindowLastSlowGapFrames,
+		PerfRenderWindowLastSlowGapMs: perf.RenderWindowLastSlowGapMs,
+		PerfRenderCadenceSlowFrames: perf.RenderCadenceSlowFrames,
+		PerfRenderReplySlowFrames: perf.RenderReplySlowFrames,
+		PerfRenderSubmitSlowFrames: perf.RenderSubmitSlowFrames,
+		PerfRenderUnattributedSlowFrames: perf.RenderUnattributedSlowFrames,
+		PerfRenderLoopP50Ms: perf.RenderLoopP50Ms,
+		PerfRenderLoopP90Ms: perf.RenderLoopP90Ms,
+		PerfRenderLoopP99Ms: perf.RenderLoopP99Ms,
+		PerfRenderPaceWaitP90Ms: perf.RenderPaceWaitP90Ms,
+		PerfRenderReplyWaitP90Ms: perf.RenderReplyWaitP90Ms,
+		PerfRenderSubmitP90Ms: perf.RenderSubmitP90Ms,
+		SceneActive: stats.ActiveEntities,
+		SceneVisible: stats.VisibleEntities,
+		SceneCulled: stats.CulledEntities,
+		SceneModels: stats.ModelEntities,
+		SceneUpserts: stats.UpsertedObjects,
+		SceneDestroyed: stats.DestroyedObjects,
+		SceneBatchEligible: stats.BatchEligibleObjects,
+		SceneBatchGroups: stats.BatchGroups,
+		SceneFlushMs: stats.FlushCpuMs,
+		SceneFrameMs: stats.FrameCpuMs,
+		TrackEntities: trackEntities,
+		PrimitiveInstances: primitiveInstances,
+		PrimitiveVisibleInstances: primitiveVisibleInstances,
+		PrimitiveChunks: primitiveChunks,
+		PrimitiveVisibleChunks: primitiveVisibleChunks,
+		PrimitiveGroups: primitiveGroups,
+		PrimitiveDrawCalls: primitiveDrawCalls,
+		PrimitiveUploadBytes: primitiveUploadBytes,
+		VehicleGrounded: vehicleGrounded,
+		WheelContacts: wheelContacts,
+		WheelCount: wheelCount,
+		WheelMaxSlip: wheelMaxSlip,
+		WheelMaxCompression: wheelMaxCompression,
+		CameraTargetStep: camera.Step,
+		CameraTargetStepMax: camera.StepMax,
+		CameraTargetResidual: camera.Residual,
+		CameraTargetResidualMax: camera.ResidualMax,
+		CameraTargetYStep: camera.YStep,
+		CameraTargetYStepMax: camera.YStepMax,
+		CameraSpeedStep: camera.SpeedStep,
+		CameraSpeedStepMax: camera.SpeedStepMax,
+	}
+	if debugOverlayVisible {
+		blockKartApplyPerfSnapshotToHUD(&hud, perfSnapshot)
+	}
+	return hud
+}
+
+func (w *World) updateDebugHUDLines(hud *WorldHUDState, perfSnapshot voplay.PerfSnapshot) {
+	w.debugHudFrame++
+	if w.debugHudLineCount == 0 || w.debugHudFrame >= 10 {
+		fixed := w.fixedProfiler.Stats()
+		w.debugHudFrame = 0
+		w.debugHudLineCount = 18
+		w.debugHudLines[0] = "F3 perf  fps " + formatHudFloat(hud.PerfFPS, 1) + "  frame " + formatHudMs(hud.PerfFrameMs) + " / budget " + formatHudMs(hud.PerfBudgetMs) + "  logic " + formatHudMs(hud.PerfLogicMs)
+		w.debugHudLines[1] = "slow " + itoa(hud.PerfSlowFrames) + " logs " + itoa(hud.PerfSlowLogs) + " work " + itoa(hud.PerfWorkSlowFrames) + " logs " + itoa(hud.PerfWorkSlowLogs)
+		w.debugHudLines[2] = "max frame " + formatHudMs(hud.PerfMaxFrameMs) + "  max logic " + formatHudMs(hud.PerfMaxLogicMs) + "  fixed steps " + itoa(hud.PerfFixedSteps) + "  bytes " + formatHudBytes(hud.PerfDrawBytes)
+		w.debugHudLines[3] = "BK fixed last/peak " + formatHudMs(fixed.TotalMs) + "/" + formatHudMs(fixed.PeakTotalMs) + "  slow " + itoa(fixed.WindowSlowFrames) + "/" + itoa(fixed.WindowFrames) + "  worst " + fixed.SlowestPhase + ":" + formatHudMs(fixed.SlowestPhaseMs)
+		w.debugHudLines[4] = "BK phase touch/game/drive/assist/phys/audio " + formatHudMs(fixed.TouchMs) + "/" + formatHudMs(fixed.GameplayMs) + "/" + formatHudMs(fixed.DriveMs) + "/" + formatHudMs(fixed.AssistMs) + "/" + formatHudMs(fixed.PhysicsMs) + "/" + formatHudMs(fixed.AudioMs) + " slept " + boolHud(fixed.Slept)
+		w.debugHudLines[5] = "engine phase input/advance/draw/overlay " + formatHudMs(hud.PerfInputMs) + "/" + formatHudMs(hud.PerfAdvanceMs) + "/" + formatHudMs(hud.PerfDrawMs) + "/" + formatHudMs(hud.PerfOverlayMs)
+		if perfSnapshot.Enabled {
+			window := blockKartPerfReportingWindow(perfSnapshot)
+			current := perfSnapshot.Current
+			workload := current.RendererWorkload
+			gpu := current.GpuQueue
+			w.debugHudLines[6] = "perf frame p50/90/99/max " + formatHudMs(window.FrameP50Ms) + "/" + formatHudMs(window.FrameP90Ms) + "/" + formatHudMs(window.FrameP99Ms) + "/" + formatHudMs(window.FrameMaxMs) + "  slow " + itoa(window.SlowFrames) + "/" + itoa(window.Frames)
+			w.debugHudLines[7] = "perf p90 game/draw/render/gpu/hud " + formatHudMs(window.GameCpuP90Ms) + "/" + formatHudMs(window.DrawEncodeP90Ms) + "/" + formatHudMs(window.RenderSubmitP90Ms) + "/" + formatHudMs(window.GpuWorkDoneP90Ms) + "/" + formatHudMs(window.HudP90Ms)
+			w.debugHudLines[8] = "perf cause " + current.Classification.PrimaryCause + "  secondary " + current.Classification.SecondaryCause + "  queue " + gpu.QueueDepthClass
+			w.debugHudLines[9] = "gpu now work/inflight/probe " + formatHudMs(gpu.SubmittedWorkDoneMs) + "/" + itoa(gpu.InFlightSubmits) + "/" + formatHudMs(gpu.ProbeOverheadMs) + "  submit " + formatHudMs(current.RendererCpu.QueueSubmitCpuMs)
+			w.debugHudLines[10] = "work draws model/prim/sprite/text/batch " + itoa(workload.ModelDraws) + "/" + itoa(workload.PrimitiveDraws) + "/" + itoa(workload.SpriteDraws) + "/" + itoa(workload.TextDraws) + "/" + itoa(workload.InstancedBatches)
+			w.debugHudLines[11] = "work inst/tri/upload/chunks " + itoa(workload.Instances) + "/" + itoa(workload.Triangles) + "/" + formatHudBytes(workload.UploadBytes) + "/" + itoa(workload.PrimitiveChunks) + " churn " + itoa(workload.BufferCreates) + "/" + itoa(workload.BindGroupCreates) + "/" + itoa(workload.TextureUploads)
+		} else {
+			w.debugHudLines[6] = "240f frame p50/90/99 " + formatHudMs(hud.PerfFrameP50Ms) + "/" + formatHudMs(hud.PerfFrameP90Ms) + "/" + formatHudMs(hud.PerfFrameP99Ms) + "  slow " + itoa(hud.PerfWindowSlowFrames) + "/" + itoa(hud.PerfWindowFrames) + " gap " + itoa(hud.PerfWindowLastSlowGapFrames) + "/" + formatHudMs(hud.PerfWindowLastSlowGapMs)
+			w.debugHudLines[7] = "240f logic p50/90/99 " + formatHudMs(hud.PerfLogicP50Ms) + "/" + formatHudMs(hud.PerfLogicP90Ms) + "/" + formatHudMs(hud.PerfLogicP99Ms) + "  work " + itoa(hud.PerfWindowWorkSlowFrames) + " gap " + itoa(hud.PerfWindowLastWorkSlowGapFrames) + "/" + formatHudMs(hud.PerfWindowLastWorkSlowGapMs)
+			w.debugHudLines[8] = "240f advance/draw p90/99 " + formatHudMs(hud.PerfAdvanceP90Ms) + "/" + formatHudMs(hud.PerfDrawP90Ms) + "/" + formatHudMs(hud.PerfDrawP99Ms)
+			w.debugHudLines[9] = "render now loop/pace/reply/submit " + formatHudMs(hud.PerfRenderLoopMs) + "/" + formatHudMs(hud.PerfRenderPaceWaitMs) + "/" + formatHudMs(hud.PerfRenderReplyWaitMs) + "/" + formatHudMs(hud.PerfRenderSubmitMs) + "  attr " + hud.PerfRenderAttribution + "  bytes " + formatHudBytes(hud.PerfRenderDrawBytes)
+			w.debugHudLines[10] = "render 240f loop p50/90/99 " + formatHudMs(hud.PerfRenderLoopP50Ms) + "/" + formatHudMs(hud.PerfRenderLoopP90Ms) + "/" + formatHudMs(hud.PerfRenderLoopP99Ms) + "  pulse " + formatHudMs(hud.PerfRenderDisplayPulseMs) + " x" + itoa(hud.PerfRenderFrameDivisor)
+			w.debugHudLines[11] = "render p90 pace/reply/submit " + formatHudMs(hud.PerfRenderPaceWaitP90Ms) + "/" + formatHudMs(hud.PerfRenderReplyWaitP90Ms) + "/" + formatHudMs(hud.PerfRenderSubmitP90Ms) + "  slow " + itoa(hud.PerfRenderWindowSlowFrames) + "/" + itoa(hud.PerfRenderWindowFrames) + " gap " + itoa(hud.PerfRenderWindowLastSlowGapFrames) + "/" + formatHudMs(hud.PerfRenderWindowLastSlowGapMs) + " c/r/s/u " + itoa(hud.PerfRenderCadenceSlowFrames) + "/" + itoa(hud.PerfRenderReplySlowFrames) + "/" + itoa(hud.PerfRenderSubmitSlowFrames) + "/" + itoa(hud.PerfRenderUnattributedSlowFrames)
+		}
+		w.debugHudLines[12] = "scene active/visible/culled/model " + itoa(hud.SceneActive) + "/" + itoa(hud.SceneVisible) + "/" + itoa(hud.SceneCulled) + "/" + itoa(hud.SceneModels)
+		w.debugHudLines[13] = "scene upsert/destroy/batch/groups " + itoa(hud.SceneUpserts) + "/" + itoa(hud.SceneDestroyed) + "/" + itoa(hud.SceneBatchEligible) + "/" + itoa(hud.SceneBatchGroups)
+		w.debugHudLines[14] = "scene cpu flush " + formatHudMs(hud.SceneFlushMs) + "  frame " + formatHudMs(hud.SceneFrameMs) + "  track ents " + itoa(hud.TrackEntities)
+		w.debugHudLines[15] = "primitive inst visible/total " + itoa(hud.PrimitiveVisibleInstances) + "/" + itoa(hud.PrimitiveInstances) + "  chunks " + itoa(hud.PrimitiveVisibleChunks) + "/" + itoa(hud.PrimitiveChunks)
+		w.debugHudLines[16] = "primitive groups/draws/upload " + itoa(hud.PrimitiveGroups) + "/" + itoa(hud.PrimitiveDrawCalls) + "/" + formatHudBytes(hud.PrimitiveUploadBytes)
+		w.debugHudLines[17] = "vehicle grounded " + boolHud(hud.VehicleGrounded) + "  wheels " + itoa(hud.WheelContacts) + "/" + itoa(hud.WheelCount) + "  slip " + formatHudFloat(hud.WheelMaxSlip, 2) + "  comp " + formatHudFloat(hud.WheelMaxCompression, 2)
+	}
+	hud.DebugLines = w.debugHudLines
+	hud.DebugLineCount = w.debugHudLineCount
 }
 
 func (w *World) isBoosting() bool {
@@ -867,27 +1302,11 @@ func (w *World) Close() {
 	w.track = nil
 	w.kartController = nil
 	if w.assets != nil {
-		if w.trackAssetGroup != "" {
-			w.assets.ReleaseGroup(w.trackAssetGroup)
-			w.trackAssetGroup = ""
-		}
 		if w.assetGroup != "" {
 			w.assets.ReleaseGroup(w.assetGroup)
 			w.assetGroup = ""
 		}
-		if w.assetPackPath != "" {
-			_ = w.assets.Unmount(w.assetPackPath)
-			w.assetPackPath = ""
-		}
 		w.assets = nil
-	}
-	if w.sphereModel != 0 {
-		w.sphereModel.Free()
-		w.sphereModel = 0
-	}
-	if w.cylinderModel != 0 {
-		w.cylinderModel.Free()
-		w.cylinderModel = 0
 	}
 	if w.cubeModel != 0 {
 		w.cubeModel.Free()

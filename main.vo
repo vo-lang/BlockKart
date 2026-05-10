@@ -7,5 +7,5 @@ import (
 
 func main() {
 	vogui.SetTheme(vogui.DefaultTheme())
-	voplay.Run(voplay.Game{Width: 1280, Height: 720, Title: "BlockKart", TargetFrameRate: 120, InitialState: NewPlayState()})
+	voplay.Run(blockKartGameConfig(NewPlayState()))
 }

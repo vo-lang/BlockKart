@@ -1,0 +1,433 @@
+{
+  "version": 2,
+  "id": "primitive_concept_v2",
+  "name": "BlockKart primitive concept terrain v2 explicit loop",
+  "target": {
+    "referenceImage": "docs/images/terrain-closed-loop-concept-v1.png",
+    "style": "panoramic 45-degree low-poly closed-loop kart circuit carved through broad rolling hills, with a lower inner basin and highlands wrapping the outside",
+    "mustRead": [
+      "the track reads as a wide hand-authored racing loop instead of an ellipse",
+      "the front straight, left S bend, far straight, right S bend, and return straight match the concept silhouette",
+      "the whole map reads as hills first, with the road cut into them",
+      "the loop interior includes a lower drainage basin instead of a flat field",
+      "outer highlands wrap around the left, right, and far sides of the loop"
+    ]
+  },
+  "terrain": {
+    "mapScale": 2.45,
+    "landmarkScale": 1.42,
+    "widthUnits": 460,
+    "depthUnits": 460,
+    "minY": -4.0,
+    "height": 38.0,
+    "heightmapSize": 769,
+    "splatSize": 1024
+  },
+  "track": {
+    "mode": "explicit_control_points",
+    "centerlineSampleCount": 760,
+    "samplesPerSegment": 18,
+    "width": 18.0,
+    "clearance": 0.18,
+    "spawnDistanceFactor": 0.0,
+    "controlPoints": [
+      { "id": "start_line", "xMapScale": 8, "zMapScale": 150, "y": 0.0, "width": 19.0 },
+      { "id": "front_right_straight", "xMapScale": 104, "zMapScale": 150, "y": 0.02, "width": 19.0 },
+      { "id": "right_s_lower_outer", "xMapScale": 168, "zMapScale": 128, "y": 0.14, "width": 18.8 },
+      { "id": "right_s_lower_inner", "xMapScale": 190, "zMapScale": 90, "y": 0.28, "width": 18.4 },
+      { "id": "right_s_neck", "xMapScale": 128, "zMapScale": 44, "y": 0.36, "width": 18.0 },
+      { "id": "right_s_upper_outer", "xMapScale": 184, "zMapScale": -24, "y": 0.5, "width": 18.4 },
+      { "id": "right_far_turn", "xMapScale": 162, "zMapScale": -104, "y": 0.62, "width": 18.6 },
+      { "id": "far_right_straight", "xMapScale": 82, "zMapScale": -136, "y": 0.68, "width": 18.8 },
+      { "id": "far_mid_straight", "xMapScale": -18, "zMapScale": -136, "y": 0.64, "width": 18.8 },
+      { "id": "far_left_straight", "xMapScale": -116, "zMapScale": -132, "y": 0.54, "width": 18.6 },
+      { "id": "left_far_turn", "xMapScale": -184, "zMapScale": -88, "y": 0.42, "width": 18.4 },
+      { "id": "left_s_upper_inner", "xMapScale": -158, "zMapScale": -34, "y": 0.28, "width": 18.0 },
+      { "id": "left_s_neck", "xMapScale": -124, "zMapScale": 4, "y": 0.2, "width": 18.2 },
+      { "id": "left_s_lower_outer", "xMapScale": -178, "zMapScale": 62, "y": 0.08, "width": 18.4 },
+      { "id": "left_front_turn", "xMapScale": -168, "zMapScale": 118, "y": 0.02, "width": 18.8 },
+      { "id": "front_left_straight", "xMapScale": -94, "zMapScale": 150, "y": 0.0, "width": 19.0 }
+    ]
+  },
+  "heroSegment": {
+    "startOffset": 0.0,
+    "centerOffset": 0.12,
+    "endOffset": 0.28,
+    "intent": "first pass must establish the concept-like closed loop silhouette, inner basin, and outer highland masses"
+  },
+  "corridor": {
+    "shoulderWidth": 11.5,
+    "terrainBlendWidth": 78,
+    "roadYOffset": -0.34,
+    "heroMask": {
+      "innerTrackLengthFactor": 0.18,
+      "outerTrackLengthFactor": 0.34,
+      "spanStartIn": -0.03,
+      "spanStartOut": 0.02,
+      "spanEndIn": -0.02,
+      "spanEndOut": 0.04
+    },
+    "blend": {
+      "startShoulderFactor": 0.72,
+      "heroStartShoulderFactor": 0.45,
+      "heroEndExtra": 18
+    },
+    "cutReinforcement": {
+      "base": 0.04,
+      "blend": 0.08
+    },
+    "roadProfile": {
+      "shoulderDrop": {
+        "base": -0.028,
+        "hero": -0.010,
+        "edgeEndShoulderFactor": 0.92
+      },
+      "ditch": {
+        "base": -0.004,
+        "hero": -0.002,
+        "centerShoulderFactor": 2.35,
+        "radiusShoulderFactor": 2.70
+      },
+      "cutFace": {
+        "base": 0.20,
+        "hero": 0.04,
+        "centerShoulderFactor": 2.35,
+        "radiusShoulderFactor": 2.45
+      },
+      "nearHill": {
+        "base": 1.78,
+        "heroRight": 0.42,
+        "heroLeft": 0.42,
+        "centerShoulderFactor": 3.22,
+        "radiusShoulderFactor": 3.45
+      },
+      "outerHill": {
+        "base": 1.55,
+        "hero": 0.30,
+        "centerShoulderFactor": 4.9,
+        "radiusShoulderFactor": 5.0
+      },
+      "erosion": {
+        "amplitude": 0.035,
+        "xFactor": 0.58,
+        "zFactor": -0.31,
+        "wavelengthMapScaleFactor": 22,
+        "fadeStartShoulderFactor": 1.0,
+        "fadeEndShoulderFactor": 10.0
+      }
+    }
+  },
+  "horizon": {
+    "back": {
+      "height": 4.9,
+      "startMapScale": 74,
+      "endMapScale": 188,
+      "zOffsetMapScale": 146
+    },
+    "side": {
+      "height": 3.4,
+      "startMapScale": 106,
+      "endMapScale": 188
+    },
+    "facet": {
+      "sinAmplitude": 0.46,
+      "sinX": 1.0,
+      "sinZ": 0.34,
+      "sinWavelengthMapScale": 38,
+      "cosAmplitude": 0.32,
+      "cosX": 0.2,
+      "cosZ": -1.0,
+      "cosWavelengthMapScale": 42
+    },
+    "farFold": {
+      "amplitude": 0.68,
+      "xOffset": 72,
+      "wavelengthMapScale": 30,
+      "fadeStartMapScale": 78,
+      "fadeEndMapScale": 188
+    }
+  },
+  "macroTerrain": {
+    "baseLift": 0.7,
+    "roadValley": {
+      "height": 3.15,
+      "heroBoost": 0.08,
+      "leftScale": 1.08,
+      "rightScale": 1.08,
+      "riseStart": 22,
+      "risePeak": 118,
+      "softFallStart": 310,
+      "softFallEnd": 455,
+      "minimumFarScale": 0.74
+    },
+    "rollingWaves": [
+      {
+        "amplitude": 4.35,
+        "xFactor": 0.78,
+        "zFactor": 1.0,
+        "wavelengthMapScale": 104,
+        "phase": 0.35,
+        "power": 1.55,
+        "center": 0.3
+      },
+      {
+        "amplitude": 3.15,
+        "xFactor": -0.46,
+        "zFactor": 1.0,
+        "wavelengthMapScale": 74,
+        "phase": 1.65,
+        "power": 1.85,
+        "center": 0.26
+      },
+      {
+        "amplitude": 2.45,
+        "xFactor": 1.0,
+        "zFactor": -0.42,
+        "wavelengthMapScale": 66,
+        "phase": -0.75,
+        "power": 2.0,
+        "center": 0.24
+      }
+    ],
+    "broadBasins": [
+      {
+        "xMapScale": 8,
+        "zMapScale": 16,
+        "height": -8.8,
+        "radiusXMapScale": 98,
+        "radiusZMapScale": 112
+      },
+      {
+        "xMapScale": -18,
+        "zMapScale": 92,
+        "height": -5.6,
+        "radiusXMapScale": 52,
+        "radiusZMapScale": 96
+      }
+    ],
+    "localRelief": {
+      "amplitude": 1.62,
+      "fadeStart": 22,
+      "fadeEnd": 88,
+      "wavelengthA": 54,
+      "wavelengthB": 38,
+      "wavelengthC": 78,
+      "phaseA": 0.18,
+      "phaseB": 1.05,
+      "phaseC": -0.5
+    }
+  },
+  "landforms": [
+    {
+      "id": "inner_left_mesa",
+      "kind": "radial_mound",
+      "label": "inner left mesa",
+      "xMapScale": -55,
+      "zMapScale": -10,
+      "height": 13.5,
+      "radiusXMapScale": 58,
+      "radiusZMapScale": 82
+    },
+    {
+      "id": "inner_back_roll",
+      "kind": "radial_mound",
+      "label": "inner back rolling hill",
+      "xMapScale": -20,
+      "zMapScale": -76,
+      "height": 8.6,
+      "radiusXMapScale": 92,
+      "radiusZMapScale": 48
+    },
+    {
+      "id": "inner_right_roll",
+      "kind": "radial_mound",
+      "label": "inner right roll",
+      "xMapScale": 78,
+      "zMapScale": 32,
+      "height": 7.2,
+      "radiusXMapScale": 64,
+      "radiusZMapScale": 82
+    },
+    {
+      "id": "central_basin_low",
+      "kind": "radial_valley",
+      "label": "central lower basin",
+      "xMapScale": 12,
+      "zMapScale": 34,
+      "height": -7.6,
+      "radiusXMapScale": 74,
+      "radiusZMapScale": 94
+    },
+    {
+      "id": "front_ravine",
+      "kind": "oriented_valley",
+      "label": "foreground ravine",
+      "xMapScale": -22,
+      "zMapScale": 108,
+      "height": -10.5,
+      "angleDeg": 4,
+      "lengthMapScale": 112,
+      "widthMapScale": 16
+    },
+    {
+      "id": "central_ravine",
+      "kind": "oriented_valley",
+      "label": "central basin drainage",
+      "xMapScale": -18,
+      "zMapScale": 32,
+      "height": -8.6,
+      "angleDeg": -6,
+      "lengthMapScale": 118,
+      "widthMapScale": 18
+    },
+    {
+      "id": "ravine_left_bank",
+      "kind": "oriented_hill",
+      "label": "ravine left bank",
+      "xMapScale": -54,
+      "zMapScale": 60,
+      "height": 7.8,
+      "angleDeg": -4,
+      "lengthMapScale": 126,
+      "widthMapScale": 28
+    },
+    {
+      "id": "ravine_right_bank",
+      "kind": "oriented_hill",
+      "label": "ravine right bank",
+      "xMapScale": 34,
+      "zMapScale": 60,
+      "height": 6.8,
+      "angleDeg": -4,
+      "lengthMapScale": 118,
+      "widthMapScale": 30
+    },
+    {
+      "id": "left_outer_highland",
+      "kind": "radial_mound",
+      "label": "left outer highland",
+      "xMapScale": -205,
+      "zMapScale": 14,
+      "height": 12.8,
+      "radiusXMapScale": 88,
+      "radiusZMapScale": 142
+    },
+    {
+      "id": "left_front_roll",
+      "kind": "radial_mound",
+      "label": "left foreground roll",
+      "xMapScale": -150,
+      "zMapScale": 154,
+      "height": 9.6,
+      "radiusXMapScale": 92,
+      "radiusZMapScale": 70
+    },
+    {
+      "id": "right_outer_highland",
+      "kind": "radial_mound",
+      "label": "right outer highland",
+      "xMapScale": 212,
+      "zMapScale": 36,
+      "height": 12.2,
+      "radiusXMapScale": 92,
+      "radiusZMapScale": 142
+    },
+    {
+      "id": "right_front_roll",
+      "kind": "radial_mound",
+      "label": "right foreground roll",
+      "xMapScale": 150,
+      "zMapScale": 156,
+      "height": 8.8,
+      "radiusXMapScale": 94,
+      "radiusZMapScale": 68
+    },
+    {
+      "id": "far_back_ridge_left",
+      "kind": "oriented_hill",
+      "label": "far back ridge left",
+      "xMapScale": -98,
+      "zMapScale": -184,
+      "height": 11.4,
+      "angleDeg": 82,
+      "lengthMapScale": 164,
+      "widthMapScale": 42
+    },
+    {
+      "id": "far_back_ridge_right",
+      "kind": "oriented_hill",
+      "label": "far back ridge right",
+      "xMapScale": 98,
+      "zMapScale": -184,
+      "height": 11.0,
+      "angleDeg": 78,
+      "lengthMapScale": 170,
+      "widthMapScale": 42
+    },
+    {
+      "id": "far_left_corner_mass",
+      "kind": "radial_mound",
+      "label": "far left corner mass",
+      "xMapScale": -190,
+      "zMapScale": -150,
+      "height": 9.2,
+      "radiusXMapScale": 78,
+      "radiusZMapScale": 68
+    },
+    {
+      "id": "far_right_corner_mass",
+      "kind": "radial_mound",
+      "label": "far right corner mass",
+      "xMapScale": 190,
+      "zMapScale": -150,
+      "height": 9.8,
+      "radiusXMapScale": 82,
+      "radiusZMapScale": 70
+    }
+  ],
+  "materialIntent": {
+    "layers": [
+      "grass",
+      "meadow",
+      "dirt",
+      "rock"
+    ],
+    "mustRead": [
+      "dirt and gravel shoulder around asphalt",
+      "rock or exposed soil on steeper cut faces",
+      "grass remains bright but not fluorescent",
+      "meadow patches appear away from the immediate road edge"
+    ]
+  },
+  "agentIteration": {
+    "paradigm": "docs/terrain-agent-editing-paradigm.md",
+    "method": "layer-mask-operation-stroke-review",
+    "editIntent": {
+      "problem": "The old terrain used an ellipse-like road and independent hill patches, so it could not approach the concept composition.",
+      "targetView": "panorama",
+      "mask": "whole-map base form plus explicit closed-loop track corridor",
+      "operation": "replace generated ellipse with explicit control-point spline, then rebuild inner basin and outer highlands around that spline",
+      "expectedVisualResult": "The panorama first reads as a concept-like closed racing loop with a front straight, left and right S bends, far straight, lower inner basin, and broad outer hill masses.",
+      "rollbackCondition": "If the panorama still reads as a plain oval or if the road no longer aligns with the generated terrain cut."
+    },
+    "editObject": "terrain/recipes/primitive_concept_v1.json",
+    "generatorInputs": [
+      "tools/terrain_heightfield_spec.mjs",
+      "tools/generate_terrain_heightfield_spec.mjs",
+      "tools/generate_primitive_terrain.mjs"
+    ],
+    "reviewViews": [
+      "panorama_45",
+      "approach_cut",
+      "inner_basin",
+      "ridge_profile"
+    ],
+    "acceptance": [
+      "track topology visibly matches the concept before small terrain detail work",
+      "heightmap changes come from recipe changes or named generator terms",
+      "agent review metrics are regenerated after each terrain pass",
+      "fixed gameplay screenshots are compared against the concept reference",
+      "no human-facing editor UI is part of this terrain plan"
+    ]
+  }
+}

@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1640" height="940" viewBox="0 0 1640 940">
+  <rect width="1640" height="940" fill="#172023"/>
+  <text x="40" y="42" font-size="30" font-family="Arial, sans-serif" font-weight="700" fill="#f7fbf0">BlockKart Agent Terrain Review</text>
+  <text x="1600" y="42" font-size="17" font-family="Arial, sans-serif" text-anchor="end" fill="#b8c6b8">actual runner captures only; fallback panels are marked</text>
+  <g>
+    <rect x="38" y="50" width="764" height="541" rx="10" fill="#10171a"/>
+    <text x="40" y="77" font-size="24" font-family="Arial, sans-serif" font-weight="700" fill="#f7fbf0">Concept target</text>
+    <text x="794" y="77" font-size="15" font-family="Arial, sans-serif" text-anchor="end" fill="#b8c6b8">docs/images/terrain-closed-loop-concept-v1.png</text>
+    <clipPath id="clip_40_92"><rect x="40" y="92" width="760" height="475" rx="4"/></clipPath>
+    <g clip-path="url(#clip_40_92)"><image href="terrain-closed-loop-concept-v1.png" x="40" y="92" width="760" height="475" preserveAspectRatio="xMidYMid slice"/></g>
+  </g>
+  <g>
+    <rect x="838" y="50" width="764" height="541" rx="10" fill="#10171a"/>
+    <text x="840" y="77" font-size="24" font-family="Arial, sans-serif" font-weight="700" fill="#f7fbf0">45-degree panorama</text>
+    <text x="1594" y="77" font-size="15" font-family="Arial, sans-serif" text-anchor="end" fill="#b8c6b8">latest</text>
+    <clipPath id="clip_840_92"><rect x="840" y="92" width="760" height="475" rx="4"/></clipPath>
+    <g clip-path="url(#clip_840_92)"><image href="terrain-agent-latest-panorama.png" x="840" y="92" width="760" height="475" preserveAspectRatio="xMidYMid slice"/></g>
+  </g>
+  <g>
+    <rect x="38" y="618" width="374" height="297" rx="10" fill="#10171a"/>
+    <text x="40" y="645" font-size="24" font-family="Arial, sans-serif" font-weight="700" fill="#f7fbf0">Approach terrain cut</text>
+    <text x="404" y="645" font-size="15" font-family="Arial, sans-serif" text-anchor="end" fill="#b8c6b8">latest</text>
+    <clipPath id="clip_40_660"><rect x="40" y="660" width="370" height="231" rx="4"/></clipPath>
+    <g clip-path="url(#clip_40_660)"><image href="terrain-agent-latest-approach-cut.png" x="40" y="660" width="370" height="231" preserveAspectRatio="xMidYMid slice"/></g>
+  </g>
+  <g>
+    <rect x="428" y="618" width="374" height="297" rx="10" fill="#10171a"/>
+    <text x="430" y="645" font-size="24" font-family="Arial, sans-serif" font-weight="700" fill="#f7fbf0">Inner basin</text>
+    <text x="794" y="645" font-size="15" font-family="Arial, sans-serif" text-anchor="end" fill="#b8c6b8">latest</text>
+    <clipPath id="clip_430_660"><rect x="430" y="660" width="370" height="231" rx="4"/></clipPath>
+    <g clip-path="url(#clip_430_660)"><image href="terrain-agent-latest-inner-basin.png" x="430" y="660" width="370" height="231" preserveAspectRatio="xMidYMid slice"/></g>
+  </g>
+  <g>
+    <rect x="838" y="618" width="374" height="297" rx="10" fill="#10171a"/>
+    <text x="840" y="645" font-size="24" font-family="Arial, sans-serif" font-weight="700" fill="#f7fbf0">Ridge profile</text>
+    <text x="1204" y="645" font-size="15" font-family="Arial, sans-serif" text-anchor="end" fill="#b8c6b8">latest</text>
+    <clipPath id="clip_840_660"><rect x="840" y="660" width="370" height="231" rx="4"/></clipPath>
+    <g clip-path="url(#clip_840_660)"><image href="terrain-agent-latest-ridge-profile.png" x="840" y="660" width="370" height="231" preserveAspectRatio="xMidYMid slice"/></g>
+  </g>
+  <g>
+    <rect x="1228" y="618" width="374" height="297" rx="10" fill="#10171a"/>
+    <text x="1230" y="645" font-size="24" font-family="Arial, sans-serif" font-weight="700" fill="#f7fbf0">Current heightmap</text>
+    <text x="1594" y="645" font-size="15" font-family="Arial, sans-serif" text-anchor="end" fill="#b8c6b8">generated target</text>
+    <clipPath id="clip_1230_660"><rect x="1230" y="660" width="370" height="231" rx="4"/></clipPath>
+    <g clip-path="url(#clip_1230_660)"><image href="terrain-heightmap-target-v1.png" x="1230" y="660" width="370" height="231" preserveAspectRatio="xMidYMid slice"/></g>
+  </g>
+</svg>

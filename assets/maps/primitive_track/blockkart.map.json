@@ -1,0 +1,205 @@
+{
+  "version": 1,
+  "name": "blockkart_primitive_track",
+  "meshes": [
+    {
+      "name": "road_asphalt",
+      "model": "road_asphalt.glb",
+      "collision": "none",
+      "material": {
+        "baseColor": {
+          "r": 0.05098,
+          "g": 0.06275,
+          "b": 0.06667,
+          "a": 1
+        },
+        "baseColorSet": true,
+        "roughness": 0.9,
+        "uvScale": 8.4,
+        "detailStrength": 0.92,
+        "macroBlend": 0.08,
+        "roughnessResponse": 0.54,
+        "toonRampResponse": 0.04
+      },
+      "pickMode": "disabled",
+      "cullDistance": 1400,
+      "cullRadius": 900,
+      "frustumCull": true
+    },
+    {
+      "name": "road_shoulders",
+      "model": "road_shoulders.glb",
+      "collision": "none",
+      "material": {
+        "baseColor": {
+          "r": 0.58,
+          "g": 0.42,
+          "b": 0.23,
+          "a": 1
+        },
+        "baseColorSet": true,
+        "roughness": 0.98,
+        "uvScale": 7.4,
+        "detailStrength": 1.62,
+        "macroBlend": 0.34,
+        "roughnessResponse": 0.9,
+        "toonRampResponse": 0.1
+      },
+      "pickMode": "disabled",
+      "cullDistance": 1400,
+      "cullRadius": 900,
+      "frustumCull": true
+    },
+    {
+      "name": "road_curbs",
+      "model": "road_curbs.glb",
+      "collision": "none",
+      "pickMode": "disabled",
+      "cullDistance": 1400,
+      "cullRadius": 900,
+      "frustumCull": true
+    },
+    {
+      "name": "road_edge_lines",
+      "model": "road_edge_lines.glb",
+      "collision": "none",
+      "pickMode": "disabled",
+      "cullDistance": 1400,
+      "cullRadius": 900,
+      "frustumCull": true
+    },
+    {
+      "name": "road_center_dashes",
+      "model": "road_center_dashes.glb",
+      "collision": "none",
+      "pickMode": "disabled",
+      "cullDistance": 1400,
+      "cullRadius": 900,
+      "frustumCull": true
+    },
+    {
+      "name": "road_tire_grime",
+      "model": "road_tire_grime.glb",
+      "collision": "none",
+      "pickMode": "disabled",
+      "cullDistance": 1400,
+      "cullRadius": 900,
+      "frustumCull": true
+    },
+    {
+      "name": "hero_creek",
+      "model": "hero_creek_ribbon.glb",
+      "collision": "none",
+      "material": {
+        "baseColor": {
+          "r": 0.13725,
+          "g": 0.62353,
+          "b": 0.87843,
+          "a": 0.82
+        },
+        "baseColorSet": true,
+        "roughness": 0.22,
+        "uvScale": 1
+      },
+      "pickMode": "disabled",
+      "cullDistance": 1200,
+      "cullRadius": 650,
+      "frustumCull": true
+    }
+  ],
+  "meshTerrains": [
+    {
+      "name": "lowpoly_terrain",
+      "model": "lowpoly_terrain.glb",
+      "lodLevels": [
+        {
+          "model": "lowpoly_terrain_lod.glb",
+          "distance": 460
+        }
+      ],
+      "heightGrid": "lowpoly_terrain_height_grid.bin",
+      "splat": {
+        "control": "terrain_splat_large.png",
+        "layers": [
+          {
+            "texture": "grass_texture.png",
+            "normal": "grass_normal.png",
+            "metallicRoughness": "grass_mr.png",
+            "uvScale": 7.8,
+            "normalScale": 0.24
+          },
+          {
+            "texture": "meadow_texture.png",
+            "normal": "meadow_normal.png",
+            "metallicRoughness": "meadow_mr.png",
+            "uvScale": 6.8,
+            "normalScale": 0.22
+          },
+          {
+            "texture": "dirt_texture.png",
+            "normal": "dirt_normal.png",
+            "metallicRoughness": "dirt_mr.png",
+            "uvScale": 5.2,
+            "normalScale": 0.16
+          },
+          {
+            "texture": "rock_texture.png",
+            "normal": "rock_normal.png",
+            "metallicRoughness": "rock_mr.png",
+            "uvScale": 4.2,
+            "normalScale": 0.3
+          }
+        ],
+        "tuning": {
+          "macroScale": 0.84,
+          "macroStrength": 0.38,
+          "detailNear": 115,
+          "detailFar": 620,
+          "slopeStart": 0.16,
+          "slopeEnd": 0.58,
+          "slopeDirtStrength": 0.3,
+          "slopeRockStrength": 0.52,
+          "antiTileStrength": 0.55,
+          "detailStrength": 0.82,
+          "normalNear": 110,
+          "normalFar": 560,
+          "heightBlendStrength": 0.1,
+          "heightLow": -3,
+          "heightHigh": 24,
+          "curvatureStrength": 0.18
+        }
+      },
+      "material": {
+        "roughness": 0.92,
+        "uvScale": 1,
+        "detailStrength": 1.08,
+        "macroBlend": 0.08,
+        "roughnessResponse": 0.88,
+        "toonRampResponse": 0.18
+      },
+      "tag": "primitive_lowpoly_terrain",
+      "cullDistance": 1500,
+      "cullRadius": 900,
+      "frustumCull": true
+    }
+  ],
+  "primitiveLayers": [
+    {
+      "name": "roadside_meadow",
+      "source": "roadside_primitives.bin",
+      "kind": "static",
+      "chunkCellSize": 36,
+      "preloadChunks": true,
+      "slots": [
+        "grass_card",
+        "dirt_stroke",
+        "pale_stone",
+        "pebble",
+        "stone",
+        "flower_stem",
+        "flower_yellow",
+        "flower_white"
+      ]
+    }
+  ]
+}
