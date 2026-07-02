@@ -1,0 +1,366 @@
+package main
+
+import (
+	"math"
+	"strconv"
+	"strings"
+	"github.com/vo-lang/voplay"
+	"github.com/vo-lang/voplay/scene3d"
+)
+
+const (
+	blockKartVehicleReportMarker = "__BLOCKKART_VEHICLE_REPORT__"
+	blockKartRaceReportMarker = "__BLOCKKART_RACE_REPORT__"
+	blockKartProductSaveRoot = "/persist/blockkart"
+	blockKartProductSaveKey = "product_state.v1"
+
+	BlockKartRaceStateReady = "Ready"
+	BlockKartRaceStateRunning = "Running"
+	BlockKartRaceStateFinished = "Finished"
+)
+
+type BlockKartSettings struct {
+	StorageKey string
+	SavePath string
+	StorageStatus string
+	StorageError string
+	LoadedFromStorage bool
+	InputPreset string
+	QualityPreset string
+}
+
+type BlockKartProductSave struct {
+	Settings BlockKartSettings
+	BestTime float64
+	BestTimeSet bool
+}
+
+type BlockKartTuningPreset struct {
+	Name string
+	MaxForwardSpeed float64
+	EngineForce float64
+	BoostEngineForce float64
+	MaxSteerAngle float64
+	OffroadSpeedScale float64
+	OffroadEngineScale float64
+	MinTurboCharge float64
+	SuperTurboCharge float64
+	MaxDriftCharge float64
+	DriftChargeRate float64
+	MiniTurboDuration float64
+	SuperTurboDuration float64
+	BoostDuration float64
+}
+
+func defaultBlockKartSettings() BlockKartSettings {
+	store := voplay.NewSettingsStore(blockKartProductSaveRoot)
+	return BlockKartSettings{StorageKey: blockKartProductSaveKey, SavePath: store.Path(blockKartProductSaveKey), StorageStatus: voplay.SettingsStatusPending, InputPreset: "keyboard-touch-v1", QualityPreset: "performance"}
+}
+
+func blockKartNormalizeSettings(settings BlockKartSettings) BlockKartSettings {
+	defaults := defaultBlockKartSettings()
+	if settings.StorageKey == "" {
+		settings.StorageKey = defaults.StorageKey
+	}
+	if settings.SavePath == "" {
+		settings.SavePath = defaults.SavePath
+	}
+	if settings.StorageStatus == "" {
+		settings.StorageStatus = defaults.StorageStatus
+	}
+	if settings.InputPreset == "" {
+		settings.InputPreset = defaults.InputPreset
+	}
+	if settings.QualityPreset == "" {
+		settings.QualityPreset = defaults.QualityPreset
+	}
+	return settings
+}
+
+func blockKartLoadProductSave(settings BlockKartSettings) BlockKartProductSave {
+	settings = blockKartNormalizeSettings(settings)
+	save := BlockKartProductSave{Settings: settings}
+	store := voplay.NewSettingsStore(blockKartProductSaveRoot)
+	read := store.ReadText(settings.StorageKey)
+	save.Settings.SavePath = read.Path
+	save.Settings.StorageStatus = read.Status
+	save.Settings.StorageError = read.Error
+	save.Settings.LoadedFromStorage = read.Found
+	if !read.Found {
+		return save
+	}
+	text := read.Data
+	inputPreset := blockKartSaveField(text, "inputPreset")
+	if inputPreset != "" {
+		save.Settings.InputPreset = inputPreset
+	}
+	qualityPreset := blockKartSaveField(text, "qualityPreset")
+	if qualityPreset != "" {
+		save.Settings.QualityPreset = qualityPreset
+	}
+	bestTimeSet, _ := strconv.ParseBool(blockKartSaveField(text, "bestTimeSet"))
+	if bestTimeSet {
+		bestTime, ok := strconv.ParseFloat(blockKartSaveField(text, "bestTime"), 64)
+		if ok && bestTime > 0 {
+			save.BestTime = bestTime
+			save.BestTimeSet = true
+		}
+	}
+	return save
+}
+
+func blockKartSaveProductState(settings BlockKartSettings, bestTime float64, bestTimeSet bool) BlockKartSettings {
+	settings = blockKartNormalizeSettings(settings)
+	store := voplay.NewSettingsStore(blockKartProductSaveRoot)
+	write := store.WriteText(settings.StorageKey, blockKartProductSaveText(settings, bestTime, bestTimeSet))
+	settings.SavePath = write.Path
+	settings.StorageStatus = write.Status
+	settings.StorageError = write.Error
+	return settings
+}
+
+func blockKartProductSaveText(settings BlockKartSettings, bestTime float64, bestTimeSet bool) string {
+	return "version=1\n" +
+		"storageKey=" + settings.StorageKey + "\n" +
+		"inputPreset=" + settings.InputPreset + "\n" +
+		"qualityPreset=" + settings.QualityPreset + "\n" +
+		"bestTimeSet=" + strconv.FormatBool(bestTimeSet) + "\n" +
+		"bestTime=" + formatFixed(bestTime, 2) + "\n"
+}
+
+func blockKartSaveField(text, key string) string {
+	prefix := key + "="
+	for _, line := range strings.Split(text, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, prefix) {
+			return strings.TrimSpace(trimmed[len(prefix):])
+		}
+	}
+	return ""
+}
+
+func defaultBlockKartTuningPreset() BlockKartTuningPreset {
+	controller := scene3d.DefaultKartControllerConfig()
+	vehicle := controller.Vehicle
+	return BlockKartTuningPreset{
+		Name: "default",
+		MaxForwardSpeed: vehicle.MaxForwardSpeed,
+		EngineForce: vehicle.EngineForce,
+		BoostEngineForce: vehicle.BoostEngineForce,
+		MaxSteerAngle: vehicle.MaxSteerAngle,
+		OffroadSpeedScale: controller.OffroadSpeedScale,
+		OffroadEngineScale: controller.OffroadEngineScale,
+		MinTurboCharge: controller.MinTurboCharge,
+		SuperTurboCharge: controller.SuperTurboCharge,
+		MaxDriftCharge: controller.MaxDriftCharge,
+		DriftChargeRate: controller.DriftChargeRate,
+		MiniTurboDuration: controller.MiniTurboDuration,
+		SuperTurboDuration: controller.SuperTurboDuration,
+		BoostDuration: controller.BoostDuration,
+	}
+}
+
+func (p BlockKartTuningPreset) KartControllerConfig() scene3d.KartControllerConfig {
+	defaults := scene3d.DefaultKartControllerConfig()
+	cfg := defaults
+	vehicle := scene3d.DefaultKartVehicleConfig()
+	if p.MaxForwardSpeed > 0 {
+		vehicle.MaxForwardSpeed = p.MaxForwardSpeed
+	}
+	if p.EngineForce > 0 {
+		vehicle.EngineForce = p.EngineForce
+	}
+	if p.BoostEngineForce > 0 {
+		vehicle.BoostEngineForce = p.BoostEngineForce
+	}
+	if p.MaxSteerAngle > 0 {
+		vehicle.MaxSteerAngle = p.MaxSteerAngle
+	}
+	cfg.Vehicle = vehicle
+	if p.OffroadSpeedScale > 0 {
+		cfg.OffroadSpeedScale = p.OffroadSpeedScale
+	}
+	if p.OffroadEngineScale > 0 {
+		cfg.OffroadEngineScale = p.OffroadEngineScale
+	}
+	if p.MinTurboCharge > 0 {
+		cfg.MinTurboCharge = p.MinTurboCharge
+	}
+	if p.SuperTurboCharge > 0 {
+		cfg.SuperTurboCharge = p.SuperTurboCharge
+	}
+	if p.MaxDriftCharge > 0 {
+		cfg.MaxDriftCharge = p.MaxDriftCharge
+	}
+	if p.DriftChargeRate > 0 {
+		cfg.DriftChargeRate = p.DriftChargeRate
+	}
+	if p.MiniTurboDuration > 0 {
+		cfg.MiniTurboDuration = p.MiniTurboDuration
+	}
+	if p.SuperTurboDuration > 0 {
+		cfg.SuperTurboDuration = p.SuperTurboDuration
+	}
+	if p.BoostDuration > 0 {
+		cfg.BoostDuration = p.BoostDuration
+	}
+	return cfg
+}
+
+func blockKartReportVehicleDiagnostics(g *voplay.GameCtx, lifecycleState, startupPhase, phase string, w *World) {
+	tuning := defaultBlockKartTuningPreset()
+	settings := defaultBlockKartSettings()
+	state := scene3d.KartControllerState{}
+	input := scene3d.VehicleInput{}
+	surface := scene3d.TrackSurfaceHit{Name: scene3d.TrackSurfaceRoad, Kind: scene3d.TrackSurfaceRoad, Friction: 1, OnRoad: true, OnSurface: true}
+	speed := 0.0
+	grounded := false
+	wheelCount := 0
+	wheelContacts := 0
+	wheelMaxSlip := 0.0
+	wheelMaxCompression := 0.0
+	roadEdgeAssist := false
+	if w != nil {
+		tuning = w.tuning
+		settings = w.settings
+		state = w.lastControllerState
+		input = w.lastVehicleInput
+		roadEdgeAssist = w.roadEdgeAssistActive
+		if w.vehicle != nil {
+			speed = math.Abs(w.vehicle.Speed)
+			grounded = w.vehicle.Grounded
+			wheelCount = w.vehicle.WheelCount()
+			for i := 0; i < wheelCount; i++ {
+				wheel, ok := w.vehicle.WheelState(i)
+				if !ok {
+					continue
+				}
+				if wheel.InContact {
+					wheelContacts++
+				}
+				slip := math.Abs(wheel.LongitudinalSlip)
+				if math.Abs(wheel.LateralSlip) > slip {
+					slip = math.Abs(wheel.LateralSlip)
+				}
+				if slip > wheelMaxSlip {
+					wheelMaxSlip = slip
+				}
+				if wheel.SuspensionCompression > wheelMaxCompression {
+					wheelMaxCompression = wheel.SuspensionCompression
+				}
+			}
+		}
+		if w.track != nil && w.player != nil {
+			surface = w.track.SurfaceAt(w.player.Position())
+		}
+	}
+	if state.SurfaceID != "" {
+		surface.Name = state.SurfaceID
+		surface.Friction = state.SurfaceFriction
+		surface.OnRoad = state.SurfaceOnRoad
+	}
+	println(blockKartVehicleReportMarker + "{" +
+		"\"lifecycleState\":" + jsonString(lifecycleState) +
+		",\"startupPhase\":" + jsonString(startupPhase) +
+		",\"phase\":" + jsonString(phase) +
+		",\"settingsStorageStatus\":" + jsonString(settings.StorageStatus) +
+		",\"settingsLoadedFromStorage\":" + jsonBool(settings.LoadedFromStorage) +
+		",\"settingsStorageError\":" + jsonString(settings.StorageError) +
+		",\"inputPreset\":" + jsonString(settings.InputPreset) +
+		",\"qualityPreset\":" + jsonString(settings.QualityPreset) +
+		",\"tuningPreset\":" + jsonString(tuning.Name) +
+		",\"speed\":" + jsonFloat(speed) +
+		",\"grounded\":" + jsonBool(grounded) +
+		",\"surfaceID\":" + jsonString(surface.Name) +
+		",\"surfaceKind\":" + jsonString(surface.Kind) +
+		",\"surfaceFriction\":" + jsonFloat(surface.Friction) +
+		",\"surfaceOnRoad\":" + jsonBool(surface.OnRoad) +
+		",\"throttle\":" + jsonFloat(input.Throttle) +
+		",\"steer\":" + jsonFloat(input.Steer) +
+		",\"drift\":" + jsonBool(input.Drift) +
+		",\"boost\":" + jsonBool(input.Boost) +
+		",\"boosting\":" + jsonBool(state.Boosting) +
+		",\"drifting\":" + jsonBool(state.Drifting) +
+		",\"driftCharge\":" + jsonFloat(state.DriftCharge) +
+		",\"boostTimer\":" + jsonFloat(wBoostTimer(w)) +
+		",\"roadEdgeAssistActive\":" + jsonBool(roadEdgeAssist) +
+		",\"wheelCount\":" + itoa(wheelCount) +
+		",\"wheelContacts\":" + itoa(wheelContacts) +
+		",\"wheelMaxSlip\":" + jsonFloat(wheelMaxSlip) +
+		",\"wheelMaxCompression\":" + jsonFloat(wheelMaxCompression) +
+		",\"maxForwardSpeed\":" + jsonFloat(tuning.MaxForwardSpeed) +
+		",\"engineForce\":" + jsonFloat(tuning.EngineForce) +
+		",\"boostEngineForce\":" + jsonFloat(tuning.BoostEngineForce) +
+		",\"offroadSpeedScale\":" + jsonFloat(tuning.OffroadSpeedScale) +
+		",\"offroadEngineScale\":" + jsonFloat(tuning.OffroadEngineScale) +
+		"}")
+}
+
+func blockKartReportRaceDiagnostics(g *voplay.GameCtx, lifecycleState, startupPhase, phase string, w *World) {
+	settings := defaultBlockKartSettings()
+	raceState := BlockKartRaceStateReady
+	courseTime := 0.0
+	finishTime := 0.0
+	bestTime := 0.0
+	bestTimeSet := false
+	finished := false
+	lap := 1
+	totalLaps := raceLapCount
+	nextCheckpoint := 0
+	checkpoints := 0
+	collected := 0
+	totalCollectibles := 0
+	nextGate := "Start"
+	if w != nil {
+		settings = w.settings
+		raceState = w.raceState
+		courseTime = w.courseTime
+		finishTime = w.finishTime
+		bestTime = w.bestTime
+		bestTimeSet = w.bestTimeSet
+		finished = w.finished
+		lap = w.lap
+		totalLaps = w.totalLaps
+		nextCheckpoint = w.nextCheckpoint
+		checkpoints = len(w.checkpoints)
+		collected = w.collected
+		totalCollectibles = len(w.collectibles)
+		nextGate = w.nextGateLabel
+	}
+	println(blockKartRaceReportMarker + "{" +
+		"\"lifecycleState\":" + jsonString(lifecycleState) +
+		",\"startupPhase\":" + jsonString(startupPhase) +
+		",\"phase\":" + jsonString(phase) +
+		",\"raceState\":" + jsonString(raceState) +
+		",\"started\":" + jsonBool(raceState == BlockKartRaceStateRunning || raceState == BlockKartRaceStateFinished) +
+		",\"finished\":" + jsonBool(finished) +
+		",\"time\":" + jsonFloat(courseTime) +
+		",\"finishTime\":" + jsonFloat(finishTime) +
+		",\"bestTime\":" + jsonFloat(bestTime) +
+		",\"bestTimeSet\":" + jsonBool(bestTimeSet) +
+		",\"lap\":" + itoa(lap) +
+		",\"totalLaps\":" + itoa(totalLaps) +
+		",\"nextCheckpoint\":" + itoa(nextCheckpoint) +
+		",\"checkpoints\":" + itoa(checkpoints) +
+		",\"nextGate\":" + jsonString(nextGate) +
+		",\"collected\":" + itoa(collected) +
+		",\"totalCollectibles\":" + itoa(totalCollectibles) +
+		",\"settingsStorageKey\":" + jsonString(settings.StorageKey) +
+		",\"settingsSavePath\":" + jsonString(settings.SavePath) +
+		",\"settingsStorageStatus\":" + jsonString(settings.StorageStatus) +
+		",\"settingsLoadedFromStorage\":" + jsonBool(settings.LoadedFromStorage) +
+		",\"settingsStorageError\":" + jsonString(settings.StorageError) +
+		",\"inputPreset\":" + jsonString(settings.InputPreset) +
+		",\"qualityPreset\":" + jsonString(settings.QualityPreset) +
+		"}")
+}
+
+func wBoostTimer(w *World) float64 {
+	if w == nil {
+		return 0
+	}
+	if w.kartController != nil && w.kartController.BoostTimer > w.boostTimer {
+		return w.kartController.BoostTimer
+	}
+	return w.boostTimer
+}

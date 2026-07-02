@@ -91,6 +91,10 @@ type BlockKartPrimitiveScene struct {
 	TowerRoofMat primitive3d.MaterialID
 }
 
+type BlockKartPrimitiveTemplate struct {
+	Scene *BlockKartPrimitiveScene
+}
+
 type PrimitivePart struct {
 	Layer *primitive3d.Layer
 	Object primitive3d.ObjectID
@@ -147,6 +151,13 @@ func (w *World) ensurePrimitiveScene() *BlockKartPrimitiveScene {
 	if w.assets == nil {
 		panic("BlockKart primitive scene requires loaded assets")
 	}
+	if w.runtimeCache != nil && w.runtimeCache.primitiveTemplate != nil {
+		primitive := w.runtimeCache.primitiveTemplate.Instantiate(w.scene)
+		w.primitive = primitive
+		w.primitiveTemplateReused = true
+		w.runtimeCache.primitiveTemplateReuses++
+		return w.primitive
+	}
 	w.assets.BeginGroup(worldAssetGroup)
 	primitive, err := newBlockKartPrimitiveScene(w.scene, w.assets)
 	w.assets.EndGroup()
@@ -155,6 +166,38 @@ func (w *World) ensurePrimitiveScene() *BlockKartPrimitiveScene {
 	}
 	w.primitive = primitive
 	return w.primitive
+}
+
+func newBlockKartPrimitiveTemplate(primitive *BlockKartPrimitiveScene) *BlockKartPrimitiveTemplate {
+	if primitive == nil {
+		return nil
+	}
+	return &BlockKartPrimitiveTemplate{Scene: primitive}
+}
+
+func (t *BlockKartPrimitiveTemplate) Instantiate(scene *scene3d.Scene) *BlockKartPrimitiveScene {
+	if t == nil || t.Scene == nil {
+		return nil
+	}
+	source := t.Scene
+	primitive := *source
+	primitive.Static = source.Static.Clone()
+	primitive.TreeDetailStatic = source.TreeDetailStatic.Clone()
+	primitive.RoadsideDetailStatic = source.RoadsideDetailStatic.Clone()
+	primitive.SmallDetailStatic = source.SmallDetailStatic.Clone()
+	primitive.FlowerDetailStatic = source.FlowerDetailStatic.Clone()
+	primitive.ScatterStatic = source.ScatterStatic.Clone()
+	primitive.Dynamic = primitive3d.NewLayer(primitive3d.LayerDesc{Kind: primitive3d.DynamicLayer, Shapes: source.Shapes, Materials: source.Materials, Name: "blockkart_dynamic_primitives"})
+	if scene != nil {
+		scene.AddPrimitiveLayer(primitive.Static)
+		scene.AddPrimitiveLayer(primitive.TreeDetailStatic)
+		scene.AddPrimitiveLayer(primitive.RoadsideDetailStatic)
+		scene.AddPrimitiveLayer(primitive.SmallDetailStatic)
+		scene.AddPrimitiveLayer(primitive.FlowerDetailStatic)
+		scene.AddPrimitiveLayer(primitive.ScatterStatic)
+		scene.AddPrimitiveLayer(primitive.Dynamic)
+	}
+	return &primitive
 }
 
 func newBlockKartPrimitiveScene(scene *scene3d.Scene, assets *voplay.Assets) (*BlockKartPrimitiveScene, error) {
@@ -352,16 +395,17 @@ func showPrimitivePart(part *PrimitivePart) {
 	}
 }
 
-func (w *World) buildPrimitiveLevel() {
+func (w *World) buildPrimitiveLevel() error {
 	prof := newBlockKartStartupProfiler("BlockKart primitive")
 	primitive := w.ensurePrimitiveScene()
+	templateReused := w.primitiveTemplateReused
 	prof.Mark("ensurePrimitiveScene")
 	mapErr := w.preparePrimitiveMapAsset()
 	if mapErr != nil {
 		w.message = "Primitive map failed: " + mapErr.Error()
 		w.messageTimer = 4
 		fmt.Println(w.message)
-		return
+		return errors.New(w.message)
 	}
 	prof.Mark("preparePrimitiveMapAsset")
 	asset := newPrimitiveTrackAsset()
@@ -371,7 +415,7 @@ func (w *World) buildPrimitiveLevel() {
 		w.message = "Primitive track failed: " + err.Error()
 		w.messageTimer = 4
 		fmt.Println(w.message)
-		return
+		return errors.New(w.message)
 	}
 	w.track = track
 	prof.Mark("NewTrack")
@@ -380,19 +424,28 @@ func (w *World) buildPrimitiveLevel() {
 		w.message = "Terrain failed: " + terrainErr.Error()
 		w.messageTimer = 4
 		fmt.Println(w.message)
-		return
+		return errors.New(w.message)
 	}
 	w.trackResult = result
 	prof.Mark("spawnPrimitiveTrackTerrain")
 	w.applyPrimitiveTrackSpawn(track)
 	w.populatePrimitiveTrackCheckpoints(track)
 	prof.Mark("trackSpawnAndCheckpoints")
-	w.buildPrimitiveTrackVisuals(track)
-	prof.Mark("buildPrimitiveTrackVisuals")
+	if templateReused {
+		w.spawnPrimitiveCachedMapMeshes(track)
+		prof.Mark("reusePrimitiveStaticTemplate")
+	} else {
+		w.buildPrimitiveTrackVisuals(track)
+		prof.Mark("buildPrimitiveTrackVisuals")
+	}
 	w.spawnPrimitiveTrackPhysics(track)
 	prof.Mark("spawnPrimitiveTrackPhysics")
 	w.spawnPrimitiveGameplay(track)
 	prof.Mark("spawnPrimitiveGameplay")
+	if templateReused {
+		prof.Mark("reuseStaticLayerChunks")
+		return nil
+	}
 	primitive.Static.Build()
 	prof.Mark("buildStaticLayer")
 	primitive.TreeDetailStatic.Build()
@@ -405,10 +458,23 @@ func (w *World) buildPrimitiveLevel() {
 	prof.Mark("buildFlowerDetailLayer")
 	primitive.ScatterStatic.Build()
 	prof.Mark("buildScatterLayer")
+	if w.runtimeCache != nil && w.runtimeCache.primitiveTemplate == nil {
+		w.runtimeCache.primitiveTemplate = newBlockKartPrimitiveTemplate(primitive)
+		if w.runtimeCache.primitiveTemplate != nil {
+			w.runtimeCache.primitiveTemplateBuilds++
+		}
+	}
+	return nil
 }
 
 func (w *World) preparePrimitiveMapAsset() error {
 	if w.primitiveMap != nil {
+		return nil
+	}
+	if w.runtimeCache != nil && w.runtimeCache.primitiveMap != nil {
+		w.primitiveMap = w.runtimeCache.primitiveMap
+		w.preparedMapReused = true
+		w.runtimeCache.preparedMapReuses++
 		return nil
 	}
 	if w.assets == nil {
@@ -421,6 +487,10 @@ func (w *World) preparePrimitiveMapAsset() error {
 		return err
 	}
 	w.primitiveMap = prepared
+	if w.runtimeCache != nil {
+		w.runtimeCache.primitiveMap = prepared
+		w.runtimeCache.preparedMapBuilds++
+	}
 	return nil
 }
 
@@ -614,6 +684,19 @@ func (w *World) addContinuousPrimitiveRoadVisuals(track *scene3d.Track) {
 			fmt.Println(name + ": " + err.Error())
 			return
 		}
+	}
+}
+
+func (w *World) spawnPrimitiveCachedMapMeshes(track *scene3d.Track) {
+	w.addContinuousPrimitiveRoadVisuals(track)
+	if track == nil || w.primitiveMap == nil {
+		return
+	}
+	_, creekErr := scene3d.SpawnPreparedMapMesh(w.scene, w.primitiveMap, "hero_creek")
+	if creekErr != nil {
+		w.message = "Creek asset failed"
+		w.messageTimer = 3
+		fmt.Println(w.message + ": " + creekErr.Error())
 	}
 }
 

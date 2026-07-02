@@ -62,8 +62,11 @@ func applyWorldTheme(theme WorldTheme, scene *scene3d.Scene) {
 }
 
 type WorldHUDState struct {
+	RaceState string
 	Time float64
 	FinishTime float64
+	BestTime float64
+	BestTimeSet bool
 	Collected int
 	TotalCollectibles int
 	Checkpoint string
@@ -80,6 +83,7 @@ type WorldHUDState struct {
 	DebugOverlayVisible bool
 	RenderDebugMode int
 	HeroCameraVisible bool
+	SettingsStorageStatus string
 	PerfFPS float64
 	PerfFrameMs float64
 	PerfLogicMs float64
@@ -230,7 +234,7 @@ func drawWorldHUD(theme *WorldTheme, g *voplay.GameCtx, hud *WorldHUDState) {
 	g.Draw.DrawRect(coursePanel.X, coursePanel.Y, coursePanel.W, 8, theme.GoalTrimColor)
 	g.Draw.DrawText("Time " + formatTime(hud.Time), coursePanel.X + 18, coursePanel.Y + 32, 24, theme.HudTextColor)
 	g.Draw.DrawText("Speed " + itoa(int(hud.Speed + 0.5)), coursePanel.X + 18, coursePanel.Y + 60, 20, theme.HudAccentTextColor)
-	g.Draw.DrawText("Generated primitive scene", coursePanel.X + 18, coursePanel.Y + 86, 18, theme.HudSubtextColor)
+	g.Draw.DrawText("Race " + hud.RaceState + "  settings " + hud.SettingsStorageStatus, coursePanel.X + 18, coursePanel.Y + 86, 18, theme.HudSubtextColor)
 	bottomPanel := voplay.AnchorScreenRect(screen, voplay.AnchorBottomLeft, 820, 28, voplay.ScreenInsets{Left: 24, Bottom: 20})
 	drawHudPanel(g.Draw, theme, bottomPanel.X, bottomPanel.Y, bottomPanel.W, bottomPanel.H, 0.72)
 	g.Draw.DrawText("W gas   S brake/reverse   A/D steer   Space drift   R restart   F3 stats   F4 material view   F5 inspect", bottomPanel.X + 14, bottomPanel.Y + 22, 16, theme.HudSubtextColor)
@@ -301,14 +305,15 @@ func drawWorldHUD(theme *WorldTheme, g *voplay.GameCtx, hud *WorldHUDState) {
 	}
 	if hud.Finished {
 		panelW := 430.0
-		panelH := 170.0
+		panelH := 198.0
 		panel := voplay.AnchorScreenRect(screen, voplay.AnchorCenter, panelW, panelH, voplay.ScreenInsets{})
 		drawHudPanel(g.Draw, theme, panel.X, panel.Y, panel.W, panel.H, 0.92)
 		g.Draw.DrawRect(panel.X, panel.Y, panel.W, 10, theme.GoalTrimColor)
 		g.Draw.DrawText("RACE COMPLETE!", panel.X + 64, panel.Y + 52, 34, theme.HudAccentTextColor)
 		g.Draw.DrawText("Time " + formatTime(hud.FinishTime), panel.X + 54, panel.Y + 92, 24, theme.HudTextColor)
-		g.Draw.DrawText("Items " + itoa(hud.Collected) + "/" + itoa(hud.TotalCollectibles), panel.X + 54, panel.Y + 122, 22, theme.HudSubtextColor)
-		g.Draw.DrawText("Press R to race again", panel.X + 54, panel.Y + 150, 20, theme.HudAccentTextColor)
+		g.Draw.DrawText("Best " + formatTime(hud.BestTime), panel.X + 54, panel.Y + 122, 22, theme.HudAccentTextColor)
+		g.Draw.DrawText("Items " + itoa(hud.Collected) + "/" + itoa(hud.TotalCollectibles), panel.X + 54, panel.Y + 150, 20, theme.HudSubtextColor)
+		g.Draw.DrawText("Press R to race again", panel.X + 54, panel.Y + 176, 20, theme.HudAccentTextColor)
 	}
 }
 
@@ -390,14 +395,15 @@ func drawCompactWorldHUD(theme *WorldTheme, g *voplay.GameCtx, hud *WorldHUDStat
 		if panelW > 350 {
 			panelW = 350
 		}
-		panelH := 150.0
+		panelH := 170.0
 		panel := voplay.AnchorScreenRect(screen, voplay.AnchorCenter, panelW, panelH, voplay.ScreenInsets{})
 		drawHudPanel(g.Draw, theme, panel.X, panel.Y, panel.W, panel.H, 0.92)
 		g.Draw.DrawRect(panel.X, panel.Y, panel.W, 8, theme.GoalTrimColor)
-		g.Draw.DrawText("RACE COMPLETE", panel.X + 36, panel.Y + 46, 25, theme.HudAccentTextColor)
-		g.Draw.DrawText("Time " + formatTime(hud.FinishTime), panel.X + 36, panel.Y + 82, 20, theme.HudTextColor)
-		g.Draw.DrawText("Items " + itoa(hud.Collected) + "/" + itoa(hud.TotalCollectibles), panel.X + 36, panel.Y + 112, 18, theme.HudSubtextColor)
-		g.Draw.DrawText("Tap RST to race again", panel.X + 36, panel.Y + 138, 16, theme.HudAccentTextColor)
+		g.Draw.DrawText("RACE COMPLETE", panel.X + 34, panel.Y + 44, 24, theme.HudAccentTextColor)
+		g.Draw.DrawText("Time " + formatTime(hud.FinishTime), panel.X + 34, panel.Y + 78, 19, theme.HudTextColor)
+		g.Draw.DrawText("Best " + formatTime(hud.BestTime), panel.X + 34, panel.Y + 104, 18, theme.HudAccentTextColor)
+		g.Draw.DrawText("Items " + itoa(hud.Collected) + "/" + itoa(hud.TotalCollectibles), panel.X + 34, panel.Y + 128, 17, theme.HudSubtextColor)
+		g.Draw.DrawText("Tap RST to race again", panel.X + 34, panel.Y + 154, 15, theme.HudAccentTextColor)
 	}
 }
 
@@ -473,14 +479,15 @@ func drawPortraitWorldHUD(theme *WorldTheme, g *voplay.GameCtx, hud *WorldHUDSta
 		if panelW > 340 {
 			panelW = 340
 		}
-		panelH := 150.0
+		panelH := 170.0
 		finishedPanel := voplay.AnchorScreenRect(screen, voplay.AnchorCenter, panelW, panelH, voplay.ScreenInsets{})
 		drawHudPanel(g.Draw, theme, finishedPanel.X, finishedPanel.Y, finishedPanel.W, finishedPanel.H, 0.92)
 		g.Draw.DrawRect(finishedPanel.X, finishedPanel.Y, finishedPanel.W, 8, theme.GoalTrimColor)
-		g.Draw.DrawText("RACE COMPLETE", finishedPanel.X + 32, finishedPanel.Y + 46, 24, theme.HudAccentTextColor)
-		g.Draw.DrawText("Time " + formatTime(hud.FinishTime), finishedPanel.X + 32, finishedPanel.Y + 82, 19, theme.HudTextColor)
-		g.Draw.DrawText("Items " + itoa(hud.Collected) + "/" + itoa(hud.TotalCollectibles), finishedPanel.X + 32, finishedPanel.Y + 112, 17, theme.HudSubtextColor)
-		g.Draw.DrawText("Tap RST to race again", finishedPanel.X + 32, finishedPanel.Y + 138, 15, theme.HudAccentTextColor)
+		g.Draw.DrawText("RACE COMPLETE", finishedPanel.X + 30, finishedPanel.Y + 44, 23, theme.HudAccentTextColor)
+		g.Draw.DrawText("Time " + formatTime(hud.FinishTime), finishedPanel.X + 30, finishedPanel.Y + 78, 18, theme.HudTextColor)
+		g.Draw.DrawText("Best " + formatTime(hud.BestTime), finishedPanel.X + 30, finishedPanel.Y + 104, 17, theme.HudAccentTextColor)
+		g.Draw.DrawText("Items " + itoa(hud.Collected) + "/" + itoa(hud.TotalCollectibles), finishedPanel.X + 30, finishedPanel.Y + 128, 16, theme.HudSubtextColor)
+		g.Draw.DrawText("Tap RST to race again", finishedPanel.X + 30, finishedPanel.Y + 154, 15, theme.HudAccentTextColor)
 	}
 }
 

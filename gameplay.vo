@@ -89,9 +89,12 @@ func (w *World) addMovingObstacle(position, scale, axis voplay.Vec3, amplitude, 
 	w.obstacles = append(w.obstacles, &MovingObstacle{Entity: entity, Visual: visual, Origin: position, Axis: axis.Normalize(), Amplitude: amplitude, Speed: speed, Phase: phase})
 }
 
-func (w *World) updateGameplay(dt float64) {
+func (w *World) updateGameplay(g *voplay.GameCtx, dt float64) {
 	w.messageTimer = maxFloat(0, w.messageTimer - dt)
 	w.boostTimer = maxFloat(0, w.boostTimer - dt)
+	if w.raceState != BlockKartRaceStateRunning {
+		return
+	}
 	if w.finished {
 		return
 	}
@@ -99,7 +102,7 @@ func (w *World) updateGameplay(dt float64) {
 	w.updateMovingObstacles()
 	w.updateCollectibles()
 	w.updateBoostPads()
-	w.updateRaceProgress()
+	w.updateRaceProgress(g)
 }
 
 func (w *World) updateMovingObstacles() {
@@ -160,7 +163,7 @@ func (w *World) updateBoostPads() {
 	}
 }
 
-func (w *World) updateRaceProgress() {
+func (w *World) updateRaceProgress(g *voplay.GameCtx) {
 	if w.finished || w.player == nil || len(w.checkpoints) == 0 {
 		return
 	}
@@ -181,12 +184,7 @@ func (w *World) updateRaceProgress() {
 	w.checkpointLabel = checkpoint.Label
 	if w.nextCheckpoint == len(w.checkpoints) - 1 {
 		if w.lap >= w.totalLaps {
-			w.finished = true
-			w.finishTime = w.courseTime
-			w.nextGateLabel = "Done"
-			w.message = "Race complete!"
-			w.messageTimer = 99
-			w.stopKartForFinish()
+			w.completeRace(g)
 			return
 		}
 		w.lap++
@@ -203,6 +201,21 @@ func (w *World) updateRaceProgress() {
 	}
 	w.nextCheckpoint++
 	w.refreshNextGateLabel()
+}
+
+func (w *World) completeRace(g *voplay.GameCtx) {
+	w.finished = true
+	w.raceState = BlockKartRaceStateFinished
+	w.finishTime = w.courseTime
+	if w.finishTime > 0 && (!w.bestTimeSet || w.finishTime < w.bestTime) {
+		w.bestTime = w.finishTime
+		w.bestTimeSet = true
+	}
+	w.nextGateLabel = "Done"
+	w.message = "Race complete!"
+	w.messageTimer = 99
+	w.stopKartForFinish()
+	w.reportRaceResultOnce(g)
 }
 
 func (w *World) refreshNextGateLabel() {
@@ -229,6 +242,8 @@ func (w *World) respawnAtCheckpoint() {
 }
 
 func (w *World) restartRun() {
+	w.raceState = BlockKartRaceStateReady
+	w.raceResultReported = false
 	w.courseTime = 0
 	w.finishTime = 0
 	w.finished = false
@@ -268,8 +283,8 @@ func (w *World) restartRun() {
 		showPrimitivePart(item.GlowPrimitive)
 	}
 	w.respawnAtCheckpoint()
-	w.message = "Go!"
-	w.messageTimer = 1.1
+	w.message = "Press W / Space / Enter"
+	w.messageTimer = 99
 }
 
 func hideEntity(e *scene3d.Entity) {

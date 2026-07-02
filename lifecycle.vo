@@ -1,0 +1,97 @@
+package main
+
+import "github.com/vo-lang/voplay"
+
+const (
+	BlockKartLifecycleBoot = "Boot"
+	BlockKartLifecycleLoading = "Loading"
+	BlockKartLifecycleReady = "Ready"
+	BlockKartLifecycleRunning = "Running"
+	BlockKartLifecyclePaused = "Paused"
+	BlockKartLifecycleRestarting = "Restarting"
+	BlockKartLifecycleFailed = "Failed"
+	BlockKartLifecycleClosed = "Closed"
+
+	BlockKartOwnerVoplay = "voplay"
+	BlockKartOwnerBlockKart = "BlockKart"
+	BlockKartOwnerStudio = "Studio"
+
+	BlockKartSubsystemRuntime = "Runtime"
+	BlockKartSubsystemRenderer = "Renderer"
+	BlockKartSubsystemResourceProxy = "ResourceProxy"
+	BlockKartSubsystemAsset = "Asset"
+	BlockKartSubsystemMap = "Map"
+	BlockKartSubsystemScene = "Scene"
+	BlockKartSubsystemPhysics = "Physics"
+	BlockKartSubsystemVehicle = "Vehicle"
+	BlockKartSubsystemAudio = "Audio"
+	BlockKartSubsystemInput = "Input"
+	BlockKartSubsystemGameplay = "Gameplay"
+
+	blockKartLifecycleReportMarker = "__BLOCKKART_LIFECYCLE__"
+	blockKartFailureReportMarker = "__BLOCKKART_FAILURE_REPORT__"
+)
+
+type BlockKartFailureReport struct {
+	LifecycleState string
+	StartupPhase string
+	Owner string
+	Subsystem string
+	DeveloperMessage string
+	PlayerMessage string
+}
+
+func blockKartNewFailureReport(lifecycleState, startupPhase, owner, subsystem, developerMessage, playerMessage string) *BlockKartFailureReport {
+	return &BlockKartFailureReport{
+		LifecycleState: lifecycleState,
+		StartupPhase: startupPhase,
+		Owner: owner,
+		Subsystem: subsystem,
+		DeveloperMessage: developerMessage,
+		PlayerMessage: playerMessage,
+	}
+}
+
+func blockKartReportLifecycle(g *voplay.GameCtx, state, startupPhase string) {
+	if g != nil {
+		g.SetLifecycle(state, startupPhase)
+	}
+	println(blockKartLifecycleReportMarker + blockKartLifecycleJSON(state, startupPhase))
+}
+
+func blockKartReportFailure(g *voplay.GameCtx, report *BlockKartFailureReport) {
+	if report == nil {
+		return
+	}
+	if g != nil {
+		g.SetLifecycle(report.LifecycleState, report.StartupPhase)
+		g.ReportIssue(voplay.GameIssue{
+			Owner: report.Owner,
+			Subsystem: report.Subsystem,
+			DeveloperMessage: report.DeveloperMessage,
+			PlayerMessage: report.PlayerMessage,
+		})
+	}
+	println(blockKartFailureReportMarker + report.JSON())
+}
+
+func blockKartLifecycleJSON(state, startupPhase string) string {
+	return "{" +
+		"\"state\":" + jsonString(state) +
+		",\"startupPhase\":" + jsonString(startupPhase) +
+		"}"
+}
+
+func (r *BlockKartFailureReport) JSON() string {
+	if r == nil {
+		return "{}"
+	}
+	return "{" +
+		"\"lifecycleState\":" + jsonString(r.LifecycleState) +
+		",\"startupPhase\":" + jsonString(r.StartupPhase) +
+		",\"owner\":" + jsonString(r.Owner) +
+		",\"subsystem\":" + jsonString(r.Subsystem) +
+		",\"developerMessage\":" + jsonString(r.DeveloperMessage) +
+		",\"playerMessage\":" + jsonString(r.PlayerMessage) +
+		"}"
+}

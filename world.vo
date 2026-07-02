@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"math"
 	"time"
 	"github.com/vo-lang/voplay"
@@ -39,6 +40,20 @@ const (
 )
 
 const worldAssetGroup = "blockkart-world"
+const blockKartRestartResourceRootCause = "Phase 2A root cause: restart was rebuilding immutable vpak map data and static primitive scenery on the render-driven frame; the runtime cache keeps asset pack, prepared map, and static primitive templates alive while World restart still rebuilds scene, race, physics, input, and dynamic kart state."
+
+type BlockKartRuntimeCache struct {
+	assets *voplay.Assets
+	assetGroup string
+	assetGroupActive bool
+	skybox voplay.CubemapID
+	primitiveMap *scene3d.MapPreparedAsset
+	primitiveTemplate *BlockKartPrimitiveTemplate
+	preparedMapBuilds int
+	preparedMapReuses int
+	primitiveTemplateBuilds int
+	primitiveTemplateReuses int
+}
 
 type World struct {
 	scene *scene3d.Scene
@@ -55,9 +70,15 @@ type World struct {
 	startPosition voplay.Vec3
 	startYaw float64
 	theme WorldTheme
+	settings BlockKartSettings
+	tuning BlockKartTuningPreset
+	runtimeCache *BlockKartRuntimeCache
 	assets *voplay.Assets
 	assetGroup string
+	assetGroupOwnedByRuntime bool
 	primitiveMap *scene3d.MapPreparedAsset
+	preparedMapReused bool
+	primitiveTemplateReused bool
 	track *scene3d.Track
 	trackResult *scene3d.TrackSpawnResult
 	primitive *BlockKartPrimitiveScene
@@ -68,8 +89,12 @@ type World struct {
 	checkpointYaw float64
 	checkpointLabel string
 	nextGateLabel string
+	raceState string
+	raceResultReported bool
 	courseTime float64
 	finishTime float64
+	bestTime float64
+	bestTimeSet bool
 	finished bool
 	collected int
 	lap int
@@ -108,6 +133,7 @@ type World struct {
 	kartBodyPrimitiveParts []PrimitiveKartBodyPart
 	kartWheelVisuals []PrimitiveKartWheelVisual
 	lastVehicleInput scene3d.VehicleInput
+	lastControllerState scene3d.KartControllerState
 	physicsIdleFrames int
 	perfAnalyzer BlockKartPerfAnalyzer
 	fixedProfiler BlockKartFixedStepProfiler
@@ -127,20 +153,85 @@ type roadEdgeAssistSample struct {
 	Side float64
 }
 
-func NewWorld(g *voplay.GameCtx) *World {
+func (c *BlockKartRuntimeCache) EnsureLoaded(assets *voplay.Assets) (voplay.CubemapID, error) {
+	if assets == nil {
+		return 0, errors.New("BlockKart assets unavailable")
+	}
+	if c == nil {
+		return 0, errors.New("BlockKart runtime cache unavailable")
+	}
+	if c.assets != nil && c.assets != assets {
+		c.Close()
+	}
+	c.assets = assets
+	packErr := assets.Mount(blockKartAssetPath("blockkart.vpak"), 100)
+	if packErr != nil {
+		c.assets = nil
+		return 0, errors.New("BlockKart asset pack mount failed: " + packErr.Error())
+	}
+	if c.skybox != 0 {
+		return c.skybox, nil
+	}
+	assets.BeginGroup(worldAssetGroup)
+	skybox, err := loadSkybox(assets)
+	assets.EndGroup()
+	if err != nil {
+		if c.assetGroupActive {
+			assets.ReleaseGroup(worldAssetGroup)
+		} else {
+			assets.ReleaseGroup(worldAssetGroup)
+		}
+		c.assets = nil
+		c.assetGroup = ""
+		c.assetGroupActive = false
+		return 0, errors.New("BlockKart skybox load failed: " + err.Error())
+	}
+	c.assetGroup = worldAssetGroup
+	c.assetGroupActive = true
+	c.skybox = skybox
+	return c.skybox, nil
+}
+
+func (c *BlockKartRuntimeCache) Close() {
+	if c == nil {
+		return
+	}
+	if c.assets != nil && c.assetGroupActive && c.assetGroup != "" {
+		c.assets.ReleaseGroup(c.assetGroup)
+	}
+	c.assets = nil
+	c.assetGroup = ""
+	c.assetGroupActive = false
+	c.skybox = 0
+	c.primitiveMap = nil
+	c.primitiveTemplate = nil
+}
+
+func NewWorld(g *voplay.GameCtx, runtimeCache *BlockKartRuntimeCache) (*World, *BlockKartFailureReport) {
 	prof := newBlockKartStartupProfiler("BlockKart world")
-	w := &World{scene: scene3d.New(), startPosition: voplay.Vec3{X: 0, Y: 1.1, Z: 98}, theme: defaultWorldTheme(), totalLaps: raceLapCount, lap: 1}
+	if g == nil {
+		return nil, blockKartNewFailureReport(BlockKartLifecycleFailed, "alloc", BlockKartOwnerVoplay, BlockKartSubsystemRuntime, "BlockKart world construction received nil GameCtx", "BlockKart could not start. Please try again.")
+	}
+	w := &World{scene: scene3d.New(), startPosition: voplay.Vec3{X: 0, Y: 1.1, Z: 98}, theme: defaultWorldTheme(), settings: defaultBlockKartSettings(), tuning: defaultBlockKartTuningPreset(), runtimeCache: runtimeCache, raceState: BlockKartRaceStateReady, totalLaps: raceLapCount, lap: 1}
 	prof.Mark("alloc")
 	w.checkpointPosition = w.startPosition
 	w.checkpointLabel = "Start"
 	w.nextGateLabel = "Gate 1"
 	w.configureScene()
 	prof.Mark("configureScene")
-	w.loadAssets(g.Assets)
+	if err := w.loadAssets(g.Assets); err != nil {
+		blockKartReportWorldDiagnostics(g, BlockKartLifecycleFailed, "loadAssets", "loadAssetsFailed", w)
+		w.Close()
+		return nil, blockKartNewFailureReport(BlockKartLifecycleFailed, "loadAssets", BlockKartOwnerBlockKart, BlockKartSubsystemAsset, err.Error(), "BlockKart could not load its game assets. Please try again.")
+	}
 	prof.Mark("loadAssets")
 	w.loadModels()
 	prof.Mark("loadModels")
-	w.buildLevel()
+	if err := w.buildLevel(); err != nil {
+		blockKartReportWorldDiagnostics(g, BlockKartLifecycleFailed, "buildLevel", "buildLevelFailed", w)
+		w.Close()
+		return nil, blockKartNewFailureReport(BlockKartLifecycleFailed, "buildLevel", BlockKartOwnerBlockKart, BlockKartSubsystemMap, err.Error(), "BlockKart could not prepare its track. Please try again.")
+	}
 	prof.Mark("buildLevel")
 	w.setupRacingInput(g)
 	prof.Mark("setupRacingInput")
@@ -152,7 +243,7 @@ func NewWorld(g *voplay.GameCtx) *World {
 	prof.Mark("setupCamera")
 	w.restartRun()
 	prof.Mark("restartRun")
-	return w
+	return w, nil
 }
 
 func (w *World) configureScene() {
@@ -181,14 +272,24 @@ func loadAudioAsset(assets *voplay.Assets, rel string) (voplay.AudioClipID, erro
 	return assets.Audio(blockKartAssetPath(rel))
 }
 
-func (w *World) loadAssets(assets *voplay.Assets) {
+func (w *World) loadAssets(assets *voplay.Assets) error {
 	if assets == nil {
-		return
+		return errors.New("BlockKart assets unavailable")
 	}
 	w.assets = assets
+	if w.runtimeCache != nil {
+		skybox, err := w.runtimeCache.EnsureLoaded(assets)
+		if err != nil {
+			return err
+		}
+		w.scene.Skybox = skybox
+		w.assetGroup = worldAssetGroup
+		w.assetGroupOwnedByRuntime = true
+		return nil
+	}
 	packErr := assets.Mount(blockKartAssetPath("blockkart.vpak"), 100)
 	if packErr != nil {
-		panic("BlockKart asset pack mount failed: " + packErr.Error())
+		return errors.New("BlockKart asset pack mount failed: " + packErr.Error())
 	}
 	assets.BeginGroup(worldAssetGroup)
 	skybox, err := loadSkybox(assets)
@@ -198,9 +299,10 @@ func (w *World) loadAssets(assets *voplay.Assets) {
 	assets.EndGroup()
 	if err != nil {
 		assets.ReleaseGroup(worldAssetGroup)
-		return
+		return errors.New("BlockKart skybox load failed: " + err.Error())
 	}
 	w.assetGroup = worldAssetGroup
+	return nil
 }
 
 func loadSkybox(assets *voplay.Assets) (voplay.CubemapID, error) {
@@ -214,8 +316,9 @@ func blockKartAssetPath(rel string) string {
 func (w *World) spawnPlayer() {
 	w.player = w.scene.Spawn(scene3d.EntityDesc{Position: w.startPosition, Rotation: w.kartRotation(), Scale: voplay.Vec3{X: 1, Y: 1, Z: 1}, Tag: "kart_physics", Physics: &scene3d.Physics{Type: scene3d.Dynamic, Collider: scene3d.Box(0.78, 0.24, 1.16), Layer: voplay.CollisionLayerDefault, Mask: voplay.CollisionMaskAll, Density: 70.0, Friction: 0.25, Restitution: 0.02, LinearDamping: 0.12, AngularDamping: 3.5, LockRotationX: true, LockRotationZ: true}})
 	w.player.Visible = false
-	w.vehicle = scene3d.NewVehicle(w.player, scene3d.DefaultKartVehicleConfig())
-	w.kartController = scene3d.NewKartController(w.vehicle, w.track, scene3d.DefaultKartControllerConfig())
+	controllerConfig := w.tuning.KartControllerConfig()
+	w.vehicle = scene3d.NewVehicle(w.player, controllerConfig.Vehicle)
+	w.kartController = scene3d.NewKartController(w.vehicle, w.track, controllerConfig)
 	w.vehicle.SetPose(w.startPosition, w.startYaw)
 	w.primeIdleStartPhysicsSleep()
 	w.resetKartRenderPose(w.startPosition, w.kartRotation())
@@ -297,8 +400,9 @@ func (w *World) FixedUpdate(g *voplay.GameCtx, dt float64, debugOverlayVisible b
 		phaseStats.TouchMs = blockKartElapsedMs(phaseStart, now)
 		phaseStart = now
 	}
-	if g.Actions.IsPressed("reset") || w.touchResetPressed {
+	if w.touchResetPressed {
 		w.restartRun()
+		blockKartReportWorldDiagnostics(g, BlockKartLifecycleRunning, "race", "raceRestart", w)
 		if profileFixedStep {
 			now := time.Now()
 			phaseStats.ResetMs = blockKartElapsedMs(phaseStart, now)
@@ -307,13 +411,28 @@ func (w *World) FixedUpdate(g *voplay.GameCtx, dt float64, debugOverlayVisible b
 		}
 		return
 	}
-	w.updateGameplay(dt)
+	if w.raceState == BlockKartRaceStateReady {
+		if w.shouldStartRace(g) {
+			w.startRace(g)
+		} else {
+			w.updateIdleVehicleAudio()
+			if profileFixedStep {
+				now := time.Now()
+				phaseStats.AudioMs = blockKartElapsedMs(phaseStart, now)
+				phaseStats.TotalMs = blockKartElapsedMs(fixedStart, now)
+				w.fixedProfiler.Record(phaseStats)
+			}
+			return
+		}
+	}
+	w.updateGameplay(g, dt)
 	if profileFixedStep {
 		now := time.Now()
 		phaseStats.GameplayMs = blockKartElapsedMs(phaseStart, now)
 		phaseStart = now
 	}
 	if w.finished {
+		w.reportRaceResultOnce(g)
 		w.updateIdleVehicleAudio()
 		if profileFixedStep {
 			now := time.Now()
@@ -388,6 +507,37 @@ func (w *World) FixedUpdate(g *voplay.GameCtx, dt float64, debugOverlayVisible b
 	}
 }
 
+func (w *World) shouldStartRace(g *voplay.GameCtx) bool {
+	if w == nil {
+		return false
+	}
+	if w.touchInputActive && w.touchInput.Throttle > 0.05 {
+		return true
+	}
+	if g == nil || g.Actions == nil {
+		return false
+	}
+	return g.Actions.IsPressed("start") || g.Actions.IsDown("start")
+}
+
+func (w *World) startRace(g *voplay.GameCtx) {
+	if w == nil || w.raceState != BlockKartRaceStateReady {
+		return
+	}
+	w.raceState = BlockKartRaceStateRunning
+	w.message = "Go!"
+	w.messageTimer = 1.1
+	blockKartReportWorldDiagnostics(g, BlockKartLifecycleRunning, "race", "raceStart", w)
+}
+
+func (w *World) reportRaceResultOnce(g *voplay.GameCtx) {
+	if w == nil || w.raceResultReported {
+		return
+	}
+	w.raceResultReported = true
+	blockKartReportWorldDiagnostics(g, BlockKartLifecycleRunning, "race", "raceFinished", w)
+}
+
 func (w *World) applyKartDrive(g *voplay.GameCtx, dt float64) {
 	if w.vehicle == nil {
 		return
@@ -410,6 +560,7 @@ func (w *World) applyKartDrive(g *voplay.GameCtx, dt float64) {
 	w.lastSteer = input.Steer
 	if w.kartController != nil {
 		state := w.kartController.UpdateFromSyncedState(scene3d.KartInput{Throttle: vehicleInput.Throttle, Steer: vehicleInput.Steer, Drift: vehicleInput.Drift, Boost: boosting}, dt)
+		w.lastControllerState = state
 		if state.SuperTurboReleased {
 			w.boostTimer = maxFloat(w.boostTimer, kartSuperTurboDuration)
 			w.message = "Super mini-turbo!"
@@ -1082,8 +1233,11 @@ func (w *World) hudState(debugOverlayVisible bool, perf voplay.DebugOverlayStats
 	}
 	camera := w.cameraTelemetry.Snapshot()
 	hud := WorldHUDState{
+		RaceState: w.raceState,
 		Time: w.courseTime,
 		FinishTime: w.finishTime,
+		BestTime: w.bestTime,
+		BestTimeSet: w.bestTimeSet,
 		Collected: w.collected,
 		TotalCollectibles: len(w.collectibles),
 		Checkpoint: w.checkpointLabel,
@@ -1100,6 +1254,7 @@ func (w *World) hudState(debugOverlayVisible bool, perf voplay.DebugOverlayStats
 		DebugOverlayVisible: debugOverlayVisible,
 		RenderDebugMode: renderDebugMode,
 		HeroCameraVisible: w.heroCameraVisible,
+		SettingsStorageStatus: w.settings.StorageStatus,
 		PerfFPS: perf.FPS,
 		PerfFrameMs: perf.FrameMs,
 		PerfLogicMs: perf.LogicMs,
@@ -1302,7 +1457,7 @@ func (w *World) Close() {
 	w.track = nil
 	w.kartController = nil
 	if w.assets != nil {
-		if w.assetGroup != "" {
+		if w.assetGroup != "" && !w.assetGroupOwnedByRuntime {
 			w.assets.ReleaseGroup(w.assetGroup)
 			w.assetGroup = ""
 		}
