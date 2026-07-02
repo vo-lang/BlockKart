@@ -5,6 +5,8 @@ import (
 	"github.com/vo-lang/voplay/scene3d"
 )
 
+const blockKartResetRepeatSeconds = 0.75
+
 type PlayState struct {
 	world *World
 	runtimeCache *BlockKartRuntimeCache
@@ -275,6 +277,10 @@ func (s *PlayState) consumeResetAction(g *voplay.GameCtx) bool {
 		return false
 	}
 	if pressed && !s.resetActionConsumed {
+		s.resetActionConsumed = true
+		return true
+	}
+	if down && !pressed && s.elapsed >= blockKartResetRepeatSeconds {
 		s.resetActionConsumed = true
 		return true
 	}
