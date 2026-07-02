@@ -8,9 +8,9 @@ import (
 const (
 	blockKartTargetFPS = 60
 	blockKartMaxCatchUpSteps = 1
-	blockKartPerfWindowFrames = 1200
-	blockKartPerfWarmupFrames = 300
-	blockKartPerfSnapshotPollFrames = 1200
+	blockKartPerfWindowFrames = 300
+	blockKartPerfWarmupFrames = 180
+	blockKartPerfSnapshotPollFrames = 300
 	blockKartPerfStatsEnabled = true
 	blockKartPerfReports = true
 	blockKartPerfVerboseConsoleReports = false
