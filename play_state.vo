@@ -77,14 +77,14 @@ func (s *PlayState) FixedUpdate(g *voplay.GameCtx, dt float64) {
 	if s.failure != nil {
 		return
 	}
-	if !s.renderPrepared {
-		return
-	}
 	if s.world == nil {
 		return
 	}
 	if g.Actions.IsPressed("reset") {
 		s.restartWorld(g)
+		return
+	}
+	if !s.renderPrepared {
 		return
 	}
 	s.world.FixedUpdate(g, dt, s.debugOverlayVisible)
@@ -96,6 +96,10 @@ func (s *PlayState) Update(g *voplay.GameCtx, dt float64) {
 		if g.Actions.IsPressed("reset") {
 			s.restartWorld(g)
 		}
+		return
+	}
+	if g.Actions.IsPressed("reset") {
+		s.restartWorld(g)
 		return
 	}
 	if !s.renderPrepared {
