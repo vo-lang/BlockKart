@@ -13,7 +13,6 @@ const (
 	blockKartRaceReportMarker = "__BLOCKKART_RACE_REPORT__"
 	blockKartProductSaveRoot = "/persist/blockkart"
 	blockKartProductSaveKey = "product_state.v1"
-
 	BlockKartRaceStateReady = "Ready"
 	BlockKartRaceStateRunning = "Running"
 	BlockKartRaceStateFinished = "Finished"
@@ -54,7 +53,7 @@ type BlockKartTuningPreset struct {
 
 func defaultBlockKartSettings() BlockKartSettings {
 	store := voplay.NewSettingsStore(blockKartProductSaveRoot)
-	return BlockKartSettings{StorageKey: blockKartProductSaveKey, SavePath: store.Path(blockKartProductSaveKey), StorageStatus: voplay.SettingsStatusPending, InputPreset: "keyboard-touch-v1", QualityPreset: "performance"}
+	return BlockKartSettings{StorageKey: blockKartProductSaveKey, SavePath: store.Path(blockKartProductSaveKey), StorageStatus: voplay.SettingsStatusPending, InputPreset: "keyboard-touch-v1", QualityPreset: blockKartDefaultQualityPreset}
 }
 
 func blockKartNormalizeSettings(settings BlockKartSettings) BlockKartSettings {
@@ -120,12 +119,7 @@ func blockKartSaveProductState(settings BlockKartSettings, bestTime float64, bes
 }
 
 func blockKartProductSaveText(settings BlockKartSettings, bestTime float64, bestTimeSet bool) string {
-	return "version=1\n" +
-		"storageKey=" + settings.StorageKey + "\n" +
-		"inputPreset=" + settings.InputPreset + "\n" +
-		"qualityPreset=" + settings.QualityPreset + "\n" +
-		"bestTimeSet=" + strconv.FormatBool(bestTimeSet) + "\n" +
-		"bestTime=" + formatFixed(bestTime, 2) + "\n"
+	return "version=1\n" + "storageKey=" + settings.StorageKey + "\n" + "inputPreset=" + settings.InputPreset + "\n" + "qualityPreset=" + settings.QualityPreset + "\n" + "bestTimeSet=" + strconv.FormatBool(bestTimeSet) + "\n" + "bestTime=" + formatFixed(bestTime, 2) + "\n"
 }
 
 func blockKartSaveField(text, key string) string {
@@ -142,22 +136,7 @@ func blockKartSaveField(text, key string) string {
 func defaultBlockKartTuningPreset() BlockKartTuningPreset {
 	controller := scene3d.DefaultKartControllerConfig()
 	vehicle := controller.Vehicle
-	return BlockKartTuningPreset{
-		Name: "default",
-		MaxForwardSpeed: vehicle.MaxForwardSpeed,
-		EngineForce: vehicle.EngineForce,
-		BoostEngineForce: vehicle.BoostEngineForce,
-		MaxSteerAngle: vehicle.MaxSteerAngle,
-		OffroadSpeedScale: controller.OffroadSpeedScale,
-		OffroadEngineScale: controller.OffroadEngineScale,
-		MinTurboCharge: controller.MinTurboCharge,
-		SuperTurboCharge: controller.SuperTurboCharge,
-		MaxDriftCharge: controller.MaxDriftCharge,
-		DriftChargeRate: controller.DriftChargeRate,
-		MiniTurboDuration: controller.MiniTurboDuration,
-		SuperTurboDuration: controller.SuperTurboDuration,
-		BoostDuration: controller.BoostDuration,
-	}
+	return BlockKartTuningPreset{Name: "default", MaxForwardSpeed: vehicle.MaxForwardSpeed, EngineForce: vehicle.EngineForce, BoostEngineForce: vehicle.BoostEngineForce, MaxSteerAngle: vehicle.MaxSteerAngle, OffroadSpeedScale: controller.OffroadSpeedScale, OffroadEngineScale: controller.OffroadEngineScale, MinTurboCharge: controller.MinTurboCharge, SuperTurboCharge: controller.SuperTurboCharge, MaxDriftCharge: controller.MaxDriftCharge, DriftChargeRate: controller.DriftChargeRate, MiniTurboDuration: controller.MiniTurboDuration, SuperTurboDuration: controller.SuperTurboDuration, BoostDuration: controller.BoostDuration}
 }
 
 func (p BlockKartTuningPreset) KartControllerConfig() scene3d.KartControllerConfig {
@@ -211,7 +190,8 @@ func blockKartReportVehicleDiagnostics(g *voplay.GameCtx, lifecycleState, startu
 	tuning := defaultBlockKartTuningPreset()
 	settings := defaultBlockKartSettings()
 	state := scene3d.KartControllerState{}
-	input := scene3d.VehicleInput{}
+	intent := scene3d.VehicleIntent{}
+	telemetry := scene3d.VehicleTelemetry{}
 	surface := scene3d.TrackSurfaceHit{Name: scene3d.TrackSurfaceRoad, Kind: scene3d.TrackSurfaceRoad, Friction: 1, OnRoad: true, OnSurface: true}
 	speed := 0.0
 	grounded := false
@@ -224,31 +204,19 @@ func blockKartReportVehicleDiagnostics(g *voplay.GameCtx, lifecycleState, startu
 		tuning = w.tuning
 		settings = w.settings
 		state = w.lastControllerState
-		input = w.lastVehicleInput
+		intent = w.lastVehicleIntent.Normalized()
 		roadEdgeAssist = w.roadEdgeAssistActive
 		if w.vehicle != nil {
-			speed = math.Abs(w.vehicle.Speed)
-			grounded = w.vehicle.Grounded
-			wheelCount = w.vehicle.WheelCount()
-			for i := 0; i < wheelCount; i++ {
-				wheel, ok := w.vehicle.WheelState(i)
-				if !ok {
-					continue
-				}
-				if wheel.InContact {
-					wheelContacts++
-				}
-				slip := math.Abs(wheel.LongitudinalSlip)
-				if math.Abs(wheel.LateralSlip) > slip {
-					slip = math.Abs(wheel.LateralSlip)
-				}
-				if slip > wheelMaxSlip {
-					wheelMaxSlip = slip
-				}
-				if wheel.SuspensionCompression > wheelMaxCompression {
-					wheelMaxCompression = wheel.SuspensionCompression
-				}
+			telemetry = w.vehicle.Telemetry()
+			speed = math.Abs(telemetry.Speed)
+			grounded = telemetry.Grounded
+			wheelCount = telemetry.WheelCount
+			wheelContacts = telemetry.ContactCount
+			wheelMaxSlip = telemetry.MaxLongitudinalSlip
+			if telemetry.MaxLateralSlip > wheelMaxSlip {
+				wheelMaxSlip = telemetry.MaxLateralSlip
 			}
+			wheelMaxCompression = telemetry.MaxSuspensionCompression
 		}
 		if w.track != nil && w.player != nil {
 			surface = w.track.SurfaceAt(w.player.Position())
@@ -259,41 +227,7 @@ func blockKartReportVehicleDiagnostics(g *voplay.GameCtx, lifecycleState, startu
 		surface.Friction = state.SurfaceFriction
 		surface.OnRoad = state.SurfaceOnRoad
 	}
-	println(blockKartVehicleReportMarker + "{" +
-		"\"lifecycleState\":" + jsonString(lifecycleState) +
-		",\"startupPhase\":" + jsonString(startupPhase) +
-		",\"phase\":" + jsonString(phase) +
-		",\"settingsStorageStatus\":" + jsonString(settings.StorageStatus) +
-		",\"settingsLoadedFromStorage\":" + jsonBool(settings.LoadedFromStorage) +
-		",\"settingsStorageError\":" + jsonString(settings.StorageError) +
-		",\"inputPreset\":" + jsonString(settings.InputPreset) +
-		",\"qualityPreset\":" + jsonString(settings.QualityPreset) +
-		",\"tuningPreset\":" + jsonString(tuning.Name) +
-		",\"speed\":" + jsonFloat(speed) +
-		",\"grounded\":" + jsonBool(grounded) +
-		",\"surfaceID\":" + jsonString(surface.Name) +
-		",\"surfaceKind\":" + jsonString(surface.Kind) +
-		",\"surfaceFriction\":" + jsonFloat(surface.Friction) +
-		",\"surfaceOnRoad\":" + jsonBool(surface.OnRoad) +
-		",\"throttle\":" + jsonFloat(input.Throttle) +
-		",\"steer\":" + jsonFloat(input.Steer) +
-		",\"drift\":" + jsonBool(input.Drift) +
-		",\"boost\":" + jsonBool(input.Boost) +
-		",\"boosting\":" + jsonBool(state.Boosting) +
-		",\"drifting\":" + jsonBool(state.Drifting) +
-		",\"driftCharge\":" + jsonFloat(state.DriftCharge) +
-		",\"boostTimer\":" + jsonFloat(wBoostTimer(w)) +
-		",\"roadEdgeAssistActive\":" + jsonBool(roadEdgeAssist) +
-		",\"wheelCount\":" + itoa(wheelCount) +
-		",\"wheelContacts\":" + itoa(wheelContacts) +
-		",\"wheelMaxSlip\":" + jsonFloat(wheelMaxSlip) +
-		",\"wheelMaxCompression\":" + jsonFloat(wheelMaxCompression) +
-		",\"maxForwardSpeed\":" + jsonFloat(tuning.MaxForwardSpeed) +
-		",\"engineForce\":" + jsonFloat(tuning.EngineForce) +
-		",\"boostEngineForce\":" + jsonFloat(tuning.BoostEngineForce) +
-		",\"offroadSpeedScale\":" + jsonFloat(tuning.OffroadSpeedScale) +
-		",\"offroadEngineScale\":" + jsonFloat(tuning.OffroadEngineScale) +
-		"}")
+	println(blockKartVehicleReportMarker + "{" + "\"lifecycleState\":" + jsonString(lifecycleState) + ",\"startupPhase\":" + jsonString(startupPhase) + ",\"phase\":" + jsonString(phase) + ",\"settingsStorageStatus\":" + jsonString(settings.StorageStatus) + ",\"settingsLoadedFromStorage\":" + jsonBool(settings.LoadedFromStorage) + ",\"settingsStorageError\":" + jsonString(settings.StorageError) + ",\"inputPreset\":" + jsonString(settings.InputPreset) + ",\"qualityPreset\":" + jsonString(settings.QualityPreset) + ",\"tuningPreset\":" + jsonString(tuning.Name) + ",\"speed\":" + jsonFloat(speed) + ",\"grounded\":" + jsonBool(grounded) + ",\"surfaceID\":" + jsonString(surface.Name) + ",\"surfaceKind\":" + jsonString(surface.Kind) + ",\"surfaceFriction\":" + jsonFloat(surface.Friction) + ",\"surfaceOnRoad\":" + jsonBool(surface.OnRoad) + ",\"throttle\":" + jsonFloat(intent.Throttle) + ",\"brake\":" + jsonFloat(intent.Brake) + ",\"steer\":" + jsonFloat(intent.Steering) + ",\"drift\":" + jsonBool(intent.Drift) + ",\"boost\":" + jsonBool(intent.BoostRequest) + ",\"telemetrySurfaceID\":" + jsonString(telemetry.SurfaceID) + ",\"telemetryForwardSpeed\":" + jsonFloat(telemetry.ForwardSpeed) + ",\"telemetryLateralSpeed\":" + jsonFloat(telemetry.LateralSpeed) + ",\"boosting\":" + jsonBool(state.Boosting) + ",\"drifting\":" + jsonBool(state.Drifting) + ",\"driftCharge\":" + jsonFloat(state.DriftCharge) + ",\"boostTimer\":" + jsonFloat(wBoostTimer(w)) + ",\"roadEdgeAssistActive\":" + jsonBool(roadEdgeAssist) + ",\"wheelCount\":" + itoa(wheelCount) + ",\"wheelContacts\":" + itoa(wheelContacts) + ",\"wheelMaxSlip\":" + jsonFloat(wheelMaxSlip) + ",\"wheelMaxCompression\":" + jsonFloat(wheelMaxCompression) + ",\"maxForwardSpeed\":" + jsonFloat(tuning.MaxForwardSpeed) + ",\"engineForce\":" + jsonFloat(tuning.EngineForce) + ",\"boostEngineForce\":" + jsonFloat(tuning.BoostEngineForce) + ",\"offroadSpeedScale\":" + jsonFloat(tuning.OffroadSpeedScale) + ",\"offroadEngineScale\":" + jsonFloat(tuning.OffroadEngineScale) + "}")
 }
 
 func blockKartReportRaceDiagnostics(g *voplay.GameCtx, lifecycleState, startupPhase, phase string, w *World) {
@@ -327,32 +261,7 @@ func blockKartReportRaceDiagnostics(g *voplay.GameCtx, lifecycleState, startupPh
 		totalCollectibles = len(w.collectibles)
 		nextGate = w.nextGateLabel
 	}
-	println(blockKartRaceReportMarker + "{" +
-		"\"lifecycleState\":" + jsonString(lifecycleState) +
-		",\"startupPhase\":" + jsonString(startupPhase) +
-		",\"phase\":" + jsonString(phase) +
-		",\"raceState\":" + jsonString(raceState) +
-		",\"started\":" + jsonBool(raceState == BlockKartRaceStateRunning || raceState == BlockKartRaceStateFinished) +
-		",\"finished\":" + jsonBool(finished) +
-		",\"time\":" + jsonFloat(courseTime) +
-		",\"finishTime\":" + jsonFloat(finishTime) +
-		",\"bestTime\":" + jsonFloat(bestTime) +
-		",\"bestTimeSet\":" + jsonBool(bestTimeSet) +
-		",\"lap\":" + itoa(lap) +
-		",\"totalLaps\":" + itoa(totalLaps) +
-		",\"nextCheckpoint\":" + itoa(nextCheckpoint) +
-		",\"checkpoints\":" + itoa(checkpoints) +
-		",\"nextGate\":" + jsonString(nextGate) +
-		",\"collected\":" + itoa(collected) +
-		",\"totalCollectibles\":" + itoa(totalCollectibles) +
-		",\"settingsStorageKey\":" + jsonString(settings.StorageKey) +
-		",\"settingsSavePath\":" + jsonString(settings.SavePath) +
-		",\"settingsStorageStatus\":" + jsonString(settings.StorageStatus) +
-		",\"settingsLoadedFromStorage\":" + jsonBool(settings.LoadedFromStorage) +
-		",\"settingsStorageError\":" + jsonString(settings.StorageError) +
-		",\"inputPreset\":" + jsonString(settings.InputPreset) +
-		",\"qualityPreset\":" + jsonString(settings.QualityPreset) +
-		"}")
+	println(blockKartRaceReportMarker + "{" + "\"lifecycleState\":" + jsonString(lifecycleState) + ",\"startupPhase\":" + jsonString(startupPhase) + ",\"phase\":" + jsonString(phase) + ",\"raceState\":" + jsonString(raceState) + ",\"started\":" + jsonBool(raceState == BlockKartRaceStateRunning || raceState == BlockKartRaceStateFinished) + ",\"finished\":" + jsonBool(finished) + ",\"time\":" + jsonFloat(courseTime) + ",\"finishTime\":" + jsonFloat(finishTime) + ",\"bestTime\":" + jsonFloat(bestTime) + ",\"bestTimeSet\":" + jsonBool(bestTimeSet) + ",\"lap\":" + itoa(lap) + ",\"totalLaps\":" + itoa(totalLaps) + ",\"nextCheckpoint\":" + itoa(nextCheckpoint) + ",\"checkpoints\":" + itoa(checkpoints) + ",\"nextGate\":" + jsonString(nextGate) + ",\"collected\":" + itoa(collected) + ",\"totalCollectibles\":" + itoa(totalCollectibles) + ",\"settingsStorageKey\":" + jsonString(settings.StorageKey) + ",\"settingsSavePath\":" + jsonString(settings.SavePath) + ",\"settingsStorageStatus\":" + jsonString(settings.StorageStatus) + ",\"settingsLoadedFromStorage\":" + jsonBool(settings.LoadedFromStorage) + ",\"settingsStorageError\":" + jsonString(settings.StorageError) + ",\"inputPreset\":" + jsonString(settings.InputPreset) + ",\"qualityPreset\":" + jsonString(settings.QualityPreset) + "}")
 }
 
 func wBoostTimer(w *World) float64 {

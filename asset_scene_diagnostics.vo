@@ -1,6 +1,8 @@
 package main
 
-import "github.com/vo-lang/voplay"
+import (
+	"github.com/vo-lang/voplay"
+)
 
 const (
 	blockKartAssetReportMarker = "__BLOCKKART_ASSET_REPORT__"
@@ -45,34 +47,7 @@ func blockKartReportAssetDiagnostics(g *voplay.GameCtx, lifecycleState, startupP
 			primitiveTemplateReuses = w.runtimeCache.primitiveTemplateReuses
 		}
 	}
-	println(blockKartAssetReportMarker + "{" +
-		"\"lifecycleState\":" + jsonString(lifecycleState) +
-		",\"startupPhase\":" + jsonString(startupPhase) +
-		",\"phase\":" + jsonString(phase) +
-		",\"assetPackPath\":" + jsonString(blockKartAssetPath("blockkart.vpak")) +
-		",\"assetPackMounted\":" + jsonBool(assetGroup == worldAssetGroup) +
-		",\"assetGroup\":" + jsonString(assetGroup) +
-		",\"assetGroupActive\":" + jsonBool(assetGroup == worldAssetGroup) +
-		",\"skyboxLoaded\":" + jsonBool(skyboxLoaded) +
-		",\"cubeModelLoaded\":" + jsonBool(cubeModelLoaded) +
-		",\"runtimeCacheReady\":" + jsonBool(runtimeCacheReady) +
-		",\"preparedMapCached\":" + jsonBool(preparedMapCached) +
-		",\"preparedMapBuilds\":" + itoa(preparedMapBuilds) +
-		",\"preparedMapReuses\":" + itoa(preparedMapReuses) +
-		",\"primitiveTemplateCached\":" + jsonBool(primitiveTemplateCached) +
-		",\"primitiveTemplateBuilds\":" + itoa(primitiveTemplateBuilds) +
-		",\"primitiveTemplateReuses\":" + itoa(primitiveTemplateReuses) +
-		",\"restartRootCause\":" + jsonString(blockKartRestartResourceRootCause) +
-		",\"mountCount\":" + itoa(assetReport.MountCount) +
-		",\"groupCount\":" + itoa(assetReport.GroupCount) +
-		",\"activeGroupDepth\":" + itoa(assetReport.ActiveGroupDepth) +
-		",\"textureCount\":" + itoa(assetReport.TextureCount) +
-		",\"linearTextureCount\":" + itoa(assetReport.LinearTextureCount) +
-		",\"cubemapCount\":" + itoa(assetReport.CubemapCount) +
-		",\"fontCount\":" + itoa(assetReport.FontCount) +
-		",\"modelCount\":" + itoa(assetReport.ModelCount) +
-		",\"audioCount\":" + itoa(assetReport.AudioCount) +
-		"}")
+	println(blockKartAssetReportMarker + "{" + "\"lifecycleState\":" + jsonString(lifecycleState) + ",\"startupPhase\":" + jsonString(startupPhase) + ",\"phase\":" + jsonString(phase) + ",\"assetPackPath\":" + jsonString(blockKartAssetPath("blockkart.vpak")) + ",\"assetPackMounted\":" + jsonBool(assetGroup == worldAssetGroup) + ",\"assetGroup\":" + jsonString(assetGroup) + ",\"assetGroupActive\":" + jsonBool(assetGroup == worldAssetGroup) + ",\"skyboxLoaded\":" + jsonBool(skyboxLoaded) + ",\"cubeModelLoaded\":" + jsonBool(cubeModelLoaded) + ",\"runtimeCacheReady\":" + jsonBool(runtimeCacheReady) + ",\"preparedMapCached\":" + jsonBool(preparedMapCached) + ",\"preparedMapBuilds\":" + itoa(preparedMapBuilds) + ",\"preparedMapReuses\":" + itoa(preparedMapReuses) + ",\"primitiveTemplateCached\":" + jsonBool(primitiveTemplateCached) + ",\"primitiveTemplateBuilds\":" + itoa(primitiveTemplateBuilds) + ",\"primitiveTemplateReuses\":" + itoa(primitiveTemplateReuses) + ",\"restartRootCause\":" + jsonString(blockKartRestartResourceRootCause) + ",\"mountCount\":" + itoa(assetReport.MountCount) + ",\"groupCount\":" + itoa(assetReport.GroupCount) + ",\"activeGroupDepth\":" + itoa(assetReport.ActiveGroupDepth) + ",\"textureCount\":" + itoa(assetReport.TextureCount) + ",\"linearTextureCount\":" + itoa(assetReport.LinearTextureCount) + ",\"cubemapCount\":" + itoa(assetReport.CubemapCount) + ",\"fontCount\":" + itoa(assetReport.FontCount) + ",\"modelCount\":" + itoa(assetReport.ModelCount) + ",\"audioCount\":" + itoa(assetReport.AudioCount) + "}")
 }
 
 func blockKartReportSceneDiagnostics(g *voplay.GameCtx, lifecycleState, startupPhase, phase string, w *World) {
@@ -81,6 +56,9 @@ func blockKartReportSceneDiagnostics(g *voplay.GameCtx, lifecycleState, startupP
 	staticRenderableEntities := 0
 	physicsBodies := 0
 	terrainBodies := 0
+	vehicles := 0
+	contactEvents := 0
+	vehicleTelemetryIssues := 0
 	primitiveLayers := 0
 	visibleEntities := 0
 	culledEntities := 0
@@ -131,6 +109,9 @@ func blockKartReportSceneDiagnostics(g *voplay.GameCtx, lifecycleState, startupP
 			staticRenderableEntities = diag.StaticRenderableEntities
 			physicsBodies = diag.PhysicsBodies
 			terrainBodies = diag.TerrainBodies
+			vehicles = diag.Vehicles
+			contactEvents = diag.ContactEvents
+			vehicleTelemetryIssues = diag.VehicleTelemetryIssues
 			primitiveLayers = diag.PrimitiveLayers
 			visibleEntities = diag.Render.VisibleEntities
 			culledEntities = diag.Render.CulledEntities
@@ -143,39 +124,5 @@ func blockKartReportSceneDiagnostics(g *voplay.GameCtx, lifecycleState, startupP
 			primitiveUploadBytes = diag.Primitive.UploadBytes
 		}
 	}
-	println(blockKartSceneReportMarker + "{" +
-		"\"lifecycleState\":" + jsonString(lifecycleState) +
-		",\"startupPhase\":" + jsonString(startupPhase) +
-		",\"phase\":" + jsonString(phase) +
-		",\"hasScene\":" + jsonBool(hasScene) +
-		",\"activeEntities\":" + itoa(activeEntities) +
-		",\"modelEntities\":" + itoa(modelEntities) +
-		",\"staticRenderableEntities\":" + itoa(staticRenderableEntities) +
-		",\"physicsBodies\":" + itoa(physicsBodies) +
-		",\"terrainBodies\":" + itoa(terrainBodies) +
-		",\"primitiveLayers\":" + itoa(primitiveLayers) +
-		",\"visibleEntities\":" + itoa(visibleEntities) +
-		",\"culledEntities\":" + itoa(culledEntities) +
-		",\"primitiveInstances\":" + itoa(primitiveInstances) +
-		",\"primitiveVisibleInstances\":" + itoa(primitiveVisibleInstances) +
-		",\"primitiveChunks\":" + itoa(primitiveChunks) +
-		",\"primitiveVisibleChunks\":" + itoa(primitiveVisibleChunks) +
-		",\"primitiveGroups\":" + itoa(primitiveGroups) +
-		",\"primitiveDrawCalls\":" + itoa(primitiveDrawCalls) +
-		",\"primitiveUploadBytes\":" + itoa(primitiveUploadBytes) +
-		",\"collectibles\":" + itoa(collectibles) +
-		",\"checkpoints\":" + itoa(checkpoints) +
-		",\"boostPads\":" + itoa(boostPads) +
-		",\"obstacles\":" + itoa(obstacles) +
-		",\"trackEntities\":" + itoa(trackEntities) +
-		",\"kartWheelPrimitives\":" + itoa(kartWheelPrimitives) +
-		",\"hasTrack\":" + jsonBool(hasTrack) +
-		",\"hasTrackResult\":" + jsonBool(hasTrackResult) +
-		",\"hasMap\":" + jsonBool(hasMap) +
-		",\"preparedMapReused\":" + jsonBool(preparedMapReused) +
-		",\"primitiveTemplateReused\":" + jsonBool(primitiveTemplateReused) +
-		",\"hasPlayer\":" + jsonBool(hasPlayer) +
-		",\"hasVehicle\":" + jsonBool(hasVehicle) +
-		",\"hasVehicleAudio\":" + jsonBool(hasVehicleAudio) +
-		"}")
+	println(blockKartSceneReportMarker + "{" + "\"lifecycleState\":" + jsonString(lifecycleState) + ",\"startupPhase\":" + jsonString(startupPhase) + ",\"phase\":" + jsonString(phase) + ",\"hasScene\":" + jsonBool(hasScene) + ",\"activeEntities\":" + itoa(activeEntities) + ",\"modelEntities\":" + itoa(modelEntities) + ",\"staticRenderableEntities\":" + itoa(staticRenderableEntities) + ",\"physicsBodies\":" + itoa(physicsBodies) + ",\"terrainBodies\":" + itoa(terrainBodies) + ",\"vehicles\":" + itoa(vehicles) + ",\"contactEvents\":" + itoa(contactEvents) + ",\"vehicleTelemetryIssues\":" + itoa(vehicleTelemetryIssues) + ",\"primitiveLayers\":" + itoa(primitiveLayers) + ",\"visibleEntities\":" + itoa(visibleEntities) + ",\"culledEntities\":" + itoa(culledEntities) + ",\"primitiveInstances\":" + itoa(primitiveInstances) + ",\"primitiveVisibleInstances\":" + itoa(primitiveVisibleInstances) + ",\"primitiveChunks\":" + itoa(primitiveChunks) + ",\"primitiveVisibleChunks\":" + itoa(primitiveVisibleChunks) + ",\"primitiveGroups\":" + itoa(primitiveGroups) + ",\"primitiveDrawCalls\":" + itoa(primitiveDrawCalls) + ",\"primitiveUploadBytes\":" + itoa(primitiveUploadBytes) + ",\"collectibles\":" + itoa(collectibles) + ",\"checkpoints\":" + itoa(checkpoints) + ",\"boostPads\":" + itoa(boostPads) + ",\"obstacles\":" + itoa(obstacles) + ",\"trackEntities\":" + itoa(trackEntities) + ",\"kartWheelPrimitives\":" + itoa(kartWheelPrimitives) + ",\"hasTrack\":" + jsonBool(hasTrack) + ",\"hasTrackResult\":" + jsonBool(hasTrackResult) + ",\"hasMap\":" + jsonBool(hasMap) + ",\"preparedMapReused\":" + jsonBool(preparedMapReused) + ",\"primitiveTemplateReused\":" + jsonBool(primitiveTemplateReused) + ",\"hasPlayer\":" + jsonBool(hasPlayer) + ",\"hasVehicle\":" + jsonBool(hasVehicle) + ",\"hasVehicleAudio\":" + jsonBool(hasVehicleAudio) + "}")
 }

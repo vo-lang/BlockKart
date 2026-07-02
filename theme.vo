@@ -47,7 +47,7 @@ func defaultWorldTheme() WorldTheme {
 	return WorldTheme{SkyColor: voplay.Hex(0x58cfff), FogColor: voplay.Hex(0xafefff), AmbientColor: voplay.Hex(0x84bdd8), GroundColor: voplay.Hex(0x5f9b3c), PathColor: voplay.Hex(0x2b3032), BridgeColor: voplay.Hex(0xd7a95c), WallColor: voplay.Hex(0x7d93b6), RailColor: voplay.Hex(0xf4efe0), RampColor: voplay.Hex(0xe69c24), AccentColor: voplay.Hex(0xe7c82f), BarrierColor: voplay.Hex(0x304d82), HazardColor: voplay.Hex(0xff3154), CheckpointColor: voplay.Hex(0x25e8d0), BannerColor: voplay.Hex(0xff405a), SupportColor: voplay.Hex(0xa7b7d0), GoalColor: voplay.Hex(0xff4056), GoalTrimColor: voplay.Hex(0xe7c82f), PlayerColor: voplay.Hex(0x008cff), KartTrimColor: voplay.Hex(0xffe36b), DriverColor: voplay.Hex(0xff3d48), WheelColor: voplay.Hex(0x202838), BoostColor: voplay.Hex(0x21dfff), TrackMarkColor: voplay.Hex(0xf4efe0), TreeTrunkColor: voplay.Hex(0x855325), TreeLeafColor: voplay.Hex(0x347f38), BushColor: voplay.Hex(0x437f36), CloudColor: voplay.Hex(0xffffff), CloudShadowColor: voplay.Hex(0xd9eff8), OrbColor: voplay.Hex(0xff7fc9), HudPanelColor: voplay.Hex(0x10233d), HudShadowColor: voplay.Hex(0x08111e), HudTrimColor: voplay.Hex(0x3b7eff), HudTextColor: voplay.Hex(0xffffff), HudSubtextColor: voplay.Hex(0xd9efff), HudAccentTextColor: voplay.Hex(0xfff2b0)}
 }
 
-func applyWorldTheme(theme WorldTheme, scene *scene3d.Scene) {
+func applyWorldTheme(theme WorldTheme, scene *scene3d.Scene, settings BlockKartSettings) {
 	scene.Camera.Fov = 64
 	profile := scene3d.KartRacingLightingProfile()
 	profile.Ambient = voplay.Color{R: 0.47, G: 0.56, B: 0.56, A: 1}
@@ -59,6 +59,7 @@ func applyWorldTheme(theme WorldTheme, scene *scene3d.Scene) {
 	profile.ColorGrading = scene3d.ColorGradingConfig{ToneMap: scene3d.ToneMapACES, Exposure: 1.08, Contrast: 1.08, Saturation: 1.02}
 	applyBlockKartRenderBudget(&profile, defaultBlockKartRenderBudget())
 	scene.ApplyLightingProfile(profile)
+	applyBlockKartQualityProfile(scene, settings)
 }
 
 type WorldHUDState struct {

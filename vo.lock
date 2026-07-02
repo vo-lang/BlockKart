@@ -53,11 +53,11 @@ deps = []
 
 [[resolved]]
 path = "github.com/vo-lang/voplay"
-version = "v0.1.29"
+version = "v0.1.30"
 vo = "^0.1.0"
-commit = "a3a634f26af2886903240c2a700984dc6d666ece"
-release_manifest = "sha256:c289257865549dc7e28603d3b5b41b8fc10631102ebe107b65cbb5d5a6306ce1"
-source = "sha256:9974ead89603cd289f5ef4e179d1868d43b2644822edd5ad0c202d9ecabbe735"
+commit = "2fbc6568cacd9d7fdeebc11038b4e988869fe0e6"
+release_manifest = "sha256:de5db504de0f235d85067d8d5f2f436e3f270ae1fa0183cbc5e9134838abc10b"
+source = "sha256:f6ecd7a9cecfcaff2e5cf5ecd6d5bf21dfa70f34d7eee111ea4ec9379471cb66"
 deps = ["github.com/vo-lang/vogui", "github.com/vo-lang/vopack"]
 
 [[resolved.artifact]]
@@ -65,14 +65,14 @@ kind = "extension-js-glue"
 target = "wasm32-unknown-unknown"
 name = "voplay_island.js"
 size = 108533
-digest = "sha256:8e5de169d3d33c06c03c4f115ad9ed6688de8832942244f062bf4dc8ea7ca2b2"
+digest = "sha256:3417b12d0a96038ea234531fca415a2bdb41993cb057b75ab7fec87b7575e985"
 
 [[resolved.artifact]]
 kind = "extension-native"
 target = "aarch64-apple-darwin"
 name = "libvo_voplay.dylib"
-size = 10342208
-digest = "sha256:55b4e2ab94fd81cd6192968808f6b800391a3fe7f2b3a1c5495c9304faabb2ce"
+size = 10352080
+digest = "sha256:dd0e96c7c47d3c7e3dac22187e9b18e7deacd52c6306e0b28b76ea170bc502c3"
 
 [[resolved.artifact]]
 kind = "extension-native"
@@ -85,5 +85,5 @@ digest = "sha256:908a7cf2165add8f01c22cc9aad7e6f8d10256b24813f62662f66654b36de14
 kind = "extension-wasm"
 target = "wasm32-unknown-unknown"
 name = "voplay_island_bg.wasm"
-size = 3614081
-digest = "sha256:c548aa0fc3d8444eef5df25c36a43de8e28407293f1cd75b64f8271a2e05006f"
+size = 3613621
+digest = "sha256:6c13521d4773904baf6179c8a9eb067e5ee1eb827960e8635517d78bfb0a3655"

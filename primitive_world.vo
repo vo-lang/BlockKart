@@ -292,7 +292,6 @@ func (p *BlockKartPrimitiveScene) AddStaticWithFlags(shape primitive3d.ShapeID, 
 
 func (p *BlockKartPrimitiveScene) AddDetail(shape primitive3d.ShapeID, material primitive3d.MaterialID, position voplay.Vec3, rotation voplay.Quat, scale voplay.Vec3, tint voplay.Color, lodFar float64) primitive3d.ObjectID {
 	if material == p.ContactShadowMat {
-		// Contact shadow cards need a blended primitive path; otherwise they render as dark slabs.
 		return 0
 	}
 	flags := p.detailFlags(shape, material, lodFar)

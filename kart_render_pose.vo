@@ -1,6 +1,8 @@
 package main
 
-import "github.com/vo-lang/voplay"
+import (
+	"github.com/vo-lang/voplay"
+)
 
 type KartRenderSample struct {
 	Position voplay.Vec3
@@ -60,12 +62,7 @@ func (p *KartRenderPose) Interpolate(alpha float64) KartRenderSample {
 		return KartRenderSample{}
 	}
 	t := clampFloat(alpha, 0, 1)
-	p.render = KartRenderSample{
-		Position: p.prev.Position.Lerp(p.curr.Position, t),
-		Rotation: p.prev.Rotation.Slerp(p.curr.Rotation, t).Normalize(),
-		Velocity: p.prev.Velocity.Lerp(p.curr.Velocity, t),
-		Speed: p.prev.Speed + (p.curr.Speed - p.prev.Speed) * t,
-	}
+	p.render = KartRenderSample{Position: p.prev.Position.Lerp(p.curr.Position, t), Rotation: p.prev.Rotation.Slerp(p.curr.Rotation, t).Normalize(), Velocity: p.prev.Velocity.Lerp(p.curr.Velocity, t), Speed: p.prev.Speed + (p.curr.Speed - p.prev.Speed) * t}
 	p.valid = true
 	return p.render
 }

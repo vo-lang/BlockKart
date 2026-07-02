@@ -79,14 +79,5 @@ func (t *CameraTargetTelemetry) Record(target scene3d.RacingCameraTarget, dt flo
 }
 
 func (t *CameraTargetTelemetry) Snapshot() CameraTargetTelemetrySnapshot {
-	return CameraTargetTelemetrySnapshot{
-		Step: t.step,
-		StepMax: t.stepMax,
-		Residual: t.residual,
-		ResidualMax: t.residualMax,
-		YStep: t.yStep,
-		YStepMax: t.yStepMax,
-		SpeedStep: t.speedStep,
-		SpeedStepMax: t.speedStepMax,
-	}
+	return CameraTargetTelemetrySnapshot{Step: t.step, StepMax: t.stepMax, Residual: t.residual, ResidualMax: t.residualMax, YStep: t.yStep, YStepMax: t.yStepMax, SpeedStep: t.speedStep, SpeedStepMax: t.speedStepMax}
 }
