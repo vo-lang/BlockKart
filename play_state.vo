@@ -17,6 +17,7 @@ type PlayState struct {
 	renderDebugMode int
 	heroCameraVisible bool
 	renderPrepared bool
+	resetActionConsumed bool
 	bestTime float64
 	bestTimeSet bool
 	settings BlockKartSettings
@@ -80,7 +81,7 @@ func (s *PlayState) FixedUpdate(g *voplay.GameCtx, dt float64) {
 	if s.world == nil {
 		return
 	}
-	if g.Actions.IsPressed("reset") {
+	if s.consumeResetAction(g) {
 		s.restartWorld(g)
 		return
 	}
@@ -93,12 +94,12 @@ func (s *PlayState) FixedUpdate(g *voplay.GameCtx, dt float64) {
 
 func (s *PlayState) Update(g *voplay.GameCtx, dt float64) {
 	if s.failure != nil {
-		if g.Actions.IsPressed("reset") {
+		if s.consumeResetAction(g) {
 			s.restartWorld(g)
 		}
 		return
 	}
-	if g.Actions.IsPressed("reset") {
+	if s.consumeResetAction(g) {
 		s.restartWorld(g)
 		return
 	}
@@ -264,6 +265,20 @@ func (s *PlayState) setLifecycle(g *voplay.GameCtx, state, startupPhase string) 
 	s.lifecycle = state
 	s.startupPhase = startupPhase
 	blockKartReportLifecycle(g, state, startupPhase)
+}
+
+func (s *PlayState) consumeResetAction(g *voplay.GameCtx) bool {
+	pressed := g.Actions.IsPressed("reset")
+	down := g.Actions.IsDown("reset")
+	if !pressed && !down {
+		s.resetActionConsumed = false
+		return false
+	}
+	if pressed && !s.resetActionConsumed {
+		s.resetActionConsumed = true
+		return true
+	}
+	return false
 }
 
 func (s *PlayState) drawFailure(g *voplay.GameCtx) {
