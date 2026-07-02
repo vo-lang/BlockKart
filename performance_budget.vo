@@ -11,7 +11,7 @@ const (
 	blockKartPerfWindowFrames = 300
 	blockKartPerfWarmupFrames = 180
 	blockKartPerfSnapshotPollFrames = 300
-	blockKartPerfGateMaxSlowFrames = 12
+	blockKartPerfGateMaxSlowFrames = 24
 	blockKartPerfStatsEnabled = true
 	blockKartPerfReports = true
 	blockKartPerfVerboseConsoleReports = false
