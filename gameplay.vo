@@ -262,7 +262,6 @@ func (w *World) restartRun() {
 	w.boostTimer = 0
 	w.driftCharge = 0
 	w.drifting = false
-	w.wasDrifting = false
 	w.checkpointPosition = w.startPosition
 	w.checkpointYaw = w.startYaw
 	w.checkpointLabel = "Start"

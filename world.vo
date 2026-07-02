@@ -109,7 +109,6 @@ type World struct {
 	boostTimer float64
 	driftCharge float64
 	drifting bool
-	wasDrifting bool
 	message string
 	messageTimer float64
 	collectibles []*Collectible
@@ -578,12 +577,9 @@ func (w *World) applyKartDrive(g *voplay.GameCtx, dt float64) {
 		w.kartSpeed = w.vehicle.Speed
 		return
 	}
-	vehicleInput := intent.VehicleInput()
 	w.vehicle.UpdateIntent(intent, dt)
-	driftHeld := w.vehicle.Drifting
-	driftCharging := driftHeld && math.Abs(vehicleInput.Steer) > 0.08 && vehicleInput.Throttle > 0
-	w.updateDriftBoost(driftHeld, driftCharging, vehicleInput.Steer, dt)
-	w.drifting = driftHeld
+	w.drifting = w.vehicle.Drifting
+	w.driftCharge = 0
 	w.kartYaw = w.vehicle.Yaw
 	w.kartSpeed = w.vehicle.Speed
 }
@@ -743,32 +739,6 @@ func (w *World) sampleRoadEdgeAssist(pos voplay.Vec3) (roadEdgeAssistSample, boo
 	return roadEdgeAssistSample{Point: cp, Right: right, Inward: right.Scale(-side), EdgeHalfWidth: edgeHalfWidth, AssistStart: edgeHalfWidth - kartRoadEdgeAssistSoftZone, LateralAbs: math.Abs(cp.LateralDistance), Side: side}, true
 }
 
-func (w *World) updateDriftBoost(driftHeld, driftCharging bool, steer, dt float64) {
-	if driftHeld {
-		if driftCharging {
-			gain := (0.58 + math.Abs(steer) * 0.72) * dt
-			w.driftCharge = clampFloat(w.driftCharge + gain, 0, kartMaxDriftCharge)
-		}
-		w.wasDrifting = true
-		return
-	}
-	if w.wasDrifting {
-		if w.driftCharge >= kartSuperTurboCharge {
-			w.activateBoost(kartSuperTurboDuration)
-			w.message = "Super mini-turbo!"
-			w.messageTimer = 0.95
-		} else if w.driftCharge >= kartMiniTurboCharge {
-			w.activateBoost(kartMiniTurboDuration)
-			w.message = "Mini-turbo!"
-			w.messageTimer = 0.82
-		}
-		w.driftCharge = 0
-		w.wasDrifting = false
-		return
-	}
-	w.driftCharge = moveTowardsFloat(w.driftCharge, 0, dt * 1.4)
-}
-
 func (w *World) kartRotation() voplay.Quat {
 	if w.vehicle != nil {
 		return w.vehicle.Rotation()
@@ -810,7 +780,6 @@ func (w *World) stopKartForFinish() {
 	w.boostTimer = 0
 	w.driftCharge = 0
 	w.drifting = false
-	w.wasDrifting = false
 	w.kartSpeed = 0
 	w.roadEdgeAssistActive = false
 	if w.player != nil {
@@ -825,8 +794,13 @@ func (w *World) stopKartForFinish() {
 		w.vehicle.Drifting = false
 	}
 	if w.kartController != nil {
-		w.kartController.BoostTimer = 0
-		w.kartController.DriftCharge = 0
+		position := w.checkpointPosition
+		if w.player != nil {
+			position = w.player.Position()
+		} else if w.vehicle != nil && w.vehicle.Body != nil {
+			position = w.vehicle.Body.Position()
+		}
+		w.kartController.Respawn(scene3d.TrackPose{Position: position, Yaw: w.kartYaw})
 	}
 }
 
