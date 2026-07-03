@@ -31,9 +31,6 @@ const (
 	kartRoadEdgeAssistPostMaxCorrection = 0.36
 	kartRoadEdgeAssistSnapOverflow = 1.35
 	kartRoadEdgeAssistLift = 0.08
-	kartPhysicsIdleSleepWarmupFrames = 30
-	kartPhysicsIdleLinearSleepSpeedSq = 0.0025
-	kartPhysicsIdleAngularSleepSpeedSq = 0.0004
 	raceLapCount = 3
 	playerResetY = -25.0
 )
@@ -332,7 +329,7 @@ func (w *World) primeIdleStartPhysicsSleep() {
 		return
 	}
 	w.vehicle.Grounded = true
-	w.physicsIdleFrames = kartPhysicsIdleSleepWarmupFrames
+	w.physicsIdleFrames = scene3d.DefaultVehicleIdleSleepConfig().WarmupFrames
 }
 
 func (w *World) spawnKartVisuals() {
@@ -463,7 +460,7 @@ func (w *World) FixedUpdate(g *voplay.GameCtx, dt float64, debugOverlayVisible b
 	}
 	if shouldSleep {
 		w.physicsIdleFrames++
-		if w.physicsIdleFrames >= kartPhysicsIdleSleepWarmupFrames {
+		if w.physicsIdleFrames >= scene3d.DefaultVehicleIdleSleepConfig().WarmupFrames {
 			w.updateVehicleAudio()
 			if profileFixedStep {
 				now := time.Now()
@@ -590,26 +587,17 @@ func (w *World) shouldSleepKartPhysics() bool {
 	if w.player == nil || w.vehicle == nil {
 		return false
 	}
-	if w.boostTimer > 0 || w.drifting || w.roadEdgeAssistActive {
-		return false
-	}
-	intent := w.lastVehicleIntent.Normalized()
-	if intent.Throttle > 0.001 || intent.Brake > 0.001 || math.Abs(intent.Steering) > 0.001 || intent.Drift || intent.BoostRequest {
-		return false
-	}
-	if math.Abs(w.kartSpeed) > 0.05 {
-		return false
-	}
-	if !w.vehicle.Grounded && w.physicsIdleFrames < kartPhysicsIdleSleepWarmupFrames {
-		return false
-	}
-	if w.player.Velocity().LengthSq() > kartPhysicsIdleLinearSleepSpeedSq {
-		return false
-	}
-	if w.player.AngularVelocity().LengthSq() > kartPhysicsIdleAngularSleepSpeedSq {
-		return false
-	}
-	return true
+	return scene3d.VehicleShouldSleepIdlePhysics(scene3d.VehicleIdleSleepSample{
+		Intent: w.lastVehicleIntent,
+		Velocity: w.player.Velocity(),
+		AngularVelocity: w.player.AngularVelocity(),
+		KartSpeed: w.kartSpeed,
+		Grounded: w.vehicle.Grounded,
+		IdleFrames: w.physicsIdleFrames,
+		Boosting: w.boostTimer > 0,
+		Drifting: w.drifting,
+		AssistActive: w.roadEdgeAssistActive,
+	}, scene3d.DefaultVehicleIdleSleepConfig())
 }
 
 func (w *World) applyKartRoadEdgeAssist(dt float64) {
@@ -846,9 +834,9 @@ func (w *World) updateVehicleAudio() {
 			return
 		}
 	}
-	if w.track != nil && w.player != nil {
-		surface := w.track.SurfaceAt(w.player.Position())
-		if !surface.OnRoad {
+	if w.vehicle != nil {
+		telemetry := w.vehicle.Telemetry()
+		if telemetry.Surface.ID != "" && !telemetry.Surface.OnRoad {
 			input.SurfaceAmount = 1
 		}
 	}

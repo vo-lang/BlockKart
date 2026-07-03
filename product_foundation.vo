@@ -210,6 +210,14 @@ func blockKartReportVehicleDiagnostics(g *voplay.GameCtx, lifecycleState, startu
 			telemetry = w.vehicle.Telemetry()
 			speed = math.Abs(telemetry.Speed)
 			grounded = telemetry.Grounded
+			if telemetry.Surface.ID != "" {
+				surface.Name = telemetry.Surface.ID
+				surface.Kind = telemetry.Surface.Kind
+				surface.Friction = telemetry.Surface.Friction
+				surface.OnRoad = telemetry.Surface.OnRoad
+				surface.Boost = telemetry.Surface.Boost
+				surface.OnSurface = telemetry.Grounded
+			}
 			wheelCount = telemetry.WheelCount
 			wheelContacts = telemetry.ContactCount
 			wheelMaxSlip = telemetry.MaxLongitudinalSlip
@@ -217,9 +225,6 @@ func blockKartReportVehicleDiagnostics(g *voplay.GameCtx, lifecycleState, startu
 				wheelMaxSlip = telemetry.MaxLateralSlip
 			}
 			wheelMaxCompression = telemetry.MaxSuspensionCompression
-		}
-		if w.track != nil && w.player != nil {
-			surface = w.track.SurfaceAt(w.player.Position())
 		}
 	}
 	if state.SurfaceID != "" {
