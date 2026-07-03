@@ -55,8 +55,8 @@ deps = []
 path = "github.com/vo-lang/voplay"
 version = "v0.1.31"
 vo = "^0.1.0"
-commit = "129fe70e6d952274a137bec191a88abbfa8a6326"
-release_manifest = "sha256:d9876e4839addf983e60be48172b26ec9966fe3bbc8bcd610a1e6b856edbab0a"
+commit = "a352ab7bb44a49c4a1a839689ba22d36b5952165"
+release_manifest = "sha256:bdc3fae1e1939da33714af090712c89d62a532245dd6c5083061c05d76c38164"
 source = "sha256:c5c5051dd783e9bd133e40bae0d6934d7e05d97f65b1724499366ecb1e9915ad"
 deps = ["github.com/vo-lang/vogui", "github.com/vo-lang/vopack"]
 
@@ -64,12 +64,12 @@ deps = ["github.com/vo-lang/vogui", "github.com/vo-lang/vopack"]
 kind = "extension-js-glue"
 target = "wasm32-unknown-unknown"
 name = "voplay_island.js"
-size = 108533
-digest = "sha256:69c052121b34464a8a5cebc5daf7f07ee598498fff1fdb695652c33f237d7e8b"
+size = 108530
+digest = "sha256:cba92d70239d37a062c9c47d548fcd860f4531c5e68816ed25e3d85576718db4"
 
 [[resolved.artifact]]
 kind = "extension-wasm"
 target = "wasm32-unknown-unknown"
 name = "voplay_island_bg.wasm"
-size = 3629752
-digest = "sha256:2e8e7876f3f43c4d5a4f1b92586477229a52123b574068dcec1cd3f717cf8630"
+size = 3639362
+digest = "sha256:aa57b1e6c7a3d2690d286ea7f5027e05e4f94910da3e4ec7edccdc238088945f"
