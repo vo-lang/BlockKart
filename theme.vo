@@ -57,7 +57,6 @@ func applyWorldTheme(theme WorldTheme, scene *scene3d.Scene, settings BlockKartS
 	profile.Fog.Start = 300
 	profile.Fog.End = 980
 	profile.ColorGrading = scene3d.ColorGradingConfig{ToneMap: scene3d.ToneMapACES, Exposure: 1.08, Contrast: 1.08, Saturation: 1.02}
-	applyBlockKartRenderBudget(&profile, defaultBlockKartRenderBudget())
 	scene.ApplyLightingProfile(profile)
 	applyBlockKartQualityProfile(scene, settings)
 }

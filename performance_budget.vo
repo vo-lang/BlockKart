@@ -23,21 +23,6 @@ const (
 	blockKartDefaultQualityPreset = "medium"
 )
 
-type BlockKartRenderBudget struct {
-	TargetFPS int
-	ShadowResolution int
-	ShadowStrength float64
-	ShadowSoftness float64
-	ShadowDistance float64
-	ShadowFade float64
-	ShadowQuality int
-	PostProcess scene3d.PostProcessConfig
-}
-
-func defaultBlockKartRenderBudget() BlockKartRenderBudget {
-	return BlockKartRenderBudget{TargetFPS: blockKartTargetFPS, ShadowResolution: 1024, ShadowStrength: 0.44, ShadowSoftness: 1.4, ShadowDistance: 240, ShadowFade: 70, ShadowQuality: scene3d.ShadowQualityHigh, PostProcess: blockKartPerformancePostProcessConfig()}
-}
-
 func blockKartRenderingQuality(settings BlockKartSettings) int {
 	settings = blockKartNormalizeSettings(settings)
 	if settings.QualityPreset == "low" {
@@ -57,24 +42,6 @@ func applyBlockKartQualityProfile(scene *scene3d.Scene, settings BlockKartSettin
 		return scene3d.RenderingQualityConfig(blockKartRenderingQuality(settings))
 	}
 	return scene.SetRenderingQuality(blockKartRenderingQuality(settings))
-}
-
-func blockKartPerformancePostProcessConfig() scene3d.PostProcessConfig {
-	return scene3d.PostProcessConfig{BloomThreshold: 1.0, BloomStrength: 0.0, SharpenStrength: 0.0, FxaaStrength: 0.0, ContactAOStrength: 0.0, ContactAORadius: 0.5, ContactAODepthScale: 1.0, ContactAODetailStrength: 0.0, ContactAODetailRadius: 0.35, ContactAONormalBias: 0.0, ContactAOQuality: scene3d.ContactAOQualityOff}
-}
-
-func applyBlockKartRenderBudget(profile *scene3d.LightingProfile, budget BlockKartRenderBudget) {
-	if profile == nil {
-		return
-	}
-	profile.PostProcess = budget.PostProcess
-	profile.ShadowsEnabled = true
-	profile.ShadowResolution = budget.ShadowResolution
-	profile.ShadowStrength = budget.ShadowStrength
-	profile.ShadowSoftness = budget.ShadowSoftness
-	profile.ShadowDistance = budget.ShadowDistance
-	profile.ShadowFade = budget.ShadowFade
-	profile.ShadowQuality = budget.ShadowQuality
 }
 
 func blockKartGameConfig(initial voplay.State) voplay.Game {
