@@ -69,6 +69,10 @@ func blockKartReportSceneDiagnostics(g *voplay.GameCtx, lifecycleState, startupP
 	primitiveGroups := 0
 	primitiveDrawCalls := 0
 	primitiveUploadBytes := 0
+	waterSurfaces := 0
+	visibleWaterSurfaces := 0
+	renderStressProfile := ""
+	renderStressApplied := false
 	collectibles := 0
 	checkpoints := 0
 	boostPads := 0
@@ -95,6 +99,8 @@ func blockKartReportSceneDiagnostics(g *voplay.GameCtx, lifecycleState, startupP
 		hasMap = w.primitiveMap != nil
 		preparedMapReused = w.preparedMapReused
 		primitiveTemplateReused = w.primitiveTemplateReused
+		renderStressProfile = w.renderStressProfile
+		renderStressApplied = w.renderStressApplied
 		hasPlayer = w.player != nil
 		hasVehicle = w.vehicle != nil
 		hasVehicleAudio = w.vehicleAudio != nil
@@ -104,6 +110,10 @@ func blockKartReportSceneDiagnostics(g *voplay.GameCtx, lifecycleState, startupP
 		if w.scene != nil {
 			hasScene = true
 			diag := w.scene.Diagnostics()
+			content := diag.PrimitiveContent
+			if content.TotalInstances == 0 && diag.Primitive.TotalInstances > 0 {
+				content = diag.Primitive
+			}
 			activeEntities = diag.ActiveEntities
 			modelEntities = diag.ModelEntities
 			staticRenderableEntities = diag.StaticRenderableEntities
@@ -115,14 +125,16 @@ func blockKartReportSceneDiagnostics(g *voplay.GameCtx, lifecycleState, startupP
 			primitiveLayers = diag.PrimitiveLayers
 			visibleEntities = diag.Render.VisibleEntities
 			culledEntities = diag.Render.CulledEntities
-			primitiveInstances = diag.Primitive.TotalInstances
+			primitiveInstances = content.TotalInstances
 			primitiveVisibleInstances = diag.Primitive.VisibleInstances
-			primitiveChunks = diag.Primitive.TotalChunks
+			primitiveChunks = content.TotalChunks
 			primitiveVisibleChunks = diag.Primitive.VisibleChunks
-			primitiveGroups = diag.Primitive.ShapeMaterialGroups
+			primitiveGroups = content.ShapeMaterialGroups
 			primitiveDrawCalls = diag.Primitive.DrawCalls
-			primitiveUploadBytes = diag.Primitive.UploadBytes
+			primitiveUploadBytes = content.UploadBytes
+			waterSurfaces = content.WaterInstances
+			visibleWaterSurfaces = diag.Primitive.VisibleWaterInstances
 		}
 	}
-	println(blockKartSceneReportMarker + "{" + "\"lifecycleState\":" + jsonString(lifecycleState) + ",\"startupPhase\":" + jsonString(startupPhase) + ",\"phase\":" + jsonString(phase) + ",\"hasScene\":" + jsonBool(hasScene) + ",\"activeEntities\":" + itoa(activeEntities) + ",\"modelEntities\":" + itoa(modelEntities) + ",\"staticRenderableEntities\":" + itoa(staticRenderableEntities) + ",\"physicsBodies\":" + itoa(physicsBodies) + ",\"terrainBodies\":" + itoa(terrainBodies) + ",\"vehicles\":" + itoa(vehicles) + ",\"contactEvents\":" + itoa(contactEvents) + ",\"vehicleTelemetryIssues\":" + itoa(vehicleTelemetryIssues) + ",\"primitiveLayers\":" + itoa(primitiveLayers) + ",\"visibleEntities\":" + itoa(visibleEntities) + ",\"culledEntities\":" + itoa(culledEntities) + ",\"primitiveInstances\":" + itoa(primitiveInstances) + ",\"primitiveVisibleInstances\":" + itoa(primitiveVisibleInstances) + ",\"primitiveChunks\":" + itoa(primitiveChunks) + ",\"primitiveVisibleChunks\":" + itoa(primitiveVisibleChunks) + ",\"primitiveGroups\":" + itoa(primitiveGroups) + ",\"primitiveDrawCalls\":" + itoa(primitiveDrawCalls) + ",\"primitiveUploadBytes\":" + itoa(primitiveUploadBytes) + ",\"collectibles\":" + itoa(collectibles) + ",\"checkpoints\":" + itoa(checkpoints) + ",\"boostPads\":" + itoa(boostPads) + ",\"obstacles\":" + itoa(obstacles) + ",\"trackEntities\":" + itoa(trackEntities) + ",\"kartWheelPrimitives\":" + itoa(kartWheelPrimitives) + ",\"hasTrack\":" + jsonBool(hasTrack) + ",\"hasTrackResult\":" + jsonBool(hasTrackResult) + ",\"hasMap\":" + jsonBool(hasMap) + ",\"preparedMapReused\":" + jsonBool(preparedMapReused) + ",\"primitiveTemplateReused\":" + jsonBool(primitiveTemplateReused) + ",\"hasPlayer\":" + jsonBool(hasPlayer) + ",\"hasVehicle\":" + jsonBool(hasVehicle) + ",\"hasVehicleAudio\":" + jsonBool(hasVehicleAudio) + "}")
+	println(blockKartSceneReportMarker + "{" + "\"lifecycleState\":" + jsonString(lifecycleState) + ",\"startupPhase\":" + jsonString(startupPhase) + ",\"phase\":" + jsonString(phase) + ",\"hasScene\":" + jsonBool(hasScene) + ",\"activeEntities\":" + itoa(activeEntities) + ",\"modelEntities\":" + itoa(modelEntities) + ",\"staticRenderableEntities\":" + itoa(staticRenderableEntities) + ",\"physicsBodies\":" + itoa(physicsBodies) + ",\"terrainBodies\":" + itoa(terrainBodies) + ",\"vehicles\":" + itoa(vehicles) + ",\"contactEvents\":" + itoa(contactEvents) + ",\"vehicleTelemetryIssues\":" + itoa(vehicleTelemetryIssues) + ",\"primitiveLayers\":" + itoa(primitiveLayers) + ",\"visibleEntities\":" + itoa(visibleEntities) + ",\"culledEntities\":" + itoa(culledEntities) + ",\"primitiveInstances\":" + itoa(primitiveInstances) + ",\"primitiveVisibleInstances\":" + itoa(primitiveVisibleInstances) + ",\"primitiveChunks\":" + itoa(primitiveChunks) + ",\"primitiveVisibleChunks\":" + itoa(primitiveVisibleChunks) + ",\"primitiveGroups\":" + itoa(primitiveGroups) + ",\"primitiveDrawCalls\":" + itoa(primitiveDrawCalls) + ",\"primitiveUploadBytes\":" + itoa(primitiveUploadBytes) + ",\"waterSurfaces\":" + itoa(waterSurfaces) + ",\"visibleWaterSurfaces\":" + itoa(visibleWaterSurfaces) + ",\"renderStressProfile\":" + jsonString(renderStressProfile) + ",\"renderStressApplied\":" + jsonBool(renderStressApplied) + ",\"collectibles\":" + itoa(collectibles) + ",\"checkpoints\":" + itoa(checkpoints) + ",\"boostPads\":" + itoa(boostPads) + ",\"obstacles\":" + itoa(obstacles) + ",\"trackEntities\":" + itoa(trackEntities) + ",\"kartWheelPrimitives\":" + itoa(kartWheelPrimitives) + ",\"hasTrack\":" + jsonBool(hasTrack) + ",\"hasTrackResult\":" + jsonBool(hasTrackResult) + ",\"hasMap\":" + jsonBool(hasMap) + ",\"preparedMapReused\":" + jsonBool(preparedMapReused) + ",\"primitiveTemplateReused\":" + jsonBool(primitiveTemplateReused) + ",\"hasPlayer\":" + jsonBool(hasPlayer) + ",\"hasVehicle\":" + jsonBool(hasVehicle) + ",\"hasVehicleAudio\":" + jsonBool(hasVehicleAudio) + "}")
 }

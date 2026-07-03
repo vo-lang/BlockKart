@@ -137,6 +137,8 @@ type World struct {
 	perfAnalyzer BlockKartPerfAnalyzer
 	fixedProfiler BlockKartFixedStepProfiler
 	perfSnapshotPollFrame int
+	renderStressProfile string
+	renderStressApplied bool
 	debugHudLines [18]string
 	debugHudLineCount int
 	debugHudFrame int

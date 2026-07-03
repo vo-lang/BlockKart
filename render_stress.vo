@@ -1,0 +1,103 @@
+package main
+
+import (
+	"math"
+	"github.com/vo-lang/voplay"
+	"github.com/vo-lang/voplay/primitive3d"
+)
+
+const (
+	blockKartRenderStressPrimitive10k = "primitive10k"
+	blockKartRenderStressWater = "water"
+	blockKartRenderStressResourceChurn = "resource-churn"
+)
+
+func (w *World) ActivateRenderStressProfile(g *voplay.GameCtx, profile string) {
+	if w == nil || profile == "" {
+		return
+	}
+	if w.renderStressProfile == profile && w.renderStressApplied {
+		blockKartReportWorldDiagnostics(g, BlockKartLifecycleRunning, "renderStress", profile, w)
+		return
+	}
+	w.renderStressProfile = profile
+	w.renderStressApplied = false
+	if profile == blockKartRenderStressPrimitive10k {
+		w.addRenderStressPrimitive10k()
+		w.renderStressApplied = true
+	} else if profile == blockKartRenderStressWater {
+		w.addRenderStressWater()
+		w.renderStressApplied = true
+	} else if profile == blockKartRenderStressResourceChurn {
+		w.addRenderStressResourceChurn()
+		w.renderStressApplied = true
+	}
+	if w.renderStressApplied {
+		w.message = "Render stress: " + profile
+		w.messageTimer = 1.5
+	}
+	blockKartReportWorldDiagnostics(g, BlockKartLifecycleRunning, "renderStress", profile, w)
+}
+
+func (w *World) addRenderStressPrimitive10k() {
+	primitive := w.ensurePrimitiveScene()
+	batch := primitive.ScatterStatic.BeginBulkAdd()
+	count := 10000
+	columns := 100
+	spacing := 2.35
+	center := w.startPosition
+	for i := 0; i < count; i++ {
+		col := i % columns
+		row := i / columns
+		x := center.X + (float64(col) - 49.5) * spacing
+		z := center.Z - 30.0 - float64(row) * spacing
+		y := center.Y - 0.85 + math.Sin(float64(i)*0.37)*0.12
+		shape := primitive.RoundedBox
+		if i % 11 == 0 {
+			shape = primitive.Sphere
+		} else if i % 17 == 0 {
+			shape = primitive.Cylinder
+		}
+		material := primitive.MeadowMat
+		if i % 5 == 0 {
+			material = primitive.StoneMat
+		} else if i % 7 == 0 {
+			material = primitive.PebbleMat
+		}
+		scale := voplay.Vec3{X: 0.58 + float64(i%4)*0.08, Y: 0.42 + float64((i/3)%5)*0.04, Z: 0.58 + float64((i/5)%4)*0.08}
+		batch.Add(primitive3d.Instance{Shape: shape, Material: material, Position: voplay.Vec3{X: x, Y: y, Z: z}, Rotation: voplay.QuatFromAxisAngle(voplay.Vec3{Y: 1}, float64(i%31)*0.07), Scale: scale, Flags: primitive3d.InstanceNoShadow, LodFar: 520})
+	}
+	batch.End()
+}
+
+func (w *World) addRenderStressWater() {
+	primitive := w.ensurePrimitiveScene()
+	if w.track != nil {
+		w.addPrimitiveLakeAndBridge(w.track)
+	}
+	w.addPrimitiveWaterfall()
+	center := w.startPosition.Add(voplay.Vec3{X: 24, Y: -0.95, Z: -42})
+	for i := 0; i < 24; i++ {
+		x := center.X + float64(i%6)*8.5
+		z := center.Z - float64(i/6)*9.0
+		primitive.AddStaticWithFlags(primitive.RoundedBox, primitive.WaterMat, voplay.Vec3{X: x, Y: center.Y, Z: z}, voplay.QuatIdentity(), voplay.Vec3{X: 7.8, Y: 0.08, Z: 7.8}, voplay.Color{}, primitive3d.InstanceNoShadow)
+	}
+}
+
+func (w *World) addRenderStressResourceChurn() {
+	primitive := w.ensurePrimitiveScene()
+	batch := primitive.SmallDetailStatic.BeginBulkAdd()
+	count := 1536
+	columns := 64
+	for i := 0; i < count; i++ {
+		col := i % columns
+		row := i / columns
+		position := w.startPosition.Add(voplay.Vec3{X: (float64(col) - 31.5) * 1.85, Y: -0.42 + math.Sin(float64(i)*0.23)*0.10, Z: -18.0 - float64(row)*1.95})
+		material := primitive.FlowerYellowMat
+		if i % 2 == 0 {
+			material = primitive.FlowerWhiteMat
+		}
+		batch.Add(primitive3d.Instance{Shape: primitive.Sphere, Material: material, Position: position, Rotation: voplay.QuatIdentity(), Scale: voplay.Vec3{X: 0.32, Y: 0.24, Z: 0.32}, Flags: primitive3d.InstanceNoShadow, LodFar: primitiveFlowerClumpLodFar})
+	}
+	batch.End()
+}

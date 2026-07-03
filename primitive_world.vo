@@ -439,7 +439,7 @@ func (w *World) buildPrimitiveLevel() error {
 	}
 	w.spawnPrimitiveTrackPhysics(track)
 	prof.Mark("spawnPrimitiveTrackPhysics")
-	w.spawnPrimitiveGameplay(track)
+	w.spawnPrimitiveGameplay(track, !templateReused)
 	prof.Mark("spawnPrimitiveGameplay")
 	if templateReused {
 		prof.Mark("reuseStaticLayerChunks")
@@ -1113,7 +1113,7 @@ func (w *World) spawnPrimitiveRoadBoxPhysics(track *scene3d.Track, count int, st
 	}
 }
 
-func (w *World) spawnPrimitiveGameplay(track *scene3d.Track) {
+func (w *World) spawnPrimitiveGameplay(track *scene3d.Track, includeStaticVisuals bool) {
 	length := track.Length()
 	startDistance := primitiveTrackStartDistance(track)
 	for i := 0; i < 8; i++ {
@@ -1124,7 +1124,9 @@ func (w *World) spawnPrimitiveGameplay(track *scene3d.Track) {
 	for _, d := range []float64{length * 0.13, length * 0.59} {
 		pose := track.PoseAt(d)
 		w.addBoostPad(pose.Position, 7.0)
-		w.addPrimitiveBoostPadVisual(pose)
+		if includeStaticVisuals {
+			w.addPrimitiveBoostPadVisual(pose)
+		}
 	}
 }
 

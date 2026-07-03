@@ -133,6 +133,15 @@ func (s *PlayState) Update(g *voplay.GameCtx, dt float64) {
 	if s.world == nil {
 		return
 	}
+	if g.Actions.IsPressed("render_stress_primitive10k") {
+		s.world.ActivateRenderStressProfile(g, blockKartRenderStressPrimitive10k)
+	}
+	if g.Actions.IsPressed("render_stress_water") {
+		s.world.ActivateRenderStressProfile(g, blockKartRenderStressWater)
+	}
+	if g.Actions.IsPressed("render_stress_resource_churn") {
+		s.world.ActivateRenderStressProfile(g, blockKartRenderStressResourceChurn)
+	}
 	s.world.Update(g, dt, s.debugOverlayVisible)
 	s.captureRacePersistence()
 }
@@ -325,4 +334,7 @@ func bindGameActions(g *voplay.GameCtx) {
 	g.Actions.Rebind("cycle_render_debug", voplay.KeyBinding("F4"))
 	g.Actions.Rebind("toggle_hero_camera", voplay.KeyBinding("F5"))
 	g.Actions.Rebind("cycle_terrain_camera", voplay.KeyBinding("F6"))
+	g.Actions.Rebind("render_stress_primitive10k", voplay.KeyBinding("F7"))
+	g.Actions.Rebind("render_stress_water", voplay.KeyBinding("F8"))
+	g.Actions.Rebind("render_stress_resource_churn", voplay.KeyBinding("F9"))
 }
