@@ -304,7 +304,7 @@ func blockKartPerfGateConfig(snapshot voplay.PerfSnapshot) voplay.PerfGateConfig
 	if budget <= 0 {
 		budget = 1000.0 / float64(blockKartTargetFPS)
 	}
-	return voplay.PerfGateConfig{MinFrames: blockKartPerfWindowFrames, MaxSlowFrames: blockKartPerfGateMaxSlowFrames, MaxFrameP99Ms: budget * 1.35, MaxFrameMaxMs: budget * 3.0, MaxGpuQueueBoundFrames: blockKartPerfWindowFrames / 4, MaxGpuWorkDoneP90Ms: budget * 1.35, MaxHudOverheadFrames: blockKartPerfWindowFrames / 10, MaxHudP90Ms: 1.0, MaxProbeOverheadMs: 0.35}
+	return voplay.PerfGateConfig{MinFrames: blockKartPerfWindowFrames, MaxSlowFrames: blockKartPerfGateMaxSlowFrames, MaxFrameP99Ms: budget * 1.35, MaxFrameMaxMs: budget * 3.0, MaxActiveWorkP99Ms: budget * 0.85, MaxGpuQueueBoundFrames: blockKartPerfWindowFrames / 4, MaxGpuWorkDoneP90Ms: budget * 1.35, MaxHudOverheadFrames: blockKartPerfWindowFrames / 10, MaxHudP90Ms: 1.0, MaxProbeOverheadMs: 0.35}
 }
 
 func blockKartApplyPerfSnapshotToHUD(hud *WorldHUDState, snapshot voplay.PerfSnapshot) {
