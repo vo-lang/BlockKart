@@ -88,7 +88,7 @@ func (w *World) addRenderStressWater() {
 	for i := 0; i < 24; i++ {
 		x := center.X + float64(i%6)*8.5
 		z := center.Z - float64(i/6)*9.0
-		primitive.AddStaticWithFlags(primitive.RoundedBox, primitive.WaterMat, voplay.Vec3{X: x, Y: center.Y, Z: z}, voplay.QuatIdentity(), voplay.Vec3{X: 7.8, Y: 0.08, Z: 7.8}, voplay.Color{}, primitive3d.InstanceNoShadow)
+		primitive.PlaceStaticWithFlags(primitive.RoundedBox, primitive.WaterMat, voplay.Vec3{X: x, Y: center.Y, Z: z}, voplay.QuatIdentity(), voplay.Vec3{X: 7.8, Y: 0.08, Z: 7.8}, voplay.Color{}, primitive3d.InstanceNoShadow)
 	}
 }
 
@@ -153,9 +153,9 @@ func (w *World) addRenderStressShadowPostMatrix() {
 			if (row + col) % 3 == 0 {
 				material = primitive.StoneMat
 			}
-			primitive.AddStaticWithFlags(primitive.Cylinder, material, voplay.Vec3{X: x, Y: center.Y + height*0.5 - 0.72, Z: z}, voplay.QuatIdentity(), voplay.Vec3{X: 0.42, Y: height, Z: 0.42}, voplay.Color{}, 0)
+			primitive.PlaceStaticWithFlags(primitive.Cylinder, material, voplay.Vec3{X: x, Y: center.Y + height*0.5 - 0.72, Z: z}, voplay.QuatIdentity(), voplay.Vec3{X: 0.42, Y: height, Z: 0.42}, voplay.Color{}, 0)
 			if (row + col) % 4 == 0 {
-				primitive.AddStaticWithFlags(primitive.RoundedBox, primitive.PebbleMat, voplay.Vec3{X: x + 1.1, Y: center.Y - 0.46, Z: z + 1.0}, voplay.QuatFromAxisAngle(voplay.Vec3{Y: 1}, float64(row+col)*0.19), voplay.Vec3{X: 1.25, Y: 0.48, Z: 0.72}, voplay.Color{}, 0)
+				primitive.PlaceStaticWithFlags(primitive.RoundedBox, primitive.PebbleMat, voplay.Vec3{X: x + 1.1, Y: center.Y - 0.46, Z: z + 1.0}, voplay.QuatFromAxisAngle(voplay.Vec3{Y: 1}, float64(row+col)*0.19), voplay.Vec3{X: 1.25, Y: 0.48, Z: 0.72}, voplay.Color{}, 0)
 			}
 		}
 	}

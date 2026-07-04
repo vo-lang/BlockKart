@@ -160,14 +160,14 @@ type WorldHUDState struct {
 	PrimitiveInstances int
 	PrimitiveVisibleInstances int
 	PrimitiveChunks int
-	PrimitiveVisibleChunks int
+	PrimitiveChunksVisible int
 	PrimitiveGroups int
 	PrimitiveDrawCalls int
 	PrimitiveUploadBytes int
-	VehicleGrounded bool
+	KartGrounded bool
 	WheelContacts int
 	WheelCount int
-	WheelMaxSlip float64
+	KartSlipPeak float64
 	WheelMaxCompression float64
 	CameraTargetStep float64
 	CameraTargetStepMax float64

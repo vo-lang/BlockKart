@@ -78,7 +78,7 @@ type World struct {
 	primitiveTemplateReused bool
 	track *scene3d.Track
 	trackResult *scene3d.TrackSpawnResult
-	primitive *BlockKartPrimitiveScene
+	primitive *BlockKartVisualContent
 	racingDebugOverlay *scene3d.RacingDebugOverlay
 	heroCameraVisible bool
 	terrainCameraView int
@@ -317,7 +317,7 @@ func (w *World) spawnPlayer() {
 	controllerConfig := w.tuning.KartControllerConfig()
 	w.vehicle = scene3d.NewVehicle(w.player, controllerConfig.Vehicle)
 	w.kartController = scene3d.NewKartController(w.vehicle, w.track, controllerConfig)
-	w.vehicle.SetPose(w.startPosition, w.startYaw)
+	w.kartController.Respawn(scene3d.TrackPose{Position: w.startPosition, Yaw: w.startYaw})
 	w.primeIdleStartPhysicsSleep()
 	w.resetKartRenderPose(w.startPosition, w.kartRotation())
 	w.spawnKartVisuals()
@@ -750,7 +750,7 @@ func (w *World) setKartPose(position voplay.Vec3, yaw float64) {
 		return
 	}
 	if w.vehicle != nil {
-		w.vehicle.SetPose(position, yaw)
+		scene3d.ResetVehiclePose(w.vehicle, position, yaw)
 		w.primeIdleStartPhysicsSleep()
 		w.resetKartRenderPose(position, w.kartRotation())
 		w.drifting = false
@@ -778,10 +778,7 @@ func (w *World) stopKartForFinish() {
 		w.resetKartRenderPose(w.player.Position(), w.kartRotation())
 	}
 	if w.vehicle != nil {
-		w.vehicle.Speed = 0
-		w.vehicle.SteerAngle = 0
-		w.vehicle.WheelSpin = 0
-		w.vehicle.Drifting = false
+		scene3d.ResetVehicleMotionState(w.vehicle)
 	}
 	if w.kartController != nil {
 		position := w.checkpointPosition
@@ -1153,8 +1150,9 @@ func (w *World) hudState(debugOverlayVisible bool, perf voplay.DebugOverlayStats
 		renderDebugMode = w.scene.RenderDebugMode
 	}
 	if debugOverlayVisible && w.scene != nil {
-		stats = w.scene.RenderStats()
-		primitiveStats := w.scene.PrimitiveStats()
+		diagnostics := w.scene.Diagnostics()
+		stats = diagnostics.Render
+		primitiveStats := diagnostics.Primitive
 		primitiveInstances = primitiveStats.TotalInstances
 		primitiveVisibleInstances = primitiveStats.VisibleInstances
 		primitiveChunks = primitiveStats.TotalChunks
@@ -1173,30 +1171,18 @@ func (w *World) hudState(debugOverlayVisible bool, perf voplay.DebugOverlayStats
 	wheelMaxSlip := 0.0
 	wheelMaxCompression := 0.0
 	if debugOverlayVisible && w.vehicle != nil {
-		vehicleGrounded = w.vehicle.Grounded
-		wheelCount = w.vehicle.WheelCount()
-		for i := 0; i < wheelCount; i++ {
-			state, ok := w.vehicle.WheelState(i)
-			if !ok {
-				continue
-			}
-			if state.InContact {
-				wheelContacts++
-			}
-			slip := math.Abs(state.LongitudinalSlip)
-			if math.Abs(state.LateralSlip) > slip {
-				slip = math.Abs(state.LateralSlip)
-			}
-			if slip > wheelMaxSlip {
-				wheelMaxSlip = slip
-			}
-			if state.SuspensionCompression > wheelMaxCompression {
-				wheelMaxCompression = state.SuspensionCompression
-			}
+		telemetry := w.vehicle.Telemetry()
+		vehicleGrounded = telemetry.Grounded
+		wheelContacts = telemetry.ContactCount
+		wheelCount = telemetry.WheelCount
+		wheelMaxSlip = math.Abs(telemetry.MaxLongitudinalSlip)
+		if math.Abs(telemetry.MaxLateralSlip) > wheelMaxSlip {
+			wheelMaxSlip = math.Abs(telemetry.MaxLateralSlip)
 		}
+		wheelMaxCompression = telemetry.MaxSuspensionCompression
 	}
 	camera := w.cameraTelemetry.Snapshot()
-	hud := WorldHUDState{RaceState: w.raceState, Time: w.courseTime, FinishTime: w.finishTime, BestTime: w.bestTime, BestTimeSet: w.bestTimeSet, Collected: w.collected, TotalCollectibles: len(w.collectibles), Checkpoint: w.checkpointLabel, NextGate: w.nextGateLabel, Lap: w.lap, TotalLaps: w.totalLaps, Speed: math.Abs(w.kartSpeed), Boosting: w.isBoosting(), Drifting: w.drifting, DriftCharge: w.driftCharge, Message: w.message, MessageTimer: w.messageTimer, Finished: w.finished, DebugOverlayVisible: debugOverlayVisible, RenderDebugMode: renderDebugMode, HeroCameraVisible: w.heroCameraVisible, SettingsStorageStatus: w.settings.StorageStatus, PerfFPS: perf.FPS, PerfFrameMs: perf.FrameMs, PerfLogicMs: perf.LogicMs, PerfInputMs: perf.InputMs, PerfAdvanceMs: perf.AdvanceMs, PerfDrawMs: perf.DrawMs, PerfOverlayMs: perf.OverlayMs, PerfBudgetMs: perf.FrameBudgetMs, PerfMaxFrameMs: perf.MaxFrameMs, PerfMaxLogicMs: perf.MaxLogicMs, PerfDrawBytes: perf.DrawBytes, PerfSubmitBytes: perf.SubmitBytes, PerfFixedSteps: perf.FixedSteps, PerfSlowFrames: perf.SlowFrames, PerfSlowLogs: perf.SlowLogs, PerfWorkSlowFrames: perf.WorkSlowFrames, PerfWorkSlowLogs: perf.WorkSlowLogs, PerfLastSlowReason: perf.LastSlowReason, PerfLastSlowFrameMs: perf.LastSlowFrameMs, PerfLastSlowLogicMs: perf.LastSlowLogicMs, PerfLastWorkSlowReason: perf.LastWorkSlowReason, PerfLastWorkSlowFrameMs: perf.LastWorkSlowFrameMs, PerfLastWorkSlowLogicMs: perf.LastWorkSlowLogicMs, PerfWindowFrames: perf.WindowFrames, PerfWindowSlowFrames: perf.WindowSlowFrames, PerfWindowLastSlowGapFrames: perf.WindowLastSlowGapFrames, PerfWindowLastSlowGapMs: perf.WindowLastSlowGapMs, PerfWindowWorkSlowFrames: perf.WindowWorkSlowFrames, PerfWindowLastWorkSlowGapFrames: perf.WindowLastWorkSlowGapFrames, PerfWindowLastWorkSlowGapMs: perf.WindowLastWorkSlowGapMs, PerfFrameP50Ms: perf.FrameP50Ms, PerfFrameP90Ms: perf.FrameP90Ms, PerfFrameP99Ms: perf.FrameP99Ms, PerfLogicP50Ms: perf.LogicP50Ms, PerfLogicP90Ms: perf.LogicP90Ms, PerfLogicP99Ms: perf.LogicP99Ms, PerfAdvanceP90Ms: perf.AdvanceP90Ms, PerfDrawP90Ms: perf.DrawP90Ms, PerfDrawP99Ms: perf.DrawP99Ms, PerfRenderFrame: perf.RenderFrame, PerfRenderLoopMs: perf.RenderLoopMs, PerfRenderPaceWaitMs: perf.RenderPaceWaitMs, PerfRenderReplyWaitMs: perf.RenderReplyWaitMs, PerfRenderSubmitMs: perf.RenderSubmitMs, PerfRenderDisplayPulseMs: perf.RenderDisplayPulseMs, PerfRenderDrawBytes: perf.RenderDrawBytes, PerfRenderFrameDivisor: perf.RenderFrameDivisor, PerfRenderAttribution: perf.RenderAttribution, PerfRenderWindowFrames: perf.RenderWindowFrames, PerfRenderWindowSlowFrames: perf.RenderWindowSlowFrames, PerfRenderWindowLastSlowGapFrames: perf.RenderWindowLastSlowGapFrames, PerfRenderWindowLastSlowGapMs: perf.RenderWindowLastSlowGapMs, PerfRenderCadenceSlowFrames: perf.RenderCadenceSlowFrames, PerfRenderReplySlowFrames: perf.RenderReplySlowFrames, PerfRenderSubmitSlowFrames: perf.RenderSubmitSlowFrames, PerfRenderUnattributedSlowFrames: perf.RenderUnattributedSlowFrames, PerfRenderLoopP50Ms: perf.RenderLoopP50Ms, PerfRenderLoopP90Ms: perf.RenderLoopP90Ms, PerfRenderLoopP99Ms: perf.RenderLoopP99Ms, PerfRenderPaceWaitP90Ms: perf.RenderPaceWaitP90Ms, PerfRenderReplyWaitP90Ms: perf.RenderReplyWaitP90Ms, PerfRenderSubmitP90Ms: perf.RenderSubmitP90Ms, SceneActive: stats.ActiveEntities, SceneVisible: stats.VisibleEntities, SceneCulled: stats.CulledEntities, SceneModels: stats.ModelEntities, SceneUpserts: stats.UpsertedObjects, SceneDestroyed: stats.DestroyedObjects, SceneBatchEligible: stats.BatchEligibleObjects, SceneBatchGroups: stats.BatchGroups, SceneFlushMs: stats.FlushCpuMs, SceneFrameMs: stats.FrameCpuMs, TrackEntities: trackEntities, PrimitiveInstances: primitiveInstances, PrimitiveVisibleInstances: primitiveVisibleInstances, PrimitiveChunks: primitiveChunks, PrimitiveVisibleChunks: primitiveVisibleChunks, PrimitiveGroups: primitiveGroups, PrimitiveDrawCalls: primitiveDrawCalls, PrimitiveUploadBytes: primitiveUploadBytes, VehicleGrounded: vehicleGrounded, WheelContacts: wheelContacts, WheelCount: wheelCount, WheelMaxSlip: wheelMaxSlip, WheelMaxCompression: wheelMaxCompression, CameraTargetStep: camera.Step, CameraTargetStepMax: camera.StepMax, CameraTargetResidual: camera.Residual, CameraTargetResidualMax: camera.ResidualMax, CameraTargetYStep: camera.YStep, CameraTargetYStepMax: camera.YStepMax, CameraSpeedStep: camera.SpeedStep, CameraSpeedStepMax: camera.SpeedStepMax}
+	hud := WorldHUDState{RaceState: w.raceState, Time: w.courseTime, FinishTime: w.finishTime, BestTime: w.bestTime, BestTimeSet: w.bestTimeSet, Collected: w.collected, TotalCollectibles: len(w.collectibles), Checkpoint: w.checkpointLabel, NextGate: w.nextGateLabel, Lap: w.lap, TotalLaps: w.totalLaps, Speed: math.Abs(w.kartSpeed), Boosting: w.isBoosting(), Drifting: w.drifting, DriftCharge: w.driftCharge, Message: w.message, MessageTimer: w.messageTimer, Finished: w.finished, DebugOverlayVisible: debugOverlayVisible, RenderDebugMode: renderDebugMode, HeroCameraVisible: w.heroCameraVisible, SettingsStorageStatus: w.settings.StorageStatus, PerfFPS: perf.FPS, PerfFrameMs: perf.FrameMs, PerfLogicMs: perf.LogicMs, PerfInputMs: perf.InputMs, PerfAdvanceMs: perf.AdvanceMs, PerfDrawMs: perf.DrawMs, PerfOverlayMs: perf.OverlayMs, PerfBudgetMs: perf.FrameBudgetMs, PerfMaxFrameMs: perf.MaxFrameMs, PerfMaxLogicMs: perf.MaxLogicMs, PerfDrawBytes: perf.DrawBytes, PerfSubmitBytes: perf.SubmitBytes, PerfFixedSteps: perf.FixedSteps, PerfSlowFrames: perf.SlowFrames, PerfSlowLogs: perf.SlowLogs, PerfWorkSlowFrames: perf.WorkSlowFrames, PerfWorkSlowLogs: perf.WorkSlowLogs, PerfLastSlowReason: perf.LastSlowReason, PerfLastSlowFrameMs: perf.LastSlowFrameMs, PerfLastSlowLogicMs: perf.LastSlowLogicMs, PerfLastWorkSlowReason: perf.LastWorkSlowReason, PerfLastWorkSlowFrameMs: perf.LastWorkSlowFrameMs, PerfLastWorkSlowLogicMs: perf.LastWorkSlowLogicMs, PerfWindowFrames: perf.WindowFrames, PerfWindowSlowFrames: perf.WindowSlowFrames, PerfWindowLastSlowGapFrames: perf.WindowLastSlowGapFrames, PerfWindowLastSlowGapMs: perf.WindowLastSlowGapMs, PerfWindowWorkSlowFrames: perf.WindowWorkSlowFrames, PerfWindowLastWorkSlowGapFrames: perf.WindowLastWorkSlowGapFrames, PerfWindowLastWorkSlowGapMs: perf.WindowLastWorkSlowGapMs, PerfFrameP50Ms: perf.FrameP50Ms, PerfFrameP90Ms: perf.FrameP90Ms, PerfFrameP99Ms: perf.FrameP99Ms, PerfLogicP50Ms: perf.LogicP50Ms, PerfLogicP90Ms: perf.LogicP90Ms, PerfLogicP99Ms: perf.LogicP99Ms, PerfAdvanceP90Ms: perf.AdvanceP90Ms, PerfDrawP90Ms: perf.DrawP90Ms, PerfDrawP99Ms: perf.DrawP99Ms, PerfRenderFrame: perf.RenderFrame, PerfRenderLoopMs: perf.RenderLoopMs, PerfRenderPaceWaitMs: perf.RenderPaceWaitMs, PerfRenderReplyWaitMs: perf.RenderReplyWaitMs, PerfRenderSubmitMs: perf.RenderSubmitMs, PerfRenderDisplayPulseMs: perf.RenderDisplayPulseMs, PerfRenderDrawBytes: perf.RenderDrawBytes, PerfRenderFrameDivisor: perf.RenderFrameDivisor, PerfRenderAttribution: perf.RenderAttribution, PerfRenderWindowFrames: perf.RenderWindowFrames, PerfRenderWindowSlowFrames: perf.RenderWindowSlowFrames, PerfRenderWindowLastSlowGapFrames: perf.RenderWindowLastSlowGapFrames, PerfRenderWindowLastSlowGapMs: perf.RenderWindowLastSlowGapMs, PerfRenderCadenceSlowFrames: perf.RenderCadenceSlowFrames, PerfRenderReplySlowFrames: perf.RenderReplySlowFrames, PerfRenderSubmitSlowFrames: perf.RenderSubmitSlowFrames, PerfRenderUnattributedSlowFrames: perf.RenderUnattributedSlowFrames, PerfRenderLoopP50Ms: perf.RenderLoopP50Ms, PerfRenderLoopP90Ms: perf.RenderLoopP90Ms, PerfRenderLoopP99Ms: perf.RenderLoopP99Ms, PerfRenderPaceWaitP90Ms: perf.RenderPaceWaitP90Ms, PerfRenderReplyWaitP90Ms: perf.RenderReplyWaitP90Ms, PerfRenderSubmitP90Ms: perf.RenderSubmitP90Ms, SceneActive: stats.ActiveEntities, SceneVisible: stats.VisibleEntities, SceneCulled: stats.CulledEntities, SceneModels: stats.ModelEntities, SceneUpserts: stats.UpsertedObjects, SceneDestroyed: stats.DestroyedObjects, SceneBatchEligible: stats.BatchEligibleObjects, SceneBatchGroups: stats.BatchGroups, SceneFlushMs: stats.FlushCpuMs, SceneFrameMs: stats.FrameCpuMs, TrackEntities: trackEntities, PrimitiveInstances: primitiveInstances, PrimitiveVisibleInstances: primitiveVisibleInstances, PrimitiveChunks: primitiveChunks, PrimitiveChunksVisible: primitiveVisibleChunks, PrimitiveGroups: primitiveGroups, PrimitiveDrawCalls: primitiveDrawCalls, PrimitiveUploadBytes: primitiveUploadBytes, KartGrounded: vehicleGrounded, WheelContacts: wheelContacts, WheelCount: wheelCount, KartSlipPeak: wheelMaxSlip, WheelMaxCompression: wheelMaxCompression, CameraTargetStep: camera.Step, CameraTargetStepMax: camera.StepMax, CameraTargetResidual: camera.Residual, CameraTargetResidualMax: camera.ResidualMax, CameraTargetYStep: camera.YStep, CameraTargetYStepMax: camera.YStepMax, CameraSpeedStep: camera.SpeedStep, CameraSpeedStepMax: camera.SpeedStepMax}
 	if debugOverlayVisible {
 		blockKartApplyPerfSnapshotToHUD(&hud, perfSnapshot)
 	}
@@ -1237,9 +1223,9 @@ func (w *World) updateDebugHUDLines(hud *WorldHUDState, perfSnapshot voplay.Perf
 		w.debugHudLines[12] = "scene active/visible/culled/model " + itoa(hud.SceneActive) + "/" + itoa(hud.SceneVisible) + "/" + itoa(hud.SceneCulled) + "/" + itoa(hud.SceneModels)
 		w.debugHudLines[13] = "scene upsert/destroy/batch/groups " + itoa(hud.SceneUpserts) + "/" + itoa(hud.SceneDestroyed) + "/" + itoa(hud.SceneBatchEligible) + "/" + itoa(hud.SceneBatchGroups)
 		w.debugHudLines[14] = "scene cpu flush " + formatHudMs(hud.SceneFlushMs) + "  frame " + formatHudMs(hud.SceneFrameMs) + "  track ents " + itoa(hud.TrackEntities)
-		w.debugHudLines[15] = "primitive inst visible/total " + itoa(hud.PrimitiveVisibleInstances) + "/" + itoa(hud.PrimitiveInstances) + "  chunks " + itoa(hud.PrimitiveVisibleChunks) + "/" + itoa(hud.PrimitiveChunks)
+		w.debugHudLines[15] = "primitive inst visible/total " + itoa(hud.PrimitiveVisibleInstances) + "/" + itoa(hud.PrimitiveInstances) + "  chunks " + itoa(hud.PrimitiveChunksVisible) + "/" + itoa(hud.PrimitiveChunks)
 		w.debugHudLines[16] = "primitive groups/draws/upload " + itoa(hud.PrimitiveGroups) + "/" + itoa(hud.PrimitiveDrawCalls) + "/" + formatHudBytes(hud.PrimitiveUploadBytes)
-		w.debugHudLines[17] = "vehicle grounded " + boolHud(hud.VehicleGrounded) + "  wheels " + itoa(hud.WheelContacts) + "/" + itoa(hud.WheelCount) + "  slip " + formatHudFloat(hud.WheelMaxSlip, 2) + "  comp " + formatHudFloat(hud.WheelMaxCompression, 2)
+		w.debugHudLines[17] = "vehicle grounded " + boolHud(hud.KartGrounded) + "  wheels " + itoa(hud.WheelContacts) + "/" + itoa(hud.WheelCount) + "  slip " + formatHudFloat(hud.KartSlipPeak, 2) + "  comp " + formatHudFloat(hud.WheelMaxCompression, 2)
 	}
 	hud.DebugLines = w.debugHudLines
 	hud.DebugLineCount = w.debugHudLineCount
