@@ -261,6 +261,9 @@ func blockKartPerfStatus(snapshot voplay.PerfSnapshot) string {
 	if window.DrawEncodeP90Ms > logicBudget {
 		return "draw-encode-over-budget"
 	}
+	if window.ActiveWorkP99Ms > logicBudget {
+		return "active-work-over-budget"
+	}
 	if window.RenderSubmitP90Ms > snapshot.BudgetMs {
 		return "render-submit-over-budget"
 	}
