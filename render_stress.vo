@@ -83,13 +83,14 @@ func (w *World) addRenderStressWater() {
 	if w.track != nil {
 		w.addPrimitiveLakeAndBridge(w.track)
 	}
-	w.addPrimitiveWaterfall()
 	center := w.startPosition.Add(voplay.Vec3{X: 24, Y: -0.95, Z: -42})
-	for i := 0; i < 24; i++ {
-		x := center.X + float64(i%6)*8.5
-		z := center.Z - float64(i/6)*9.0
-		primitive.PlaceStaticWithFlags(primitive.RoundedBox, primitive.WaterMat, voplay.Vec3{X: x, Y: center.Y, Z: z}, voplay.QuatIdentity(), voplay.Vec3{X: 7.8, Y: 0.08, Z: 7.8}, voplay.Color{}, primitive3d.InstanceNoShadow)
+	batch := primitive.Static.BeginBulkAdd()
+	for i := 0; i < 12; i++ {
+		x := center.X + float64(i%4)*8.5
+		z := center.Z - float64(i/4)*9.0
+		batch.Add(primitive3d.Instance{Shape: primitive.RoundedBox, Material: primitive.WaterMat, Position: voplay.Vec3{X: x, Y: center.Y, Z: z}, Rotation: voplay.QuatIdentity(), Scale: voplay.Vec3{X: 7.8, Y: 0.08, Z: 7.8}, Flags: primitive3d.InstanceNoShadow})
 	}
+	batch.End()
 }
 
 func (w *World) addRenderStressResourceChurn() {
