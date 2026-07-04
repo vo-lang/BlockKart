@@ -78,7 +78,7 @@ type World struct {
 	primitiveTemplateReused bool
 	track *scene3d.Track
 	trackResult *scene3d.TrackSpawnResult
-	primitive *BlockKartVisualContent
+	primitive *PrimitiveVisualContent
 	racingDebugOverlay *scene3d.RacingDebugOverlay
 	heroCameraVisible bool
 	terrainCameraView int
@@ -633,7 +633,7 @@ func (w *World) applyKartRoadEdgeAssist(dt float64) {
 		blend := clampFloat(kartRoadEdgeAssistVelocityBlend * dt, 0, 1)
 		vel = vel.Add(sample.Inward.Scale((targetInwardSpeed - inwardSpeed) * blend))
 	}
-	w.player.SetVelocity(vel)
+	scene3d.ApplyVehicleConstraint(w.vehicle, scene3d.VehicleConstraintCommand{LinearVelocity: vel, ApplyLinearVelocity: true, Reason: "blockkart_road_edge_assist_velocity"})
 	corrected := pos
 	changed := false
 	penetration := sample.LateralAbs - sample.EdgeHalfWidth
@@ -652,7 +652,7 @@ func (w *World) applyKartRoadEdgeAssist(dt float64) {
 	lifted := false
 	corrected, lifted = w.liftKartAboveRoadEdge(corrected, sample)
 	if changed || lifted {
-		w.player.SetPosition(corrected)
+			scene3d.ApplyVehicleConstraint(w.vehicle, scene3d.VehicleConstraintCommand{Position: corrected, ApplyPosition: true, Reason: "blockkart_road_edge_assist_position"})
 	}
 }
 
@@ -677,7 +677,7 @@ func (w *World) resolveKartRoadEdgeAssistPose() {
 	lifted := false
 	corrected, lifted = w.liftKartAboveRoadEdge(corrected, sample)
 	if changed || lifted {
-		w.player.SetPosition(corrected)
+		scene3d.ApplyVehicleConstraint(w.vehicle, scene3d.VehicleConstraintCommand{Position: corrected, ApplyPosition: true, Reason: "blockkart_road_edge_post_position"})
 	}
 }
 
@@ -704,7 +704,7 @@ func (w *World) clearKartDownwardVelocity() {
 		return
 	}
 	vel.Y = 0
-	w.player.SetVelocity(vel)
+	scene3d.ApplyVehicleConstraint(w.vehicle, scene3d.VehicleConstraintCommand{LinearVelocity: vel, ApplyLinearVelocity: true, Reason: "blockkart_clear_downward_velocity"})
 }
 
 func (w *World) sampleRoadEdgeAssist(pos voplay.Vec3) (roadEdgeAssistSample, bool) {
@@ -758,9 +758,7 @@ func (w *World) setKartPose(position voplay.Vec3, yaw float64) {
 		return
 	}
 	if w.player != nil {
-		w.player.SetPosition(position)
-		w.player.SetRotation(w.kartRotation())
-		w.player.SetVelocity(voplay.Vec3{})
+		scene3d.ApplyEntityPhysicsConstraint(w.player, scene3d.VehicleConstraintCommand{Position: position, Rotation: w.kartRotation(), LinearVelocity: voplay.Vec3{}, ApplyPosition: true, ApplyRotation: true, ApplyLinearVelocity: true, Reason: "blockkart_set_kart_pose_fallback"})
 	}
 	w.resetKartRenderPose(position, w.kartRotation())
 	w.syncKartVisuals()
@@ -772,13 +770,12 @@ func (w *World) stopKartForFinish() {
 	w.drifting = false
 	w.kartSpeed = 0
 	w.roadEdgeAssistActive = false
-	if w.player != nil {
-		w.player.SetVelocity(voplay.Vec3{})
-		w.player.SetAngularVelocity(voplay.Vec3{})
-		w.resetKartRenderPose(w.player.Position(), w.kartRotation())
-	}
 	if w.vehicle != nil {
 		scene3d.ResetVehicleMotionState(w.vehicle)
+	}
+	if w.player != nil && w.vehicle == nil {
+		scene3d.ApplyEntityPhysicsConstraint(w.player, scene3d.VehicleConstraintCommand{LinearVelocity: voplay.Vec3{}, AngularVelocity: voplay.Vec3{}, ApplyLinearVelocity: true, ApplyAngularVelocity: true, Reason: "blockkart_finish_stop_fallback"})
+		w.resetKartRenderPose(w.player.Position(), w.kartRotation())
 	}
 	if w.kartController != nil {
 		position := w.checkpointPosition

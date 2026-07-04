@@ -33,11 +33,17 @@ const (
 	primitiveSmallPropLodFar = 150.0
 	primitiveFlowerClumpLodFar = 88.0
 	primitiveContactShadowLodFar = 118.0
+	primitiveLayerStatic = "blockkart_static_primitives"
+	primitiveLayerTreeDetail = "blockkart_tree_detail_primitives"
+	primitiveLayerRoadsideDetail = "blockkart_roadside_detail_primitives"
+	primitiveLayerSmallDetail = "blockkart_small_detail_primitives"
+	primitiveLayerFlowerDetail = "blockkart_flower_detail_primitives"
+	primitiveLayerScatter = "blockkart_scatter_primitives"
+	primitiveLayerDynamic = "blockkart_dynamic_primitives"
 )
 
-type BlockKartVisualContent struct {
-	Shapes *primitive3d.ShapeRegistry
-	Materials *primitive3d.MaterialPalette
+type PrimitiveVisualContent struct {
+	Authoring *scene3d.PrimitiveWorldAuthoring
 	Static *primitive3d.Layer
 	TreeDetailStatic *primitive3d.Layer
 	RoadsideDetailStatic *primitive3d.Layer
@@ -92,21 +98,10 @@ type BlockKartVisualContent struct {
 }
 
 type BlockKartPrimitiveTemplate struct {
-	Scene *BlockKartVisualContent
+	Scene *PrimitiveVisualContent
 }
 
-type PrimitivePart struct {
-	Layer *primitive3d.Layer
-	Object primitive3d.ObjectID
-	Shape primitive3d.ShapeID
-	Material primitive3d.MaterialID
-	Flags primitive3d.InstanceFlags
-	Scale voplay.Vec3
-	Tint voplay.Color
-	Position voplay.Vec3
-	Rotation voplay.Quat
-	Visible bool
-}
+type PrimitivePart = scene3d.PrimitiveAuthoringPart
 
 type PrimitiveKartBodyPart struct {
 	Part *PrimitivePart
@@ -144,7 +139,7 @@ type primitiveTrackPointDef struct {
 	Width float64
 }
 
-func (w *World) ensurePrimitiveScene() *BlockKartVisualContent {
+func (w *World) ensurePrimitiveScene() *PrimitiveVisualContent {
 	if w.primitive != nil {
 		return w.primitive
 	}
@@ -159,7 +154,7 @@ func (w *World) ensurePrimitiveScene() *BlockKartVisualContent {
 		return w.primitive
 	}
 	w.assets.BeginGroup(worldAssetGroup)
-	primitive, err := newBlockKartVisualContent(w.scene, w.assets)
+	primitive, err := newPrimitiveVisualContent(w.scene, w.assets)
 	w.assets.EndGroup()
 	if err != nil {
 		panic("BlockKart primitive scene asset load failed: " + err.Error())
@@ -169,65 +164,69 @@ func (w *World) ensurePrimitiveScene() *BlockKartVisualContent {
 }
 
 
-func newBlockKartPrimitiveLayer(desc primitive3d.LayerDesc) *primitive3d.Layer {
-	return primitive3d.NewBuilder(primitive3d.BuilderDesc{Kind: desc.Kind, Shapes: desc.Shapes, Materials: desc.Materials, Chunking: desc.Chunking, PreloadChunks: desc.PreloadChunks, Name: desc.Name}).Build()
-}
-
-func newBlockKartPrimitiveTemplate(primitive *BlockKartVisualContent) *BlockKartPrimitiveTemplate {
+func newBlockKartPrimitiveTemplate(primitive *PrimitiveVisualContent) *BlockKartPrimitiveTemplate {
 	if primitive == nil {
 		return nil
 	}
 	return &BlockKartPrimitiveTemplate{Scene: primitive}
 }
 
-func (t *BlockKartPrimitiveTemplate) Instantiate(scene *scene3d.Scene) *BlockKartVisualContent {
+func (t *BlockKartPrimitiveTemplate) Instantiate(scene *scene3d.Scene) *PrimitiveVisualContent {
 	if t == nil || t.Scene == nil {
 		return nil
 	}
 	source := t.Scene
 	primitive := *source
-	primitive.Static = source.Static.Clone()
-	primitive.TreeDetailStatic = source.TreeDetailStatic.Clone()
-	primitive.RoadsideDetailStatic = source.RoadsideDetailStatic.Clone()
-	primitive.SmallDetailStatic = source.SmallDetailStatic.Clone()
-	primitive.FlowerDetailStatic = source.FlowerDetailStatic.Clone()
-	primitive.ScatterStatic = source.ScatterStatic.Clone()
-	primitive.Dynamic = newBlockKartPrimitiveLayer(primitive3d.LayerDesc{Kind: primitive3d.DynamicLayer, Shapes: source.Shapes, Materials: source.Materials, Name: "blockkart_dynamic_primitives"})
-	if scene != nil {
-		scene.AddPrimitiveLayer(primitive.Static)
-		scene.AddPrimitiveLayer(primitive.TreeDetailStatic)
-		scene.AddPrimitiveLayer(primitive.RoadsideDetailStatic)
-		scene.AddPrimitiveLayer(primitive.SmallDetailStatic)
-		scene.AddPrimitiveLayer(primitive.FlowerDetailStatic)
-		scene.AddPrimitiveLayer(primitive.ScatterStatic)
-		scene.AddPrimitiveLayer(primitive.Dynamic)
-	}
+	primitive.Authoring = source.Authoring.CloneForScene(scene, blockKartPrimitiveLayer(primitiveLayerDynamic, primitive3d.DynamicLayer, 0, false))
+	primitive.bindPrimitiveLayers()
 	return &primitive
 }
 
-func newBlockKartVisualContent(scene *scene3d.Scene, assets *voplay.Assets) (*BlockKartVisualContent, error) {
-	shapes := primitive3d.NewShapeRegistry()
-	materials := primitive3d.NewMaterialPalette()
-	staticLayer := newBlockKartPrimitiveLayer(primitive3d.LayerDesc{Kind: primitive3d.StaticLayer, Shapes: shapes, Materials: materials, Chunking: primitive3d.ChunkingDesc{CellSize: primitiveStaticBatchCellSize}, PreloadChunks: true, Name: "blockkart_static_primitives"})
-	treeDetailLayer := newBlockKartPrimitiveLayer(primitive3d.LayerDesc{Kind: primitive3d.StaticLayer, Shapes: shapes, Materials: materials, Chunking: primitive3d.ChunkingDesc{CellSize: primitiveTreeDetailBatchCellSize}, PreloadChunks: true, Name: "blockkart_tree_detail_primitives"})
-	roadsideDetailLayer := newBlockKartPrimitiveLayer(primitive3d.LayerDesc{Kind: primitive3d.StaticLayer, Shapes: shapes, Materials: materials, Chunking: primitive3d.ChunkingDesc{CellSize: primitiveRoadsideDetailBatchCellSize}, PreloadChunks: true, Name: "blockkart_roadside_detail_primitives"})
-	smallDetailLayer := newBlockKartPrimitiveLayer(primitive3d.LayerDesc{Kind: primitive3d.StaticLayer, Shapes: shapes, Materials: materials, Chunking: primitive3d.ChunkingDesc{CellSize: primitiveSmallDetailBatchCellSize}, PreloadChunks: true, Name: "blockkart_small_detail_primitives"})
-	flowerDetailLayer := newBlockKartPrimitiveLayer(primitive3d.LayerDesc{Kind: primitive3d.StaticLayer, Shapes: shapes, Materials: materials, Chunking: primitive3d.ChunkingDesc{CellSize: primitiveFlowerDetailBatchCellSize}, PreloadChunks: true, Name: "blockkart_flower_detail_primitives"})
-	scatterLayer := newBlockKartPrimitiveLayer(primitive3d.LayerDesc{Kind: primitive3d.StaticLayer, Shapes: shapes, Materials: materials, Chunking: primitive3d.ChunkingDesc{CellSize: primitiveScatterBatchCellSize}, PreloadChunks: true, Name: "blockkart_scatter_primitives"})
-	dynamicLayer := newBlockKartPrimitiveLayer(primitive3d.LayerDesc{Kind: primitive3d.DynamicLayer, Shapes: shapes, Materials: materials, Name: "blockkart_dynamic_primitives"})
-	p := &BlockKartVisualContent{Shapes: shapes, Materials: materials, Static: staticLayer, TreeDetailStatic: treeDetailLayer, RoadsideDetailStatic: roadsideDetailLayer, SmallDetailStatic: smallDetailLayer, FlowerDetailStatic: flowerDetailLayer, ScatterStatic: scatterLayer, Dynamic: dynamicLayer}
+func blockKartPrimitiveLayer(name string, kind primitive3d.LayerKind, cellSize float64, preload bool) scene3d.PrimitiveBatchAuthoring {
+	return scene3d.PrimitiveBatchAuthoring{Name: name, Kind: kind, Chunk: scene3d.ChunkAuthoring{CellSize: cellSize, PreloadChunks: preload}}
+}
+
+func blockKartPrimitiveLayers() []scene3d.PrimitiveBatchAuthoring {
+	return []scene3d.PrimitiveBatchAuthoring{
+		blockKartPrimitiveLayer(primitiveLayerStatic, primitive3d.StaticLayer, primitiveStaticBatchCellSize, true),
+		blockKartPrimitiveLayer(primitiveLayerTreeDetail, primitive3d.StaticLayer, primitiveTreeDetailBatchCellSize, true),
+		blockKartPrimitiveLayer(primitiveLayerRoadsideDetail, primitive3d.StaticLayer, primitiveRoadsideDetailBatchCellSize, true),
+		blockKartPrimitiveLayer(primitiveLayerSmallDetail, primitive3d.StaticLayer, primitiveSmallDetailBatchCellSize, true),
+		blockKartPrimitiveLayer(primitiveLayerFlowerDetail, primitive3d.StaticLayer, primitiveFlowerDetailBatchCellSize, true),
+		blockKartPrimitiveLayer(primitiveLayerScatter, primitive3d.StaticLayer, primitiveScatterBatchCellSize, true),
+		blockKartPrimitiveLayer(primitiveLayerDynamic, primitive3d.DynamicLayer, 0, false),
+	}
+}
+
+func (p *PrimitiveVisualContent) bindPrimitiveLayers() {
+	if p == nil || p.Authoring == nil {
+		return
+	}
+	p.Static = p.Authoring.Layer(primitiveLayerStatic)
+	p.TreeDetailStatic = p.Authoring.Layer(primitiveLayerTreeDetail)
+	p.RoadsideDetailStatic = p.Authoring.Layer(primitiveLayerRoadsideDetail)
+	p.SmallDetailStatic = p.Authoring.Layer(primitiveLayerSmallDetail)
+	p.FlowerDetailStatic = p.Authoring.Layer(primitiveLayerFlowerDetail)
+	p.ScatterStatic = p.Authoring.Layer(primitiveLayerScatter)
+	p.Dynamic = p.Authoring.Layer(primitiveLayerDynamic)
+}
+
+func newPrimitiveVisualContent(scene *scene3d.Scene, assets *voplay.Assets) (*PrimitiveVisualContent, error) {
+	authoring := scene3d.NewPrimitiveWorldAuthoring(scene, scene3d.PrimitiveWorldAuthoringDesc{Layers: blockKartPrimitiveLayers()})
+	p := &PrimitiveVisualContent{Authoring: authoring}
+	p.bindPrimitiveLayers()
 	grassCardTexture, grassCardErr := assets.Texture(blockKartAssetPath("effects/grass_card_atlas.png"))
 	if grassCardErr != nil {
 		return nil, grassCardErr
 	}
-	p.Box = shapes.Shape(primitive3d.ShapeDesc{Kind: primitive3d.ShapeBox})
-	p.RoundedBox = shapes.Shape(primitive3d.ShapeDesc{Kind: primitive3d.ShapeRoundedBox, BevelRadius: 0.08, Segments: 4})
-	p.Sphere = shapes.Shape(primitive3d.ShapeDesc{Kind: primitive3d.ShapeSphere, Segments: 8})
-	p.Cylinder = shapes.Shape(primitive3d.ShapeDesc{Kind: primitive3d.ShapeCylinder, Segments: 10})
-	p.Cone = shapes.Shape(primitive3d.ShapeDesc{Kind: primitive3d.ShapeCone, Segments: 8})
-	p.Wedge = shapes.Shape(primitive3d.ShapeDesc{Kind: primitive3d.ShapeWedge})
-	p.GrassCard = shapes.Shape(primitive3d.ShapeDesc{Kind: primitive3d.ShapePlane, Width: 1, Depth: 1, SubX: 1, SubZ: 1})
-	p.NeedleLeaf = shapes.Shape(primitive3d.ShapeDesc{Kind: primitive3d.ShapeCone, Segments: 5})
+	p.Box = authoring.Shape(primitive3d.ShapeDesc{Kind: primitive3d.ShapeBox})
+	p.RoundedBox = authoring.Shape(primitive3d.ShapeDesc{Kind: primitive3d.ShapeRoundedBox, BevelRadius: 0.08, Segments: 4})
+	p.Sphere = authoring.Shape(primitive3d.ShapeDesc{Kind: primitive3d.ShapeSphere, Segments: 8})
+	p.Cylinder = authoring.Shape(primitive3d.ShapeDesc{Kind: primitive3d.ShapeCylinder, Segments: 10})
+	p.Cone = authoring.Shape(primitive3d.ShapeDesc{Kind: primitive3d.ShapeCone, Segments: 8})
+	p.Wedge = authoring.Shape(primitive3d.ShapeDesc{Kind: primitive3d.ShapeWedge})
+	p.GrassCard = authoring.Shape(primitive3d.ShapeDesc{Kind: primitive3d.ShapePlane, Width: 1, Depth: 1, SubX: 1, SubZ: 1})
+	p.NeedleLeaf = authoring.Shape(primitive3d.ShapeDesc{Kind: primitive3d.ShapeCone, Segments: 5})
 	p.RoadMat = p.material(primitive3d.MaterialRoadAsphalt, voplay.Hex(0x414443), 0.84, 0, voplay.Color{})
 	p.RoadStripeMat = p.material(primitive3d.MaterialToyPlastic, voplay.Hex(0xfff4dd), 0.48, 0, voplay.Color{})
 	p.GrassMat = p.material(primitive3d.MaterialGrass, voplay.Hex(0x4f9737), 0.64, 0, voplay.Color{})
@@ -264,123 +263,65 @@ func newBlockKartVisualContent(scene *scene3d.Scene, assets *voplay.Assets) (*Bl
 	p.ContactShadowMat = p.material(primitive3d.MaterialRubber, voplay.Hex(0x11100d).WithAlpha(0.16), 0.98, 0, voplay.Color{})
 	p.TowerWallMat = p.material(primitive3d.MaterialStone, voplay.Hex(0xcfae72), 0.68, 0, voplay.Color{})
 	p.TowerRoofMat = p.material(primitive3d.MaterialToyPlastic, voplay.Hex(0xf04a32), 0.34, 0, voplay.Color{})
-	scene.AddPrimitiveLayer(staticLayer)
-	scene.AddPrimitiveLayer(treeDetailLayer)
-	scene.AddPrimitiveLayer(roadsideDetailLayer)
-	scene.AddPrimitiveLayer(smallDetailLayer)
-	scene.AddPrimitiveLayer(flowerDetailLayer)
-	scene.AddPrimitiveLayer(scatterLayer)
-	scene.AddPrimitiveLayer(dynamicLayer)
 	return p, nil
 }
 
-func (p *BlockKartVisualContent) material(preset primitive3d.MaterialPreset, color voplay.Color, roughness, metallic float64, emissive voplay.Color) primitive3d.MaterialID {
+func (p *PrimitiveVisualContent) material(preset primitive3d.MaterialPreset, color voplay.Color, roughness, metallic float64, emissive voplay.Color) primitive3d.MaterialID {
 	base := voplay.MaterialDesc{BaseColor: color, Roughness: roughness, Metallic: metallic, UVScale: 1}
 	if emissive != (voplay.Color{}) {
 		base.EmissiveColor = emissive
 	}
-	return p.Materials.Material(primitive3d.MaterialDesc{Preset: preset, Base: base})
+	return p.Authoring.Material(scene3d.SurfaceMaterialAuthoring{Preset: preset, Base: base})
 }
 
-func (p *BlockKartVisualContent) grassCardMaterial(albedo voplay.TextureID) primitive3d.MaterialID {
+func (p *PrimitiveVisualContent) grassCardMaterial(albedo voplay.TextureID) primitive3d.MaterialID {
 	base := voplay.MaterialDesc{BaseColor: voplay.Color{R: 1.0, G: 1.0, B: 0.96, A: 1}, Albedo: albedo, Roughness: 0.88, Metallic: 0, UVScale: 1, DetailStrength: 0.006, MacroBlend: 0.001, RoughnessResponse: 0.38, ToonRampResponse: 0.34, EmissiveColor: voplay.Color{R: 0.135, G: 0.235, B: 0.060, A: 1}, ShadingMode: voplay.MaterialShadingToon, FilterMode: voplay.MaterialFilterNearest}
-	return p.Materials.Material(primitive3d.MaterialDesc{Preset: primitive3d.MaterialGrass, Base: base})
+	return p.Authoring.Material(scene3d.SurfaceMaterialAuthoring{Preset: primitive3d.MaterialGrass, Base: base})
 }
 
-func (p *BlockKartVisualContent) PlaceStatic(shape primitive3d.ShapeID, material primitive3d.MaterialID, position voplay.Vec3, rotation voplay.Quat, scale voplay.Vec3, tint voplay.Color) primitive3d.ObjectID {
-	return p.Static.Add(primitive3d.Instance{Shape: shape, Material: material, Position: position, Rotation: normalizePrimitiveQuat(rotation), Scale: normalizePrimitiveVecScale(scale), Tint: tint})
+func (p *PrimitiveVisualContent) PlaceStatic(shape primitive3d.ShapeID, material primitive3d.MaterialID, position voplay.Vec3, rotation voplay.Quat, scale voplay.Vec3, tint voplay.Color) primitive3d.ObjectID {
+	return p.PlaceStaticWithFlags(shape, material, position, rotation, scale, tint, primitive3d.InstanceFlags(0))
 }
 
-func (p *BlockKartVisualContent) PlaceStaticWithFlags(shape primitive3d.ShapeID, material primitive3d.MaterialID, position voplay.Vec3, rotation voplay.Quat, scale voplay.Vec3, tint voplay.Color, flags primitive3d.InstanceFlags) primitive3d.ObjectID {
-	return p.Static.Add(primitive3d.Instance{Shape: shape, Material: material, Position: position, Rotation: normalizePrimitiveQuat(rotation), Scale: normalizePrimitiveVecScale(scale), Tint: tint, Flags: flags})
+func (p *PrimitiveVisualContent) PlaceStaticWithFlags(shape primitive3d.ShapeID, material primitive3d.MaterialID, position voplay.Vec3, rotation voplay.Quat, scale voplay.Vec3, tint voplay.Color, flags primitive3d.InstanceFlags) primitive3d.ObjectID {
+	return p.Authoring.AddPrimitive(primitiveLayerStatic, scene3d.PrimitiveInstanceAuthoring{Shape: shape, Material: material, Position: position, Rotation: rotation, Scale: scale, Tint: tint, Flags: flags})
 }
 
-func (p *BlockKartVisualContent) PlaceDetail(shape primitive3d.ShapeID, material primitive3d.MaterialID, position voplay.Vec3, rotation voplay.Quat, scale voplay.Vec3, tint voplay.Color, lodFar float64) primitive3d.ObjectID {
+func (p *PrimitiveVisualContent) PlaceDetail(shape primitive3d.ShapeID, material primitive3d.MaterialID, position voplay.Vec3, rotation voplay.Quat, scale voplay.Vec3, tint voplay.Color, lodFar float64) primitive3d.ObjectID {
 	if material == p.ContactShadowMat {
 		return 0
 	}
 	flags := p.detailFlags(shape, material, lodFar)
 	detailLodFar := lodFar
-	return p.detailLayerForLod(detailLodFar).Add(primitive3d.Instance{Shape: shape, Material: material, Position: position, Rotation: normalizePrimitiveQuat(rotation), Scale: normalizePrimitiveVecScale(scale), Tint: tint, Flags: flags, LodFar: detailLodFar})
+	return p.Authoring.AddPrimitive(p.detailLayerNameForLod(detailLodFar), scene3d.PrimitiveInstanceAuthoring{Shape: shape, Material: material, Position: position, Rotation: rotation, Scale: scale, Tint: tint, Flags: flags, LodFar: detailLodFar})
 }
 
-func (p *BlockKartVisualContent) detailFlags(shape primitive3d.ShapeID, material primitive3d.MaterialID, lodFar float64) primitive3d.InstanceFlags {
+func (p *PrimitiveVisualContent) detailFlags(shape primitive3d.ShapeID, material primitive3d.MaterialID, lodFar float64) primitive3d.InstanceFlags {
 	if shape == p.GrassCard || material == p.GrassCardMat || lodFar <= primitiveFlowerClumpLodFar {
 		return primitive3d.InstanceNoShadow
 	}
 	return primitive3d.InstanceFlags(0)
 }
 
-func (p *BlockKartVisualContent) detailLayerForLod(lodFar float64) *primitive3d.Layer {
+func (p *PrimitiveVisualContent) detailLayerNameForLod(lodFar float64) string {
 	if lodFar >= primitiveTreeLodFar {
-		return p.TreeDetailStatic
+		return primitiveLayerTreeDetail
 	}
 	if lodFar >= primitiveRoadsidePropLodFar {
-		return p.RoadsideDetailStatic
+		return primitiveLayerRoadsideDetail
 	}
 	if lodFar <= primitiveFlowerClumpLodFar {
-		return p.FlowerDetailStatic
+		return primitiveLayerFlowerDetail
 	}
-	return p.SmallDetailStatic
+	return primitiveLayerSmallDetail
 }
 
-func (p *BlockKartVisualContent) AddDynamic(shape primitive3d.ShapeID, material primitive3d.MaterialID, position voplay.Vec3, rotation voplay.Quat, scale voplay.Vec3, tint voplay.Color) *PrimitivePart {
+func (p *PrimitiveVisualContent) AddDynamic(shape primitive3d.ShapeID, material primitive3d.MaterialID, position voplay.Vec3, rotation voplay.Quat, scale voplay.Vec3, tint voplay.Color) *PrimitivePart {
 	return p.AddDynamicWithFlags(shape, material, position, rotation, scale, tint, primitive3d.InstanceFlags(0))
 }
 
-func (p *BlockKartVisualContent) AddDynamicWithFlags(shape primitive3d.ShapeID, material primitive3d.MaterialID, position voplay.Vec3, rotation voplay.Quat, scale voplay.Vec3, tint voplay.Color, flags primitive3d.InstanceFlags) *PrimitivePart {
-	instance := primitive3d.Instance{Shape: shape, Material: material, Position: position, Rotation: normalizePrimitiveQuat(rotation), Scale: normalizePrimitiveVecScale(scale), Tint: tint, Flags: flags}
-	id := p.Dynamic.Add(instance)
-	return &PrimitivePart{Layer: p.Dynamic, Object: id, Shape: shape, Material: material, Flags: flags, Position: position, Rotation: normalizePrimitiveQuat(rotation), Scale: normalizePrimitiveVecScale(scale), Tint: tint, Visible: true}
-}
-
-func (p *PrimitivePart) SetPose(position voplay.Vec3, rotation voplay.Quat) {
-	p.setPose(position, rotation, false)
-}
-
-func (p *PrimitivePart) setPose(position voplay.Vec3, rotation voplay.Quat, force bool) {
-	if p == nil || p.Layer == nil || p.Object == 0 {
-		return
-	}
-	nextRotation := normalizePrimitiveQuat(rotation)
-	if !force && p.Position == position && p.Rotation == nextRotation {
-		return
-	}
-	p.Position = position
-	p.Rotation = nextRotation
-	p.write()
-}
-
-func (p *PrimitivePart) SetPoseScale(position voplay.Vec3, rotation voplay.Quat, scale voplay.Vec3) {
-	if p == nil {
-		return
-	}
-	nextScale := normalizePrimitiveVecScale(scale)
-	scaleChanged := p.Scale != nextScale
-	p.Scale = nextScale
-	p.setPose(position, rotation, scaleChanged)
-}
-
-func (p *PrimitivePart) SetVisible(visible bool) {
-	if p == nil || p.Layer == nil || p.Object == 0 {
-		return
-	}
-	if p.Visible == visible {
-		return
-	}
-	p.Visible = visible
-	p.write()
-}
-
-func (p *PrimitivePart) write() {
-	if p == nil || p.Layer == nil || p.Object == 0 {
-		return
-	}
-	scale := p.Scale
-	if !p.Visible {
-		scale = voplay.Vec3{X: 0.001, Y: 0.001, Z: 0.001}
-	}
-	p.Layer.Set(p.Object, primitive3d.Instance{Shape: p.Shape, Material: p.Material, Flags: p.Flags, Position: p.Position, Rotation: normalizePrimitiveQuat(p.Rotation), Scale: normalizePrimitiveVecScale(scale), Tint: p.Tint, Object: p.Object})
+func (p *PrimitiveVisualContent) AddDynamicWithFlags(shape primitive3d.ShapeID, material primitive3d.MaterialID, position voplay.Vec3, rotation voplay.Quat, scale voplay.Vec3, tint voplay.Color, flags primitive3d.InstanceFlags) *PrimitivePart {
+	return p.Authoring.AddDynamic(primitiveLayerDynamic, scene3d.PrimitiveInstanceAuthoring{Shape: shape, Material: material, Position: position, Rotation: rotation, Scale: scale, Tint: tint, Flags: flags})
 }
 
 func blockKartHighFrequencyPrimitiveFlags() primitive3d.InstanceFlags {
@@ -442,25 +383,31 @@ func (w *World) buildPrimitiveLevel() error {
 		w.buildPrimitiveTrackVisuals(track)
 		prof.Mark("buildPrimitiveTrackVisuals")
 	}
-	w.spawnPrimitiveTrackPhysics(track)
-	prof.Mark("spawnPrimitiveTrackPhysics")
+	colliderErr := w.attachPrimitiveTrackColliderEntities(track)
+	if colliderErr != nil {
+		w.message = "Track collider failed: " + colliderErr.Error()
+		w.messageTimer = 4
+		fmt.Println(w.message)
+		return errors.New(w.message)
+	}
+	prof.Mark("primitiveTrackColliders")
 	w.spawnPrimitiveGameplay(track, !templateReused)
 	prof.Mark("spawnPrimitiveGameplay")
 	if templateReused {
 		prof.Mark("reuseStaticLayerChunks")
 		return nil
 	}
-	primitive.Static.Build()
+	primitive.Authoring.BuildLayer(primitiveLayerStatic)
 	prof.Mark("buildStaticLayer")
-	primitive.TreeDetailStatic.Build()
+	primitive.Authoring.BuildLayer(primitiveLayerTreeDetail)
 	prof.Mark("buildTreeDetailLayer")
-	primitive.RoadsideDetailStatic.Build()
+	primitive.Authoring.BuildLayer(primitiveLayerRoadsideDetail)
 	prof.Mark("buildRoadsideDetailLayer")
-	primitive.SmallDetailStatic.Build()
+	primitive.Authoring.BuildLayer(primitiveLayerSmallDetail)
 	prof.Mark("buildSmallDetailLayer")
-	primitive.FlowerDetailStatic.Build()
+	primitive.Authoring.BuildLayer(primitiveLayerFlowerDetail)
 	prof.Mark("buildFlowerDetailLayer")
-	primitive.ScatterStatic.Build()
+	primitive.Authoring.BuildLayer(primitiveLayerScatter)
 	prof.Mark("buildScatterLayer")
 	if w.runtimeCache != nil && w.runtimeCache.primitiveTemplate == nil {
 		w.runtimeCache.primitiveTemplate = newBlockKartPrimitiveTemplate(primitive)
@@ -704,7 +651,7 @@ func (w *World) spawnPrimitiveCachedMapMeshes(track *scene3d.Track) {
 	}
 }
 
-func primitiveRoadsideBakedSlots(primitive *BlockKartVisualContent) []scene3d.BakedPrimitiveLayerSlot {
+func primitiveRoadsideBakedSlots(primitive *PrimitiveVisualContent) []scene3d.BakedPrimitiveLayerSlot {
 	return []scene3d.BakedPrimitiveLayerSlot{scene3d.BakedPrimitiveLayerSlot{Shape: primitive.GrassCard, Material: primitive.GrassCardMat}, scene3d.BakedPrimitiveLayerSlot{Shape: primitive.RoundedBox, Material: primitive.DirtDetailMat}, scene3d.BakedPrimitiveLayerSlot{Shape: primitive.RoundedBox, Material: primitive.PaleStoneMat}, scene3d.BakedPrimitiveLayerSlot{Shape: primitive.RoundedBox, Material: primitive.PebbleMat}, scene3d.BakedPrimitiveLayerSlot{Shape: primitive.RoundedBox, Material: primitive.StoneMat}, scene3d.BakedPrimitiveLayerSlot{Shape: primitive.Cylinder, Material: primitive.LeafMat}, scene3d.BakedPrimitiveLayerSlot{Shape: primitive.Sphere, Material: primitive.FlowerYellowMat}, scene3d.BakedPrimitiveLayerSlot{Shape: primitive.Sphere, Material: primitive.FlowerWhiteMat}}
 }
 
@@ -1099,23 +1046,13 @@ func (w *World) addPrimitiveClouds() {
 	}
 }
 
-func (w *World) spawnPrimitiveTrackPhysics(track *scene3d.Track) {
-	length := track.Length()
-	count := primitiveTrackPhysicsSampleCount(track)
-	step := length / float64(count)
-	ground := w.scene.Spawn(scene3d.EntityDesc{Position: voplay.Vec3{Y: primitiveTerrainY + 1.42}, Tag: "primitive_ground_physics", Physics: &scene3d.Physics{Type: scene3d.Static, Collider: scene3d.Box(primitiveTerrainWidth * 0.5, 0.18, primitiveTerrainDepth * 0.5), Layer: voplay.CollisionLayerDefault, Mask: voplay.CollisionMaskAll, Friction: 0.72, Restitution: 0.02}, PickMode: scene3d.PickDisabled})
-	ground.Visible = false
-	w.trackResult.Entities = append(w.trackResult.Entities, ground)
-	w.spawnRoadColliderStrip(track, count, step)
-}
-
-func (w *World) spawnRoadColliderStrip(track *scene3d.Track, count int, step float64) {
-	for i := 0; i < count; i++ {
-		pose := track.PoseAt(float64(i) * step + step * 0.5)
-		ent := w.scene.Spawn(scene3d.EntityDesc{Position: pose.Position.Add(voplay.Vec3{Y: -0.08}), Rotation: pose.Rotation, Tag: "primitive_road_physics", Physics: &scene3d.Physics{Type: scene3d.Static, Collider: scene3d.Box(pose.HalfWidth + primitiveRoadPhysicsOuterOffset, 0.18, step * primitiveRoadPhysicsSegmentOverlap), Layer: voplay.CollisionLayerDefault, Mask: voplay.CollisionMaskAll, Friction: 1.05, Restitution: 0.01}, PickMode: scene3d.PickDisabled})
-		ent.Visible = false
-		w.trackResult.Entities = append(w.trackResult.Entities, ent)
+func (w *World) attachPrimitiveTrackColliderEntities(track *scene3d.Track) error {
+	result, err := scene3d.SpawnTrackColliderStrip(w.scene, track, scene3d.ColliderAuthoring{Layer: voplay.CollisionLayerDefault, Mask: voplay.CollisionMaskAll, SegmentLength: primitiveTrackPhysicsSegmentLength, MinSegments: 24, GroundTag: "primitive_ground_physics", GroundY: primitiveTerrainY + 1.42, GroundHalfExtents: voplay.Vec3{X: primitiveTerrainWidth * 0.5, Y: 0.18, Z: primitiveTerrainDepth * 0.5}, GroundFriction: 0.72, GroundRestitution: 0.02, RoadTag: "primitive_road_physics", RoadYOffset: -0.08, RoadHalfHeight: 0.18, RoadOuterOffset: primitiveRoadPhysicsOuterOffset, RoadSegmentOverlap: primitiveRoadPhysicsSegmentOverlap, RoadFriction: 1.05, RoadRestitution: 0.01})
+	if err != nil {
+		return err
 	}
+	w.trackResult.Entities = append(w.trackResult.Entities, result.Entities...)
+	return nil
 }
 
 func (w *World) spawnPrimitiveGameplay(track *scene3d.Track, includeStaticVisuals bool) {
@@ -1144,14 +1081,6 @@ func (w *World) addPrimitiveBoostPadVisual(pose scene3d.TrackPose) {
 
 func primitiveTrackSampleCount(track *scene3d.Track) int {
 	count := int(math.Ceil(track.Length() / primitiveTrackSegmentLength))
-	if count < 24 {
-		count = 24
-	}
-	return count
-}
-
-func primitiveTrackPhysicsSampleCount(track *scene3d.Track) int {
-	count := int(math.Ceil(track.Length() / primitiveTrackPhysicsSegmentLength))
 	if count < 24 {
 		count = 24
 	}
@@ -1264,11 +1193,11 @@ func (w *World) assignPrimitiveKartWheelState(state *PrimitiveKartVisualState, i
 	}
 }
 
-func (w *World) addPrimitiveKartBodyPart(primitive *BlockKartVisualContent, pos voplay.Vec3, rot voplay.Quat, shape primitive3d.ShapeID, material primitive3d.MaterialID, local voplay.Vec3, localRot voplay.Quat, scale voplay.Vec3, tint voplay.Color) *PrimitivePart {
+func (w *World) addPrimitiveKartBodyPart(primitive *PrimitiveVisualContent, pos voplay.Vec3, rot voplay.Quat, shape primitive3d.ShapeID, material primitive3d.MaterialID, local voplay.Vec3, localRot voplay.Quat, scale voplay.Vec3, tint voplay.Color) *PrimitivePart {
 	return w.addPrimitiveKartBodyPartWithFlags(primitive, pos, rot, shape, material, local, localRot, scale, tint, primitive3d.InstanceFlags(0))
 }
 
-func (w *World) addPrimitiveKartBodyPartWithFlags(primitive *BlockKartVisualContent, pos voplay.Vec3, rot voplay.Quat, shape primitive3d.ShapeID, material primitive3d.MaterialID, local voplay.Vec3, localRot voplay.Quat, scale voplay.Vec3, tint voplay.Color, flags primitive3d.InstanceFlags) *PrimitivePart {
+func (w *World) addPrimitiveKartBodyPartWithFlags(primitive *PrimitiveVisualContent, pos voplay.Vec3, rot voplay.Quat, shape primitive3d.ShapeID, material primitive3d.MaterialID, local voplay.Vec3, localRot voplay.Quat, scale voplay.Vec3, tint voplay.Color, flags primitive3d.InstanceFlags) *PrimitivePart {
 	local = primitiveKartScaleVec(local)
 	scale = primitiveKartScaleVec(scale)
 	part := primitive.AddDynamicWithFlags(shape, material, pos.Add(rot.RotateVec3(local)), rot.Mul(localRot), scale, tint, flags)
@@ -1276,7 +1205,7 @@ func (w *World) addPrimitiveKartBodyPartWithFlags(primitive *BlockKartVisualCont
 	return part
 }
 
-func (w *World) addPrimitiveKartWheelVisual(primitive *BlockKartVisualContent, pos voplay.Vec3, rot voplay.Quat, local voplay.Vec3, steer bool, wheelIndex int, sideSign float64) {
+func (w *World) addPrimitiveKartWheelVisual(primitive *PrimitiveVisualContent, pos voplay.Vec3, rot voplay.Quat, local voplay.Vec3, steer bool, wheelIndex int, sideSign float64) {
 	if sideSign == 0 {
 		sideSign = 1
 		if local.X < 0 {
@@ -1381,18 +1310,4 @@ func (w *World) syncPrimitiveKartWheel(part *PrimitivePart, pos voplay.Vec3, rot
 	}
 	wheelRot = wheelRot.Mul(axisRot)
 	part.SetPose(wheelPos, wheelRot)
-}
-
-func normalizePrimitiveQuat(rotation voplay.Quat) voplay.Quat {
-	if rotation == (voplay.Quat{}) {
-		return voplay.QuatIdentity()
-	}
-	return rotation
-}
-
-func normalizePrimitiveVecScale(scale voplay.Vec3) voplay.Vec3 {
-	if scale == (voplay.Vec3{}) {
-		return voplay.Vec3{X: 1, Y: 1, Z: 1}
-	}
-	return scale
 }
