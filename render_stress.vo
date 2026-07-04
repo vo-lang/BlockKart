@@ -10,6 +10,8 @@ const (
 	blockKartRenderStressPrimitive10k = "primitive10k"
 	blockKartRenderStressWater = "water"
 	blockKartRenderStressResourceChurn = "resource-churn"
+	blockKartRenderStressChunkedWorldDrive = "chunked-world-drive"
+	blockKartRenderStressShadowPostMatrix = "shadow-post-matrix"
 )
 
 func (w *World) ActivateRenderStressProfile(g *voplay.GameCtx, profile string) {
@@ -30,6 +32,12 @@ func (w *World) ActivateRenderStressProfile(g *voplay.GameCtx, profile string) {
 		w.renderStressApplied = true
 	} else if profile == blockKartRenderStressResourceChurn {
 		w.addRenderStressResourceChurn()
+		w.renderStressApplied = true
+	} else if profile == blockKartRenderStressChunkedWorldDrive {
+		w.addRenderStressChunkedWorldDrive()
+		w.renderStressApplied = true
+	} else if profile == blockKartRenderStressShadowPostMatrix {
+		w.addRenderStressShadowPostMatrix()
 		w.renderStressApplied = true
 	}
 	if w.renderStressApplied {
@@ -100,4 +108,55 @@ func (w *World) addRenderStressResourceChurn() {
 		batch.Add(primitive3d.Instance{Shape: primitive.Sphere, Material: material, Position: position, Rotation: voplay.QuatIdentity(), Scale: voplay.Vec3{X: 0.32, Y: 0.24, Z: 0.32}, Flags: primitive3d.InstanceNoShadow, LodFar: primitiveFlowerClumpLodFar})
 	}
 	batch.End()
+}
+
+func (w *World) addRenderStressChunkedWorldDrive() {
+	primitive := w.ensurePrimitiveScene()
+	batch := primitive.ScatterStatic.BeginBulkAdd()
+	count := 4096
+	columns := 64
+	spacing := 6.75
+	center := w.startPosition.Add(voplay.Vec3{Z: -72})
+	for i := 0; i < count; i++ {
+		col := i % columns
+		row := i / columns
+		x := center.X + (float64(col) - 31.5) * spacing
+		z := center.Z - float64(row) * spacing
+		y := center.Y - 0.78 + math.Sin(float64(col)*0.41+float64(row)*0.27)*0.18
+		shape := primitive.RoundedBox
+		if i % 13 == 0 {
+			shape = primitive.Cylinder
+		} else if i % 19 == 0 {
+			shape = primitive.Sphere
+		}
+		material := primitive.MeadowMat
+		if row % 5 == 0 {
+			material = primitive.StoneMat
+		} else if col % 7 == 0 {
+			material = primitive.PebbleMat
+		}
+		scale := voplay.Vec3{X: 0.72 + float64(i%3)*0.12, Y: 0.38 + float64(row%4)*0.06, Z: 0.72 + float64(col%4)*0.10}
+		batch.Add(primitive3d.Instance{Shape: shape, Material: material, Position: voplay.Vec3{X: x, Y: y, Z: z}, Rotation: voplay.QuatFromAxisAngle(voplay.Vec3{Y: 1}, float64(i%47)*0.11), Scale: scale, Flags: primitive3d.InstanceNoShadow, LodFar: 780})
+	}
+	batch.End()
+}
+
+func (w *World) addRenderStressShadowPostMatrix() {
+	primitive := w.ensurePrimitiveScene()
+	center := w.startPosition.Add(voplay.Vec3{X: -18, Z: -34})
+	for row := 0; row < 8; row++ {
+		for col := 0; col < 12; col++ {
+			x := center.X + float64(col) * 4.2
+			z := center.Z - float64(row) * 4.6
+			height := 1.35 + float64((row+col)%5)*0.34
+			material := primitive.WoodMat
+			if (row + col) % 3 == 0 {
+				material = primitive.StoneMat
+			}
+			primitive.AddStaticWithFlags(primitive.Cylinder, material, voplay.Vec3{X: x, Y: center.Y + height*0.5 - 0.72, Z: z}, voplay.QuatIdentity(), voplay.Vec3{X: 0.42, Y: height, Z: 0.42}, voplay.Color{}, 0)
+			if (row + col) % 4 == 0 {
+				primitive.AddStaticWithFlags(primitive.RoundedBox, primitive.PebbleMat, voplay.Vec3{X: x + 1.1, Y: center.Y - 0.46, Z: z + 1.0}, voplay.QuatFromAxisAngle(voplay.Vec3{Y: 1}, float64(row+col)*0.19), voplay.Vec3{X: 1.25, Y: 0.48, Z: 0.72}, voplay.Color{}, 0)
+			}
+		}
+	}
 }

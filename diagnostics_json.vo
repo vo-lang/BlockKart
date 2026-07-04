@@ -1,0 +1,27 @@
+package main
+
+func jsonFloat(value float64) string {
+	return formatFixed(value, 2)
+}
+
+func jsonBool(value bool) string {
+	if value {
+		return "true"
+	}
+	return "false"
+}
+
+func jsonString(value string) string {
+	out := "\""
+	for i := 0; i < len(value); i++ {
+		ch := value[i:i + 1]
+		if ch == "\\" {
+			out += "\\\\"
+		} else if ch == "\"" {
+			out += "\\\""
+		} else {
+			out += ch
+		}
+	}
+	return out + "\""
+}
