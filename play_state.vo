@@ -84,7 +84,7 @@ func (s *PlayState) FixedUpdate(g *voplay.GameCtx, dt float64) {
 		return
 	}
 	if s.consumeResetAction(g) {
-		s.restartWorld(g)
+		s.restartRun(g)
 		return
 	}
 	if !s.renderPrepared {
@@ -102,7 +102,7 @@ func (s *PlayState) Update(g *voplay.GameCtx, dt float64) {
 		return
 	}
 	if s.consumeResetAction(g) {
-		s.restartWorld(g)
+		s.restartRun(g)
 		return
 	}
 	if !s.renderPrepared {
@@ -207,6 +207,21 @@ func (s *PlayState) restartWorld(g *voplay.GameCtx) {
 	s.renderPrepared = false
 	s.elapsed = 0
 	s.buildWorld(g, "restart")
+}
+
+func (s *PlayState) restartRun(g *voplay.GameCtx) {
+	if s.world == nil {
+		s.restartWorld(g)
+		return
+	}
+	s.setLifecycle(g, BlockKartLifecycleRestarting, "raceRestart")
+	s.captureRacePersistence()
+	s.world.restartRun()
+	s.world.SetRenderDebugMode(s.renderDebugMode)
+	s.world.SetHeroCameraVisible(s.heroCameraVisible)
+	s.elapsed = 0
+	s.setLifecycle(g, BlockKartLifecycleRunning, "raceRestart")
+	blockKartReportWorldDiagnostics(g, s.lifecycle, s.startupPhase, "raceRestart", s.world)
 }
 
 func (s *PlayState) captureRacePersistence() {
