@@ -1,0 +1,186 @@
+package main
+
+import (
+	"math"
+	"github.com/vo-lang/voplay"
+	"github.com/vo-lang/voplay/scene3d"
+)
+
+func (w *World) Update(g *voplay.GameCtx, dt float64, debugOverlayVisible bool) {
+	w.updateKartRenderPose(g.Alpha)
+	w.updateRacingCamera(dt, debugOverlayVisible)
+	w.scene.UpdateAudio()
+	w.scene.UpdateEmitters(dt)
+	w.scene.TickAnimations(dt)
+	if debugOverlayVisible && w.racingDebugOverlay != nil {
+		w.racingDebugOverlay.Update(w.scene)
+	}
+}
+
+func (w *World) updateRacingCamera(dt float64, debugOverlayVisible bool) {
+	if w.camera == nil || w.scene == nil {
+		return
+	}
+	if w.terrainCameraView > 0 {
+		w.updateTerrainCaptureCamera()
+		return
+	}
+	if w.heroCameraVisible {
+		w.updateHeroInspectionCamera()
+		return
+	}
+	target := scene3d.RacingCameraTarget{Position: w.startPosition, Forward: voplay.QuatFromAxisAngle(voplay.Vec3{Y: 1}, w.startYaw).RotateVec3(voplay.Vec3{Z: -1})}
+	if w.vehicle != nil {
+		target = scene3d.RacingCameraTargetFromVehicle(w.vehicle)
+		if sample, ok := w.kartRenderPose.RenderSample(); ok {
+			target.Position = sample.Position
+			target.Forward = sample.Rotation.RotateVec3(voplay.Vec3{Z: -1})
+			target.Velocity = sample.Velocity
+			target.Speed = sample.Speed
+		}
+		target.Position = w.stabilizedCameraTargetPosition(target.Position)
+	}
+	target.Boost = w.isBoosting()
+	if w.drifting {
+		target.Drift = w.lastSteer
+	}
+	if debugOverlayVisible {
+		w.cameraTelemetry.Record(target, dt)
+	}
+	w.camera.UpdateCamera(&w.scene.Camera, w.scene, target, dt)
+}
+
+func (w *World) stabilizedCameraTargetPosition(position voplay.Vec3) voplay.Vec3 {
+	if w.track == nil {
+		return position
+	}
+	point := w.track.ClosestPoint(position)
+	pose := w.track.PoseAt(point.Distance)
+	minY := pose.Position.Y + kartSpawnRideHeight
+	if position.Y < minY {
+		position.Y = minY
+	}
+	return position
+}
+
+func (w *World) beginKartPhysicsStep() {
+	if w.player == nil {
+		return
+	}
+	if !w.kartRenderPose.Initialized() {
+		w.resetKartRenderPose(w.player.Position(), w.kartVisualRotation())
+		return
+	}
+	w.kartRenderPose.BeginStep()
+}
+
+func (w *World) endKartPhysicsStep() {
+	if w.player == nil {
+		return
+	}
+	pos := w.player.Position()
+	if w.vehicle != nil {
+		pos = w.vehicle.Position()
+	}
+	rot := w.kartVisualRotation()
+	vel := voplay.Vec3{}
+	if w.vehicle != nil {
+		vel = w.vehicle.LinearVelocity()
+	}
+	speed := w.currentKartRenderSpeed()
+	sample := NewKartRenderSample(pos, rot, vel, speed)
+	if !w.kartRenderPose.Initialized() {
+		w.resetKartRenderPose(pos, rot)
+		return
+	}
+	w.kartRenderPose.Commit(sample)
+}
+
+func (w *World) resetKartRenderPose(pos voplay.Vec3, rot voplay.Quat) {
+	sample := w.kartRenderPose.Reset(pos, rot)
+	w.syncKartVisualsAt(sample.Position, sample.Rotation)
+	w.cameraTelemetry.ResetAnchor()
+}
+
+func (w *World) updateKartRenderPose(alpha float64) {
+	if w.player == nil {
+		return
+	}
+	if !w.kartRenderPose.Initialized() {
+		w.resetKartRenderPose(w.player.Position(), w.kartVisualRotation())
+	}
+	sample := w.kartRenderPose.Interpolate(alpha)
+	w.syncKartVisualsAt(sample.Position, sample.Rotation)
+}
+
+func (w *World) currentKartRenderSpeed() float64 {
+	if w.vehicle != nil {
+		return w.vehicle.Speed
+	}
+	return w.kartSpeed
+}
+
+func (w *World) updateHeroInspectionCamera() {
+	if w.scene == nil {
+		return
+	}
+	target := voplay.Vec3{X: 76, Y: 5.4, Z: 113}
+	position := voplay.Vec3{X: 91, Y: 10.2, Z: 98}
+	if w.track != nil {
+		pose := w.track.PoseAt(48)
+		target = pose.Position.Sub(pose.Right.Scale(pose.HalfWidth + 34.0)).Add(voplay.Vec3{Y: 4.8})
+		position = target.Add(pose.Right.Scale(24.0)).Sub(pose.Forward.Scale(32.0)).Add(voplay.Vec3{Y: 27.0})
+	}
+	w.scene.Camera.LookAt(position, target)
+	w.scene.Camera.Fov = 42
+}
+
+func (w *World) CycleTerrainCameraView() int {
+	w.terrainCameraView++
+	if w.terrainCameraView > 4 {
+		w.terrainCameraView = 0
+	}
+	return w.terrainCameraView
+}
+
+func (w *World) updateTerrainCaptureCamera() {
+	if w.scene == nil {
+		return
+	}
+	if w.track == nil {
+		w.scene.Camera.LookAt(voplay.Vec3{X: 0, Y: 58, Z: 96}, voplay.Vec3{X: 0, Y: 0, Z: 0})
+		w.scene.Camera.Fov = 48
+		return
+	}
+	start := w.track.DistanceAlongTrack(w.startPosition)
+	length := w.track.Length()
+	if length <= 0 {
+		length = 1
+	}
+	if w.terrainCameraView == 1 {
+		target := voplay.Vec3{X: 0, Y: 0.0, Z: 1}
+		position := voplay.Vec3{X: 0, Y: 950, Z: 0}
+		w.scene.Camera.LookAt(position, target)
+		w.scene.Camera.Fov = 62
+		return
+	}
+	if w.terrainCameraView == 2 {
+		pose := w.track.PoseAt(start + length * 0.02)
+		target := pose.Position.Add(pose.Forward.Scale(92)).Add(voplay.Vec3{Y: 5.0})
+		position := pose.Position.Sub(pose.Forward.Scale(178)).Sub(pose.Right.Scale(34)).Add(voplay.Vec3{Y: 104})
+		w.scene.Camera.LookAt(position, target)
+		w.scene.Camera.Fov = 54
+		return
+	}
+	if w.terrainCameraView == 3 {
+		target := voplay.Vec3{X: 12, Y: 1.6, Z: -8}
+		position := voplay.Vec3{X: 440, Y: 185, Z: 305}
+		w.scene.Camera.LookAt(position, target)
+		w.scene.Camera.Fov = 56
+		return
+	}
+	target := voplay.Vec3{X: -36, Y: 2.8, Z: 6}
+	position := voplay.Vec3{X: -485, Y: 170, Z: 255}
+	w.scene.Camera.LookAt(position, target)
+	w.scene.Camera.Fov = 55
+}

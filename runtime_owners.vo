@@ -1,0 +1,44 @@
+package main
+
+import (
+	"github.com/vo-lang/voplay"
+	"github.com/vo-lang/voplay/scene3d"
+)
+
+type RaceSession struct {
+	State string
+	Lap int
+	TotalLaps int
+	Started bool
+	Finished bool
+}
+
+type KartRig struct {
+	Player *scene3d.Entity
+	Vehicle *scene3d.Vehicle
+	Controller *scene3d.KartController
+}
+
+type TrackRuntime struct {
+	Track *scene3d.Track
+	Spawn *scene3d.TrackSpawnResult
+	Spec BlockKartTrackSpec
+}
+
+type HUDPresenter struct {
+	LastState WorldHUDState
+	DebugLines []string
+}
+
+type PerfReporter struct {
+	LastSnapshot voplay.PerfSnapshot
+	PollFrame int
+}
+
+type AssetRuntimeCache struct {
+	Cache *BlockKartRuntimeCache
+}
+
+type StructuredFailureReport struct {
+	Report BlockKartFailureReport
+}

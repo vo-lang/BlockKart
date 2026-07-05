@@ -112,7 +112,7 @@ func (w *World) updateMovingObstacles() {
 		}
 		offset := math.Sin(w.courseTime * obstacle.Speed + obstacle.Phase) * obstacle.Amplitude
 		position := obstacle.Origin.Add(obstacle.Axis.Scale(offset))
-		scene3d.ApplyEntityPhysicsConstraint(obstacle.Entity, scene3d.VehicleConstraintCommand{Position: position, ApplyPosition: true, Reason: "blockkart_moving_obstacle_position"})
+		scene3d.ApplyEntityPhysicsTarget(obstacle.Entity, scene3d.VehicleConstraintCommand{Position: position, ApplyPosition: true, Reason: "blockkart_moving_obstacle_position"})
 		if obstacle.Visual != nil {
 			obstacle.Visual.SetPose(position, voplay.QuatIdentity())
 		}

@@ -207,7 +207,7 @@ func blockKartReportVehicleDiagnostics(g *voplay.GameCtx, lifecycleState, startu
 		intent = w.lastVehicleIntent.Normalized()
 		roadEdgeAssist = w.roadEdgeAssistActive
 		if w.vehicle != nil {
-			telemetry = w.vehicle.Telemetry()
+			telemetry = scene3d.ProductVehicleTelemetry(w.vehicle)
 			speed = math.Abs(telemetry.Speed)
 			grounded = telemetry.Grounded
 			if telemetry.Surface.ID != "" {

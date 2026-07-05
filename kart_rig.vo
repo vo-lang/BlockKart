@@ -1,0 +1,177 @@
+package main
+
+import (
+	"math"
+	"github.com/vo-lang/voplay"
+	"github.com/vo-lang/voplay/scene3d"
+)
+
+func (w *World) applyKartRoadEdgeAssist(dt float64) {
+	if dt <= 0 || w.track == nil || w.vehicle == nil {
+		w.roadEdgeAssistActive = false
+		return
+	}
+	pos := w.vehicle.Position()
+	sample, ok := w.sampleRoadEdgeAssist(pos)
+	if !ok {
+		w.roadEdgeAssistActive = false
+		return
+	}
+	if sample.LateralAbs <= sample.AssistStart {
+		w.roadEdgeAssistActive = false
+		return
+	}
+	enteringAssist := !w.roadEdgeAssistActive
+	result := scene3d.ApplyVehicleRoadEdgeAssist(w.vehicle, w.roadEdgeAssistCommand(sample, enteringAssist), dt)
+	w.roadEdgeAssistActive = result.Active
+}
+
+func (w *World) resolveKartRoadEdgeAssistPose() {
+	if w.track == nil || w.vehicle == nil {
+		return
+	}
+	pos := w.vehicle.Position()
+	sample, ok := w.sampleRoadEdgeAssist(pos)
+	if !ok || sample.LateralAbs <= sample.AssistStart {
+		return
+	}
+	scene3d.ResolveVehicleRoadEdgeAssistPose(w.vehicle, w.roadEdgeAssistCommand(sample, false))
+}
+
+func (w *World) roadEdgeAssistCommand(sample roadEdgeAssistSample, entering bool) scene3d.VehicleRoadEdgeAssistCommand {
+	return scene3d.VehicleRoadEdgeAssistCommand{RoadPosition: sample.Point.Position, Right: sample.Right, Inward: sample.Inward, EdgeHalfWidth: sample.EdgeHalfWidth, AssistStart: sample.AssistStart, LateralAbs: sample.LateralAbs, Side: sample.Side, SoftZone: kartRoadEdgeAssistSoftZone, MaxPushSpeed: kartRoadEdgeAssistMaxPushSpeed, VelocityBlend: kartRoadEdgeAssistVelocityBlend, OutwardDamping: kartRoadEdgeAssistOutwardDamping, ImpactSpeed: kartRoadEdgeAssistImpactSpeed, PositionBlend: kartRoadEdgeAssistPositionBlend, MaxCorrection: kartRoadEdgeAssistMaxCorrection, PostMaxCorrection: kartRoadEdgeAssistPostMaxCorrection, SnapOverflow: kartRoadEdgeAssistSnapOverflow, RideHeight: kartSpawnRideHeight, Lift: kartRoadEdgeAssistLift, Entering: entering}
+}
+
+func (w *World) sampleRoadEdgeAssist(pos voplay.Vec3) (roadEdgeAssistSample, bool) {
+	if w.track == nil {
+		return roadEdgeAssistSample{}, false
+	}
+	cp := w.track.ClosestPoint(pos)
+	if cp.HalfWidth <= kartRoadEdgeAssistCenterInset || cp.Right.LengthSq() == 0 {
+		return roadEdgeAssistSample{}, false
+	}
+	right := cp.Right
+	right.Y = 0
+	if right.LengthSq() == 0 {
+		return roadEdgeAssistSample{}, false
+	}
+	right = right.Normalize()
+	side := 1.0
+	if cp.LateralDistance < 0 {
+		side = -1.0
+	}
+	edgeHalfWidth := cp.HalfWidth - kartRoadEdgeAssistCenterInset
+	return roadEdgeAssistSample{Point: cp, Right: right, Inward: right.Scale(-side), EdgeHalfWidth: edgeHalfWidth, AssistStart: edgeHalfWidth - kartRoadEdgeAssistSoftZone, LateralAbs: math.Abs(cp.LateralDistance), Side: side}, true
+}
+
+func (w *World) kartRotation() voplay.Quat {
+	if w.vehicle != nil {
+		return w.vehicle.Rotation()
+	}
+	return voplay.QuatFromAxisAngle(voplay.Vec3{Y: 1}, w.kartYaw)
+}
+
+func (w *World) setKartPose(position voplay.Vec3, yaw float64) {
+	w.kartYaw = yaw
+	w.kartSpeed = 0
+	w.roadEdgeAssistActive = false
+	w.physicsIdleFrames = 0
+	if w.kartController != nil {
+		w.kartController.Respawn(scene3d.TrackPose{Position: position, Yaw: yaw})
+		w.primeIdleStartPhysicsSleep()
+		w.resetKartRenderPose(position, w.kartRotation())
+		w.drifting = false
+		w.syncKartVisuals()
+		return
+	}
+	if w.vehicle != nil {
+		scene3d.ResetVehiclePose(w.vehicle, position, yaw)
+		w.primeIdleStartPhysicsSleep()
+		w.resetKartRenderPose(position, w.kartRotation())
+		w.drifting = false
+		w.syncKartVisuals()
+		return
+	}
+	w.resetKartRenderPose(position, w.kartRotation())
+	w.syncKartVisuals()
+}
+
+func (w *World) stopKartForFinish() {
+	w.boostTimer = 0
+	w.driftCharge = 0
+	w.drifting = false
+	w.kartSpeed = 0
+	w.roadEdgeAssistActive = false
+	if w.vehicle != nil {
+		scene3d.ResetVehicleMotionState(w.vehicle)
+	}
+	if w.kartController != nil {
+		position := w.checkpointPosition
+		if w.vehicle != nil {
+			position = w.vehicle.Position()
+		} else if w.player != nil {
+			position = w.player.Position()
+		}
+		w.kartController.Respawn(scene3d.TrackPose{Position: position, Yaw: w.kartYaw})
+	}
+}
+
+func (w *World) activateBoost(duration float64) {
+	if duration > w.boostTimer {
+		w.boostTimer = duration
+	}
+	if w.kartController != nil {
+		w.kartController.ActivateBoost(duration)
+	}
+}
+
+func (w *World) syncKartVisuals() {
+	if w.player == nil {
+		return
+	}
+	pos := w.player.Position()
+	rot := w.kartVisualRotation()
+	w.syncKartVisualsAt(pos, rot)
+}
+
+func (w *World) syncKartVisualsAt(pos voplay.Vec3, rot voplay.Quat) {
+	if w.kartChassisPrimitive != nil {
+		w.syncPrimitiveKartVisuals(pos, rot)
+	}
+}
+
+func (w *World) updateVehicleAudio() {
+	if w.vehicleAudio == nil {
+		return
+	}
+	telemetry := scene3d.VehicleTelemetry{}
+	if w.vehicle != nil {
+		telemetry = scene3d.ProductVehicleTelemetry(w.vehicle)
+	}
+	input := scene3d.VehicleAudioInputFromTelemetry(telemetry)
+	if w.kartController != nil {
+		state := w.kartController.State()
+		if state.SurfaceID != "" {
+			if !state.SurfaceOnRoad {
+				input.SurfaceAmount = 1
+			}
+			w.vehicleAudio.Update(input)
+			return
+		}
+	}
+	w.vehicleAudio.Update(input)
+}
+
+func (w *World) updateIdleVehicleAudio() {
+	if w.vehicleAudio == nil {
+		return
+	}
+	w.vehicleAudio.Update(scene3d.VehicleAudioInput{})
+}
+
+func (w *World) kartVisualRotation() voplay.Quat {
+	if w.vehicle != nil {
+		return w.vehicle.VisualRotation()
+	}
+	return w.kartRotation()
+}

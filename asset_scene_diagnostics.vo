@@ -109,7 +109,7 @@ func blockKartReportSceneDiagnostics(g *voplay.GameCtx, lifecycleState, startupP
 		}
 		if w.scene != nil {
 			hasScene = true
-			diag := w.scene.Diagnostics()
+			diag := scene3d.ProductSceneDiagnostics(w.scene)
 			content := diag.PrimitiveContent
 			if content.TotalInstances == 0 && diag.Primitive.TotalInstances > 0 {
 				content = diag.Primitive
