@@ -64,7 +64,7 @@ deps = ["github.com/vo-lang/vogui", "github.com/vo-lang/vopack"]
 kind = "extension-js-glue"
 target = "wasm32-unknown-unknown"
 name = "voplay_island.js"
-size = 110539
+size = 110536
 digest = "sha256:4c7db91eae8fd7cdd491660f9a91559e61064a23e8f7982d3fb06da0364fc72e"
 
 [[resolved.artifact]]
