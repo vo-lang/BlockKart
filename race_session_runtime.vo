@@ -6,8 +6,8 @@ import (
 )
 
 func (w *World) Update(g *voplay.GameCtx, dt float64, debugOverlayVisible bool) {
-	w.updateKartRenderPose(g.Alpha)
-	w.updateRacingCamera(dt, debugOverlayVisible)
+	w.raceSession.updateKartRenderPose(w, g.Alpha)
+	w.raceSession.updateRacingCamera(w, dt, debugOverlayVisible)
 	w.scene.UpdateAudio()
 	w.scene.UpdateEmitters(dt)
 	w.scene.TickAnimations(dt)
@@ -16,16 +16,16 @@ func (w *World) Update(g *voplay.GameCtx, dt float64, debugOverlayVisible bool) 
 	}
 }
 
-func (w *World) updateRacingCamera(dt float64, debugOverlayVisible bool) {
+func (r *RaceSession) updateRacingCamera(w *World, dt float64, debugOverlayVisible bool) {
 	if w.camera == nil || w.scene == nil {
 		return
 	}
 	if w.terrainCameraView > 0 {
-		w.updateTerrainCaptureCamera()
+		w.raceSession.updateTerrainCaptureCamera(w)
 		return
 	}
 	if w.heroCameraVisible {
-		w.updateHeroInspectionCamera()
+		w.raceSession.updateHeroInspectionCamera(w)
 		return
 	}
 	target := scene3d.RacingCameraTarget{Position: w.startPosition, Forward: voplay.QuatFromAxisAngle(voplay.Vec3{Y: 1}, w.startYaw).RotateVec3(voplay.Vec3{Z: -1})}
@@ -37,9 +37,9 @@ func (w *World) updateRacingCamera(dt float64, debugOverlayVisible bool) {
 			target.Velocity = sample.Velocity
 			target.Speed = sample.Speed
 		}
-		target.Position = w.stabilizedCameraTargetPosition(target.Position)
+		target.Position = w.raceSession.stabilizedCameraTargetPosition(w, target.Position)
 	}
-	target.Boost = w.isBoosting()
+	target.Boost = w.hudPresenter.isBoosting(w)
 	if w.drifting {
 		target.Drift = w.lastSteer
 	}
@@ -49,7 +49,7 @@ func (w *World) updateRacingCamera(dt float64, debugOverlayVisible bool) {
 	w.camera.UpdateCamera(&w.scene.Camera, w.scene, target, dt)
 }
 
-func (w *World) stabilizedCameraTargetPosition(position voplay.Vec3) voplay.Vec3 {
+func (r *RaceSession) stabilizedCameraTargetPosition(w *World, position voplay.Vec3) voplay.Vec3 {
 	if w.track == nil {
 		return position
 	}
@@ -62,18 +62,18 @@ func (w *World) stabilizedCameraTargetPosition(position voplay.Vec3) voplay.Vec3
 	return position
 }
 
-func (w *World) beginKartPhysicsStep() {
+func (r *RaceSession) beginKartPhysicsStep(w *World) {
 	if w.player == nil {
 		return
 	}
 	if !w.kartRenderPose.Initialized() {
-		w.resetKartRenderPose(w.player.Position(), w.kartVisualRotation())
+		w.raceSession.resetKartRenderPose(w, w.player.Position(), w.kartRig.kartVisualRotation(w))
 		return
 	}
 	w.kartRenderPose.BeginStep()
 }
 
-func (w *World) endKartPhysicsStep() {
+func (r *RaceSession) endKartPhysicsStep(w *World) {
 	if w.player == nil {
 		return
 	}
@@ -81,38 +81,38 @@ func (w *World) endKartPhysicsStep() {
 	if w.vehicle != nil {
 		pos = w.vehicle.Position()
 	}
-	rot := w.kartVisualRotation()
+	rot := w.kartRig.kartVisualRotation(w)
 	vel := voplay.Vec3{}
 	if w.vehicle != nil {
 		vel = w.vehicle.LinearVelocity()
 	}
-	speed := w.currentKartRenderSpeed()
+	speed := w.raceSession.currentKartRenderSpeed(w)
 	sample := NewKartRenderSample(pos, rot, vel, speed)
 	if !w.kartRenderPose.Initialized() {
-		w.resetKartRenderPose(pos, rot)
+		w.raceSession.resetKartRenderPose(w, pos, rot)
 		return
 	}
 	w.kartRenderPose.Commit(sample)
 }
 
-func (w *World) resetKartRenderPose(pos voplay.Vec3, rot voplay.Quat) {
+func (r *RaceSession) resetKartRenderPose(w *World, pos voplay.Vec3, rot voplay.Quat) {
 	sample := w.kartRenderPose.Reset(pos, rot)
-	w.syncKartVisualsAt(sample.Position, sample.Rotation)
+	w.kartRig.syncKartVisualsAt(w, sample.Position, sample.Rotation)
 	w.cameraTelemetry.ResetAnchor()
 }
 
-func (w *World) updateKartRenderPose(alpha float64) {
+func (r *RaceSession) updateKartRenderPose(w *World, alpha float64) {
 	if w.player == nil {
 		return
 	}
 	if !w.kartRenderPose.Initialized() {
-		w.resetKartRenderPose(w.player.Position(), w.kartVisualRotation())
+		w.raceSession.resetKartRenderPose(w, w.player.Position(), w.kartRig.kartVisualRotation(w))
 	}
 	sample := w.kartRenderPose.Interpolate(alpha)
-	w.syncKartVisualsAt(sample.Position, sample.Rotation)
+	w.kartRig.syncKartVisualsAt(w, sample.Position, sample.Rotation)
 }
 
-func (w *World) currentKartRenderSpeed() float64 {
+func (r *RaceSession) currentKartRenderSpeed(w *World) float64 {
 	if w.vehicle != nil {
 		telemetry := scene3d.ProductVehicleTelemetry(w.vehicle)
 		return telemetry.Speed
@@ -120,7 +120,7 @@ func (w *World) currentKartRenderSpeed() float64 {
 	return w.kartSpeed
 }
 
-func (w *World) updateHeroInspectionCamera() {
+func (r *RaceSession) updateHeroInspectionCamera(w *World) {
 	if w.scene == nil {
 		return
 	}
@@ -143,7 +143,7 @@ func (w *World) CycleTerrainCameraView() int {
 	return w.terrainCameraView
 }
 
-func (w *World) updateTerrainCaptureCamera() {
+func (r *RaceSession) updateTerrainCaptureCamera(w *World) {
 	if w.scene == nil {
 		return
 	}

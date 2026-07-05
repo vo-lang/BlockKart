@@ -17,6 +17,7 @@ type KartRig struct {
 	Player *scene3d.Entity
 	Vehicle *scene3d.Vehicle
 	Controller *scene3d.KartController
+	PhysicsSession *scene3d.VehiclePhysicsSession
 }
 
 type TrackRuntime struct {
@@ -41,4 +42,64 @@ type AssetRuntimeCache struct {
 
 type StructuredFailureReport struct {
 	Report BlockKartFailureReport
+}
+
+func (r *RaceSession) Reset(totalLaps int) {
+	if r == nil {
+		return
+	}
+	r.State = BlockKartRaceStateReady
+	r.Lap = 1
+	r.TotalLaps = totalLaps
+	r.Started = false
+	r.Finished = false
+}
+
+func (k *KartRig) Bind(player *scene3d.Entity, vehicle *scene3d.Vehicle, controller *scene3d.KartController, session *scene3d.VehiclePhysicsSession) {
+	if k == nil {
+		return
+	}
+	k.Player = player
+	k.Vehicle = vehicle
+	k.Controller = controller
+	k.PhysicsSession = session
+}
+
+func (k *KartRig) StepPhysics(delta float64, intent scene3d.VehicleIntent) scene3d.VehicleTelemetry {
+	if k == nil || k.PhysicsSession == nil {
+		return scene3d.VehicleTelemetry{}
+	}
+	return k.PhysicsSession.Step(delta, intent)
+}
+
+func (t *TrackRuntime) Bind(track *scene3d.Track, spawn *scene3d.TrackSpawnResult, spec BlockKartTrackSpec) {
+	if t == nil {
+		return
+	}
+	t.Track = track
+	t.Spawn = spawn
+	t.Spec = spec
+}
+
+func (h *HUDPresenter) Capture(state WorldHUDState, lines []string) {
+	if h == nil {
+		return
+	}
+	h.LastState = state
+	h.DebugLines = lines
+}
+
+func (p *PerfReporter) Record(snapshot voplay.PerfSnapshot, frame int) {
+	if p == nil {
+		return
+	}
+	p.LastSnapshot = snapshot
+	p.PollFrame = frame
+}
+
+func (a *AssetRuntimeCache) Bind(cache *BlockKartRuntimeCache) {
+	if a == nil {
+		return
+	}
+	a.Cache = cache
 }

@@ -25,19 +25,19 @@ func (w *World) ActivateRenderStressProfile(g *voplay.GameCtx, profile string) {
 	w.renderStressProfile = profile
 	w.renderStressApplied = false
 	if profile == blockKartRenderStressPrimitive10k {
-		w.addRenderStressPrimitive10k()
+		w.trackRuntime.addRenderStressPrimitive10k(w)
 		w.renderStressApplied = true
 	} else if profile == blockKartRenderStressWater {
-		w.addRenderStressWater()
+		w.trackRuntime.addRenderStressWater(w)
 		w.renderStressApplied = true
 	} else if profile == blockKartRenderStressResourceChurn {
-		w.addRenderStressResourceChurn()
+		w.trackRuntime.addRenderStressResourceChurn(w)
 		w.renderStressApplied = true
 	} else if profile == blockKartRenderStressChunkedWorldDrive {
-		w.addRenderStressChunkedWorldDrive()
+		w.trackRuntime.addRenderStressChunkedWorldDrive(w)
 		w.renderStressApplied = true
 	} else if profile == blockKartRenderStressShadowPostMatrix {
-		w.addRenderStressShadowPostMatrix()
+		w.trackRuntime.addRenderStressShadowPostMatrix(w)
 		w.renderStressApplied = true
 	}
 	if w.renderStressApplied {
@@ -47,8 +47,8 @@ func (w *World) ActivateRenderStressProfile(g *voplay.GameCtx, profile string) {
 	blockKartReportWorldDiagnostics(g, BlockKartLifecycleRunning, "renderStress", profile, w)
 }
 
-func (w *World) addRenderStressPrimitive10k() {
-	primitive := w.ensurePrimitiveScene()
+func (t *TrackRuntime) addRenderStressPrimitive10k(w *World) {
+	primitive := w.trackRuntime.ensurePrimitiveScene(w)
 	batch := primitive.ScatterStatic.BeginBulkAdd()
 	count := 10000
 	columns := 100
@@ -78,10 +78,10 @@ func (w *World) addRenderStressPrimitive10k() {
 	batch.End()
 }
 
-func (w *World) addRenderStressWater() {
-	primitive := w.ensurePrimitiveScene()
+func (t *TrackRuntime) addRenderStressWater(w *World) {
+	primitive := w.trackRuntime.ensurePrimitiveScene(w)
 	if w.track != nil {
-		w.addPrimitiveLakeAndBridge(w.track)
+		w.trackRuntime.addPrimitiveLakeAndBridge(w, w.track)
 	}
 	center := w.startPosition.Add(voplay.Vec3{X: 24, Y: -0.95, Z: -42})
 	batch := primitive.Static.BeginBulkAdd()
@@ -93,8 +93,8 @@ func (w *World) addRenderStressWater() {
 	batch.End()
 }
 
-func (w *World) addRenderStressResourceChurn() {
-	primitive := w.ensurePrimitiveScene()
+func (t *TrackRuntime) addRenderStressResourceChurn(w *World) {
+	primitive := w.trackRuntime.ensurePrimitiveScene(w)
 	batch := primitive.SmallDetailStatic.BeginBulkAdd()
 	count := 1536
 	columns := 64
@@ -111,8 +111,8 @@ func (w *World) addRenderStressResourceChurn() {
 	batch.End()
 }
 
-func (w *World) addRenderStressChunkedWorldDrive() {
-	primitive := w.ensurePrimitiveScene()
+func (t *TrackRuntime) addRenderStressChunkedWorldDrive(w *World) {
+	primitive := w.trackRuntime.ensurePrimitiveScene(w)
 	batch := primitive.ScatterStatic.BeginBulkAdd()
 	count := 4096
 	columns := 64
@@ -142,8 +142,8 @@ func (w *World) addRenderStressChunkedWorldDrive() {
 	batch.End()
 }
 
-func (w *World) addRenderStressShadowPostMatrix() {
-	primitive := w.ensurePrimitiveScene()
+func (t *TrackRuntime) addRenderStressShadowPostMatrix(w *World) {
+	primitive := w.trackRuntime.ensurePrimitiveScene(w)
 	center := w.startPosition.Add(voplay.Vec3{X: -18, Z: -34})
 	for row := 0; row < 8; row++ {
 		for col := 0; col < 12; col++ {

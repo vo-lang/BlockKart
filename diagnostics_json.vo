@@ -11,6 +11,19 @@ func jsonBool(value bool) string {
 	return "false"
 }
 
+func jsonControlEscape(ch string) string {
+	if ch == "\n" {
+		return "\\n"
+	}
+	if ch == "\r" {
+		return "\\r"
+	}
+	if ch == "\t" {
+		return "\\t"
+	}
+	return ch
+}
+
 func jsonString(value string) string {
 	out := "\""
 	for i := 0; i < len(value); i++ {
@@ -20,7 +33,7 @@ func jsonString(value string) string {
 		} else if ch == "\"" {
 			out += "\\\""
 		} else {
-			out += ch
+			out += jsonControlEscape(ch)
 		}
 	}
 	return out + "\""

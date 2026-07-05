@@ -216,44 +216,46 @@ func NewWorld(g *voplay.GameCtx, runtimeCache *BlockKartRuntimeCache) (*World, *
 		return nil, blockKartNewFailureReport(BlockKartLifecycleFailed, "alloc", BlockKartOwnerVoplay, BlockKartSubsystemRuntime, "BlockKart world construction received nil GameCtx", "BlockKart could not start. Please try again.")
 	}
 	w := &World{scene: scene3d.New(), startPosition: voplay.Vec3{X: 0, Y: 1.1, Z: 98}, theme: defaultWorldTheme(), settings: defaultBlockKartSettings(), tuning: defaultBlockKartTuningPreset(), runtimeCache: runtimeCache, raceState: BlockKartRaceStateReady, totalLaps: raceLapCount, lap: 1}
+	w.assetRuntime.Bind(runtimeCache)
+	w.raceSession.Reset(raceLapCount)
 	prof.Mark("alloc")
 	w.checkpointPosition = w.startPosition
 	w.checkpointLabel = "Start"
 	w.nextGateLabel = "Gate 1"
-	w.configureScene()
+	w.assetRuntime.configureScene(w)
 	prof.Mark("configureScene")
-	if err := w.loadAssets(g.Assets); err != nil {
+	if err := w.assetRuntime.loadAssets(w, g.Assets); err != nil {
 		blockKartReportWorldDiagnostics(g, BlockKartLifecycleFailed, "loadAssets", "loadAssetsFailed", w)
 		w.Close()
 		return nil, blockKartNewFailureReport(BlockKartLifecycleFailed, "loadAssets", BlockKartOwnerBlockKart, BlockKartSubsystemAsset, err.Error(), "BlockKart could not load its game assets. Please try again.")
 	}
 	prof.Mark("loadAssets")
-	w.loadModels()
+	w.kartRig.loadModels(w)
 	prof.Mark("loadModels")
-	if err := w.buildLevel(); err != nil {
+	if err := w.trackRuntime.buildLevel(w); err != nil {
 		blockKartReportWorldDiagnostics(g, BlockKartLifecycleFailed, "buildLevel", "buildLevelFailed", w)
 		w.Close()
 		return nil, blockKartNewFailureReport(BlockKartLifecycleFailed, "buildLevel", BlockKartOwnerBlockKart, BlockKartSubsystemMap, err.Error(), "BlockKart could not prepare its track. Please try again.")
 	}
 	prof.Mark("buildLevel")
-	w.setupRacingInput(g)
+	w.raceSession.setupRacingInput(w, g)
 	prof.Mark("setupRacingInput")
-	w.spawnPlayer()
+	w.kartRig.spawnPlayer(w)
 	prof.Mark("spawnPlayer")
-	w.setupVehicleAudio()
+	w.kartRig.setupVehicleAudio(w)
 	prof.Mark("setupVehicleAudio")
-	w.setupCamera()
+	w.kartRig.setupCamera(w)
 	prof.Mark("setupCamera")
-	w.restartRun()
+	w.raceSession.restartRun(w)
 	prof.Mark("restartRun")
 	return w, nil
 }
 
-func (w *World) configureScene() {
+func (a *AssetRuntimeCache) configureScene(w *World) {
 	applyWorldTheme(w.theme, w.scene, w.settings)
 }
 
-func (w *World) setupRacingInput(g *voplay.GameCtx) {
+func (r *RaceSession) setupRacingInput(w *World, g *voplay.GameCtx) {
 	if g == nil || g.Input == nil {
 		return
 	}
@@ -263,7 +265,7 @@ func (w *World) setupRacingInput(g *voplay.GameCtx) {
 	w.racingInput = profile
 }
 
-func (w *World) loadModels() {
+func (k *KartRig) loadModels(w *World) {
 	w.cubeModel = scene3d.CubeMesh()
 }
 
@@ -275,7 +277,7 @@ func loadAudioAsset(assets *voplay.Assets, rel string) (voplay.AudioClipID, erro
 	return assets.Audio(blockKartAssetPath(rel))
 }
 
-func (w *World) loadAssets(assets *voplay.Assets) error {
+func (a *AssetRuntimeCache) loadAssets(w *World, assets *voplay.Assets) error {
 	if assets == nil {
 		return errors.New("BlockKart assets unavailable")
 	}
@@ -316,20 +318,21 @@ func blockKartAssetPath(rel string) string {
 	return "assets/" + rel
 }
 
-func (w *World) spawnPlayer() {
-	w.player = w.scene.Spawn(scene3d.EntityDesc{Position: w.startPosition, Rotation: w.kartRotation(), Scale: voplay.Vec3{X: 1, Y: 1, Z: 1}, Tag: "kart_physics", Physics: &scene3d.Physics{Type: scene3d.Dynamic, Collider: scene3d.Box(0.78, 0.24, 1.16), Layer: voplay.CollisionLayerDefault, Mask: voplay.CollisionMaskAll, Density: 70.0, Friction: 0.25, Restitution: 0.02, LinearDamping: 0.12, AngularDamping: 3.5, LockRotationX: true, LockRotationZ: true}})
+func (k *KartRig) spawnPlayer(w *World) {
+	w.player = w.scene.Spawn(scene3d.EntityDesc{Position: w.startPosition, Rotation: w.kartRig.kartRotation(w), Scale: voplay.Vec3{X: 1, Y: 1, Z: 1}, Tag: "kart_physics", Physics: &scene3d.Physics{Type: scene3d.Dynamic, Collider: scene3d.Box(0.78, 0.24, 1.16), Layer: voplay.CollisionLayerDefault, Mask: voplay.CollisionMaskAll, Density: 70.0, Friction: 0.25, Restitution: 0.02, LinearDamping: 0.12, AngularDamping: 3.5, LockRotationX: true, LockRotationZ: true}})
 	w.player.Visible = false
 	controllerConfig := w.tuning.KartControllerConfig()
 	w.vehicle = scene3d.NewVehicle(w.player, controllerConfig.Vehicle)
 	w.kartController = scene3d.NewKartController(w.vehicle, w.track, controllerConfig)
 	w.kartController.Respawn(scene3d.TrackPose{Position: w.startPosition, Yaw: w.startYaw})
-	w.primeIdleStartPhysicsSleep()
-	w.resetKartRenderPose(w.startPosition, w.kartRotation())
-	w.spawnKartVisuals()
-	w.syncKartVisuals()
+	w.kartRig.Bind(w.player, w.vehicle, w.kartController, scene3d.NewVehiclePhysicsSession(scene3d.VehiclePhysicsSessionDesc{Scene: w.scene, Vehicle: w.vehicle, FixedDt: 1.0 / 60.0}))
+	w.kartRig.primeIdleStartPhysicsSleep(w)
+	w.raceSession.resetKartRenderPose(w, w.startPosition, w.kartRig.kartRotation(w))
+	w.kartRig.spawnKartVisuals(w)
+	w.kartRig.syncKartVisuals(w)
 }
 
-func (w *World) primeIdleStartPhysicsSleep() {
+func (k *KartRig) primeIdleStartPhysicsSleep(w *World) {
 	if w.vehicle == nil {
 		return
 	}
@@ -337,11 +340,11 @@ func (w *World) primeIdleStartPhysicsSleep() {
 	w.physicsIdleFrames = scene3d.DefaultVehicleIdleSleepConfig().WarmupFrames
 }
 
-func (w *World) spawnKartVisuals() {
-	w.spawnPrimitiveKartVisuals()
+func (k *KartRig) spawnKartVisuals(w *World) {
+	w.trackRuntime.spawnPrimitiveKartVisuals(w)
 }
 
-func (w *World) setupCamera() {
+func (k *KartRig) setupCamera(w *World) {
 	w.camera = scene3d.NewRacingCamera()
 	w.camera.BaseDistance = 22.4
 	w.camera.MaxDistance = 33.0
@@ -358,10 +361,10 @@ func (w *World) setupCamera() {
 	w.camera.BoostFovKick = 3.2
 	w.camera.CollisionEnabled = false
 	w.camera.CollisionOffset = 0.72
-	w.updateRacingCamera(0, false)
+	w.raceSession.updateRacingCamera(w, 0, false)
 }
 
-func (w *World) setupVehicleAudio() {
+func (k *KartRig) setupVehicleAudio(w *World) {
 	if w.assets == nil || w.player == nil {
 		return
 	}
@@ -397,14 +400,14 @@ func (w *World) FixedUpdate(g *voplay.GameCtx, dt float64, debugOverlayVisible b
 		fixedStart = time.Now()
 		phaseStart = fixedStart
 	}
-	w.updateTouchControls(g)
+	w.hudPresenter.updateTouchControls(w, g)
 	if profileFixedStep {
 		now := time.Now()
 		phaseStats.TouchMs = blockKartElapsedMs(phaseStart, now)
 		phaseStart = now
 	}
 	if w.touchResetPressed {
-		w.restartRun()
+		w.raceSession.restartRun(w)
 		blockKartReportWorldDiagnostics(g, BlockKartLifecycleRunning, "race", "raceRestart", w)
 		if profileFixedStep {
 			now := time.Now()
@@ -415,10 +418,10 @@ func (w *World) FixedUpdate(g *voplay.GameCtx, dt float64, debugOverlayVisible b
 		return
 	}
 	if w.raceState == BlockKartRaceStateReady {
-		if w.shouldStartRace(g) {
-			w.startRace(g)
+		if w.raceSession.shouldStartRace(w, g) {
+			w.raceSession.startRace(w, g)
 		} else {
-			w.updateIdleVehicleAudio()
+			w.kartRig.updateIdleVehicleAudio(w)
 			if profileFixedStep {
 				now := time.Now()
 				phaseStats.AudioMs = blockKartElapsedMs(phaseStart, now)
@@ -428,15 +431,15 @@ func (w *World) FixedUpdate(g *voplay.GameCtx, dt float64, debugOverlayVisible b
 			return
 		}
 	}
-	w.updateGameplay(g, dt)
+	w.raceSession.updateGameplay(w, g, dt)
 	if profileFixedStep {
 		now := time.Now()
 		phaseStats.GameplayMs = blockKartElapsedMs(phaseStart, now)
 		phaseStart = now
 	}
 	if w.finished {
-		w.reportRaceResultOnce(g)
-		w.updateIdleVehicleAudio()
+		w.raceSession.reportRaceResultOnce(w, g)
+		w.kartRig.updateIdleVehicleAudio(w)
 		if profileFixedStep {
 			now := time.Now()
 			phaseStats.AudioMs = blockKartElapsedMs(phaseStart, now)
@@ -445,19 +448,19 @@ func (w *World) FixedUpdate(g *voplay.GameCtx, dt float64, debugOverlayVisible b
 		}
 		return
 	}
-	w.applyKartDrive(g, dt)
+	w.kartRig.applyKartDrive(w, g, dt)
 	if profileFixedStep {
 		now := time.Now()
 		phaseStats.DriveMs = blockKartElapsedMs(phaseStart, now)
 		phaseStart = now
 	}
-	w.applyKartRoadEdgeAssist(dt)
+	w.kartRig.applyKartRoadEdgeAssist(w, dt)
 	if profileFixedStep {
 		now := time.Now()
 		phaseStats.AssistMs = blockKartElapsedMs(phaseStart, now)
 		phaseStart = now
 	}
-	shouldSleep := w.shouldSleepKartPhysics()
+	shouldSleep := w.kartRig.shouldSleepKartPhysics(w)
 	if profileFixedStep {
 		now := time.Now()
 		phaseStats.SleepMs = blockKartElapsedMs(phaseStart, now)
@@ -466,7 +469,7 @@ func (w *World) FixedUpdate(g *voplay.GameCtx, dt float64, debugOverlayVisible b
 	if shouldSleep {
 		w.physicsIdleFrames++
 		if w.physicsIdleFrames >= scene3d.DefaultVehicleIdleSleepConfig().WarmupFrames {
-			w.updateVehicleAudio()
+			w.kartRig.updateVehicleAudio(w)
 			if profileFixedStep {
 				now := time.Now()
 				phaseStats.Slept = true
@@ -479,28 +482,28 @@ func (w *World) FixedUpdate(g *voplay.GameCtx, dt float64, debugOverlayVisible b
 	} else {
 		w.physicsIdleFrames = 0
 	}
-	w.beginKartPhysicsStep()
-	scene3d.ProductStepAndSyncPhysics(w.scene, dt)
+	w.raceSession.beginKartPhysicsStep(w)
+	w.kartRig.StepPhysics(dt, w.lastVehicleIntent)
 	if profileFixedStep {
 		now := time.Now()
 		phaseStats.PhysicsMs = blockKartElapsedMs(phaseStart, now)
 		phaseStart = now
 	}
-	w.resolveKartRoadEdgeAssistPose()
-	w.endKartPhysicsStep()
+	w.kartRig.resolveKartRoadEdgeAssistPose(w)
+	w.raceSession.endKartPhysicsStep(w)
 	if profileFixedStep {
 		now := time.Now()
 		phaseStats.ResolveMs = blockKartElapsedMs(phaseStart, now)
 		phaseStart = now
 	}
-	w.updateVehicleAudio()
+	w.kartRig.updateVehicleAudio(w)
 	if profileFixedStep {
 		now := time.Now()
 		phaseStats.AudioMs = blockKartElapsedMs(phaseStart, now)
 		phaseStart = now
 	}
 	if w.player.Position().Y < playerResetY {
-		w.respawnAtCheckpoint()
+		w.raceSession.respawnAtCheckpoint(w)
 	}
 	if profileFixedStep {
 		now := time.Now()
@@ -510,7 +513,7 @@ func (w *World) FixedUpdate(g *voplay.GameCtx, dt float64, debugOverlayVisible b
 	}
 }
 
-func (w *World) shouldStartRace(g *voplay.GameCtx) bool {
+func (r *RaceSession) shouldStartRace(w *World, g *voplay.GameCtx) bool {
 	if w == nil {
 		return false
 	}
@@ -523,7 +526,7 @@ func (w *World) shouldStartRace(g *voplay.GameCtx) bool {
 	return g.Actions.IsPressed("start") || g.Actions.IsDown("start")
 }
 
-func (w *World) startRace(g *voplay.GameCtx) {
+func (r *RaceSession) startRace(w *World, g *voplay.GameCtx) {
 	if w == nil || w.raceState != BlockKartRaceStateReady {
 		return
 	}
@@ -533,7 +536,7 @@ func (w *World) startRace(g *voplay.GameCtx) {
 	blockKartReportWorldDiagnostics(g, BlockKartLifecycleRunning, "race", "raceStart", w)
 }
 
-func (w *World) reportRaceResultOnce(g *voplay.GameCtx) {
+func (r *RaceSession) reportRaceResultOnce(w *World, g *voplay.GameCtx) {
 	if w == nil || w.raceResultReported {
 		return
 	}
@@ -541,12 +544,12 @@ func (w *World) reportRaceResultOnce(g *voplay.GameCtx) {
 	blockKartReportWorldDiagnostics(g, BlockKartLifecycleRunning, "race", "raceFinished", w)
 }
 
-func (w *World) applyKartDrive(g *voplay.GameCtx, dt float64) {
+func (k *KartRig) applyKartDrive(w *World, g *voplay.GameCtx, dt float64) {
 	if w.vehicle == nil {
 		return
 	}
 	if w.racingInput == nil {
-		w.setupRacingInput(g)
+		w.raceSession.setupRacingInput(w, g)
 	}
 	input := scene3d.RacingInput{}
 	if w.racingInput != nil {
@@ -573,7 +576,7 @@ func (w *World) applyKartDrive(g *voplay.GameCtx, dt float64) {
 			w.messageTimer = 0.82
 		}
 		if state.ShouldRespawn {
-			w.respawnAtCheckpoint()
+			w.raceSession.respawnAtCheckpoint(w)
 		}
 		w.drifting = state.Drifting
 		w.driftCharge = state.DriftCharge
@@ -590,7 +593,7 @@ func (w *World) applyKartDrive(g *voplay.GameCtx, dt float64) {
 	w.kartSpeed = telemetry.Speed
 }
 
-func (w *World) shouldSleepKartPhysics() bool {
+func (k *KartRig) shouldSleepKartPhysics(w *World) bool {
 	if w.vehicle == nil {
 		return false
 	}
@@ -652,7 +655,7 @@ func clampFloat(v, lo, hi float64) float64 {
 
 func (w *World) SetRacingDebugOverlayVisible(visible bool) {
 	if !visible {
-		w.destroyRacingDebugOverlay()
+		w.hudPresenter.destroyRacingDebugOverlay(w)
 		return
 	}
 	if w.racingDebugOverlay != nil {
@@ -670,7 +673,7 @@ func (w *World) SetRacingDebugOverlayVisible(visible bool) {
 
 func (w *World) SetRenderDebugMode(mode int) {
 	if w.scene != nil {
-		w.scene.RenderDebugMode = mode
+		scene3d.ProductSetRenderDebugMode(w.scene, mode)
 	}
 }
 
@@ -678,7 +681,7 @@ func (w *World) SetHeroCameraVisible(visible bool) {
 	w.heroCameraVisible = visible
 }
 
-func (w *World) destroyRacingDebugOverlay() {
+func (h *HUDPresenter) destroyRacingDebugOverlay(w *World) {
 	if w.racingDebugOverlay != nil {
 		w.racingDebugOverlay.Destroy(w.scene)
 		w.racingDebugOverlay = nil
@@ -686,7 +689,7 @@ func (w *World) destroyRacingDebugOverlay() {
 }
 
 func (w *World) Close() {
-	w.destroyRacingDebugOverlay()
+	w.hudPresenter.destroyRacingDebugOverlay(w)
 	if w.vehicleAudio != nil {
 		w.vehicleAudio.Destroy()
 		w.vehicleAudio = nil

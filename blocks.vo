@@ -5,8 +5,8 @@ import (
 	"github.com/vo-lang/voplay/scene3d"
 )
 
-func (w *World) buildLevel() error {
-	return w.buildPrimitiveLevel()
+func (t *TrackRuntime) buildLevel(w *World) error {
+	return w.trackRuntime.buildPrimitiveLevel(w)
 }
 
 func boxPhysics(scale voplay.Vec3) *scene3d.Physics {
