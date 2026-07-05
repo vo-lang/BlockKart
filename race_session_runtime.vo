@@ -1,7 +1,6 @@
 package main
 
 import (
-	"math"
 	"github.com/vo-lang/voplay"
 	"github.com/vo-lang/voplay/scene3d"
 )

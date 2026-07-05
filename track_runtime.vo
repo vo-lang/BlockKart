@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"math"
 	"github.com/vo-lang/voplay"
-	"github.com/vo-lang/voplay/primitive3d"
 	"github.com/vo-lang/voplay/scene3d"
 )
 

@@ -2,7 +2,6 @@ package main
 
 import (
 	"errors"
-	"math"
 	"time"
 	"github.com/vo-lang/voplay"
 	"github.com/vo-lang/voplay/scene3d"
