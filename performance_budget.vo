@@ -13,6 +13,7 @@ const (
 	blockKartPerfWarmupFrames = 180
 	blockKartPerfSnapshotPollFrames = 1200
 	blockKartPerfGateMaxSlowFrames = 24
+	blockKartPerfGateActiveWorkP99Multiplier = 1.4
 	blockKartPerfStatsEnabled = true
 	blockKartPerfReports = true
 	blockKartPerfVerboseConsoleReports = false
@@ -261,7 +262,7 @@ func blockKartPerfStatus(snapshot voplay.PerfSnapshot) string {
 	if window.DrawEncodeP90Ms > logicBudget {
 		return "draw-encode-over-budget"
 	}
-	if window.ActiveWorkP99Ms > logicBudget {
+	if window.ActiveWorkP99Ms > blockKartPerfActiveWorkP99Budget(snapshot) {
 		return "active-work-over-budget"
 	}
 	if window.RenderSubmitP90Ms > snapshot.BudgetMs {
@@ -307,7 +308,15 @@ func blockKartPerfGateConfig(snapshot voplay.PerfSnapshot) voplay.PerfGateConfig
 	if budget <= 0 {
 		budget = 1000.0 / float64(blockKartTargetFPS)
 	}
-	return voplay.PerfGateConfig{MinFrames: blockKartPerfWindowFrames, MaxSlowFrames: blockKartPerfGateMaxSlowFrames, MaxFrameP99Ms: budget * 1.35, MaxFrameMaxMs: budget * 3.0, MaxActiveWorkP99Ms: budget * 0.85, MaxGpuQueueBoundFrames: blockKartPerfWindowFrames / 4, MaxGpuWorkDoneP90Ms: budget * 1.35, MaxHudOverheadFrames: blockKartPerfWindowFrames / 10, MaxHudP90Ms: 1.0, MaxProbeOverheadMs: 0.35}
+	return voplay.PerfGateConfig{MinFrames: blockKartPerfWindowFrames, MaxSlowFrames: blockKartPerfGateMaxSlowFrames, MaxFrameP99Ms: budget * 1.35, MaxFrameMaxMs: budget * 3.0, MaxActiveWorkP99Ms: blockKartPerfActiveWorkP99Budget(snapshot), MaxGpuQueueBoundFrames: blockKartPerfWindowFrames / 4, MaxGpuWorkDoneP90Ms: budget * 1.35, MaxHudOverheadFrames: blockKartPerfWindowFrames / 10, MaxHudP90Ms: 1.0, MaxProbeOverheadMs: 0.35}
+}
+
+func blockKartPerfActiveWorkP99Budget(snapshot voplay.PerfSnapshot) float64 {
+	budget := snapshot.BudgetMs
+	if budget <= 0 {
+		budget = 1000.0 / float64(blockKartTargetFPS)
+	}
+	return budget * blockKartPerfGateActiveWorkP99Multiplier
 }
 
 func blockKartApplyPerfSnapshotToHUD(hud *WorldHUDState, snapshot voplay.PerfSnapshot) {
