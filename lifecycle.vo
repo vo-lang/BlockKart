@@ -61,14 +61,3 @@ func blockKartReportFailure(g *voplay.GameCtx, report *BlockKartFailureReport) {
 	}
 	println(blockKartFailureReportMarker + report.JSON())
 }
-
-func blockKartLifecycleJSON(state, startupPhase string) string {
-	return "{" + "\"state\":" + jsonString(state) + ",\"startupPhase\":" + jsonString(startupPhase) + "}"
-}
-
-func (r *BlockKartFailureReport) JSON() string {
-	if r == nil {
-		return "{}"
-	}
-	return "{" + "\"lifecycleState\":" + jsonString(r.LifecycleState) + ",\"startupPhase\":" + jsonString(r.StartupPhase) + ",\"owner\":" + jsonString(r.Owner) + ",\"subsystem\":" + jsonString(r.Subsystem) + ",\"developerMessage\":" + jsonString(r.DeveloperMessage) + ",\"playerMessage\":" + jsonString(r.PlayerMessage) + "}"
-}

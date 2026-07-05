@@ -114,7 +114,8 @@ func (w *World) updateKartRenderPose(alpha float64) {
 
 func (w *World) currentKartRenderSpeed() float64 {
 	if w.vehicle != nil {
-		return w.vehicle.Speed
+		telemetry := scene3d.ProductVehicleTelemetry(w.vehicle)
+		return telemetry.Speed
 	}
 	return w.kartSpeed
 }

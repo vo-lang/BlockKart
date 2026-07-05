@@ -25,3 +25,73 @@ func jsonString(value string) string {
 	}
 	return out + "\""
 }
+
+
+type blockKartJSONField struct {
+	Key string
+	Value string
+}
+
+func blockKartJSONString(value string) string {
+	return jsonString(value)
+}
+
+func blockKartJSONFloatValue(value float64) string {
+	return jsonFloat(value)
+}
+
+func blockKartJSONBoolValue(value bool) string {
+	return jsonBool(value)
+}
+
+func blockKartJSONText(key, value string) blockKartJSONField {
+	return blockKartJSONField{Key: key, Value: blockKartJSONString(value)}
+}
+
+func blockKartJSONFloat(key string, value float64) blockKartJSONField {
+	return blockKartJSONField{Key: key, Value: blockKartJSONFloatValue(value)}
+}
+
+func blockKartJSONBool(key string, value bool) blockKartJSONField {
+	return blockKartJSONField{Key: key, Value: blockKartJSONBoolValue(value)}
+}
+
+func blockKartJSONInt(key string, value int) blockKartJSONField {
+	return blockKartJSONField{Key: key, Value: itoa(value)}
+}
+
+func blockKartJSONObject(fields []blockKartJSONField) string {
+	out := "{"
+	for i, field := range fields {
+		if i > 0 {
+			out += ","
+		}
+		out += blockKartJSONString(field.Key) + ":" + field.Value
+	}
+	return out + "}"
+}
+
+func blockKartEmitJSON(marker string, fields []blockKartJSONField) {
+	println(marker + blockKartJSONObject(fields))
+}
+
+func blockKartLifecycleJSON(state, startupPhase string) string {
+	return blockKartJSONObject([]blockKartJSONField{
+		blockKartJSONText("state", state),
+		blockKartJSONText("startupPhase", startupPhase),
+	})
+}
+
+func (r *BlockKartFailureReport) JSON() string {
+	if r == nil {
+		return "{}"
+	}
+	return blockKartJSONObject([]blockKartJSONField{
+		blockKartJSONText("lifecycleState", r.LifecycleState),
+		blockKartJSONText("startupPhase", r.StartupPhase),
+		blockKartJSONText("owner", r.Owner),
+		blockKartJSONText("subsystem", r.Subsystem),
+		blockKartJSONText("developerMessage", r.DeveloperMessage),
+		blockKartJSONText("playerMessage", r.PlayerMessage),
+	})
+}

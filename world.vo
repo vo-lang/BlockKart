@@ -333,7 +333,7 @@ func (w *World) primeIdleStartPhysicsSleep() {
 	if w.vehicle == nil {
 		return
 	}
-	w.vehicle.Grounded = true
+	scene3d.ProductPrimeVehicleIdleSleep(w.vehicle)
 	w.physicsIdleFrames = scene3d.DefaultVehicleIdleSleepConfig().WarmupFrames
 }
 
@@ -480,7 +480,7 @@ func (w *World) FixedUpdate(g *voplay.GameCtx, dt float64, debugOverlayVisible b
 		w.physicsIdleFrames = 0
 	}
 	w.beginKartPhysicsStep()
-	w.scene.StepAndSyncPhysics(dt)
+	scene3d.ProductStepAndSyncPhysics(w.scene, dt)
 	if profileFixedStep {
 		now := time.Now()
 		phaseStats.PhysicsMs = blockKartElapsedMs(phaseStart, now)
@@ -577,32 +577,25 @@ func (w *World) applyKartDrive(g *voplay.GameCtx, dt float64) {
 		}
 		w.drifting = state.Drifting
 		w.driftCharge = state.DriftCharge
-		w.kartYaw = w.vehicle.Yaw
-		w.kartSpeed = w.vehicle.Speed
+		telemetry := scene3d.ProductVehicleTelemetry(w.vehicle)
+		w.kartYaw = telemetry.Yaw
+		w.kartSpeed = telemetry.Speed
 		return
 	}
 	w.vehicle.UpdateIntent(intent, dt)
-	w.drifting = w.vehicle.Drifting
+	telemetry := scene3d.ProductVehicleTelemetry(w.vehicle)
+	w.drifting = telemetry.Drifting
 	w.driftCharge = 0
-	w.kartYaw = w.vehicle.Yaw
-	w.kartSpeed = w.vehicle.Speed
+	w.kartYaw = telemetry.Yaw
+	w.kartSpeed = telemetry.Speed
 }
 
 func (w *World) shouldSleepKartPhysics() bool {
 	if w.vehicle == nil {
 		return false
 	}
-	return scene3d.VehicleShouldSleepIdlePhysics(scene3d.VehicleIdleSleepSample{
-		Intent: w.lastVehicleIntent,
-		Velocity: w.vehicle.LinearVelocity(),
-		AngularVelocity: w.vehicle.AngularVelocity(),
-		KartSpeed: w.kartSpeed,
-		Grounded: w.vehicle.Grounded,
-		IdleFrames: w.physicsIdleFrames,
-		Boosting: w.boostTimer > 0,
-		Drifting: w.drifting,
-		AssistActive: w.roadEdgeAssistActive,
-	}, scene3d.DefaultVehicleIdleSleepConfig())
+	sample := scene3d.ProductVehicleIdleSleepSample(w.vehicle, w.lastVehicleIntent, w.kartSpeed, w.physicsIdleFrames, w.boostTimer > 0, w.drifting, w.roadEdgeAssistActive)
+	return scene3d.VehicleShouldSleepIdlePhysics(sample, scene3d.DefaultVehicleIdleSleepConfig())
 }
 
 func blockKartElapsedMs(start time.Time, end time.Time) float64 {

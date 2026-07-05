@@ -256,8 +256,7 @@ func (w *World) restartRun() {
 	w.kartSpeed = 0
 	w.kartYaw = w.startYaw
 	if w.vehicle != nil {
-		w.vehicle.Speed = 0
-		w.vehicle.Yaw = w.startYaw
+		scene3d.ResetVehicleMotionState(w.vehicle)
 	}
 	w.boostTimer = 0
 	w.driftCharge = 0
