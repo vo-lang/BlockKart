@@ -216,7 +216,7 @@ func (s *PlayState) restartRun(g *voplay.GameCtx) {
 	}
 	s.setLifecycle(g, BlockKartLifecycleRestarting, "raceRestart")
 	s.captureRacePersistence()
-	s.world.restartRun()
+	s.world.raceSession.restartRun(s.world)
 	s.world.SetRenderDebugMode(s.renderDebugMode)
 	s.world.SetHeroCameraVisible(s.heroCameraVisible)
 	s.elapsed = 0
