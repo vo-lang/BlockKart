@@ -537,7 +537,7 @@ func (r *RaceSession) startRace(w *BlockKartRuntimeContext, g *voplay.GameCtx) {
 	w.raceState = BlockKartRaceStateRunning
 	w.message = "Go!"
 	w.messageTimer = 1.1
-	blockKartReportWorldDiagnostics(g, BlockKartLifecycleRunning, "race", "raceStart", w)
+	blockKartReportRuntimeDiagnostics(g, BlockKartLifecycleRunning, "race", "raceStart", w)
 }
 
 func (r *RaceSession) reportRaceResultOnce(w *BlockKartRuntimeContext, g *voplay.GameCtx) {
@@ -545,7 +545,7 @@ func (r *RaceSession) reportRaceResultOnce(w *BlockKartRuntimeContext, g *voplay
 		return
 	}
 	w.raceResultReported = true
-	blockKartReportWorldDiagnostics(g, BlockKartLifecycleRunning, "race", "raceFinished", w)
+	blockKartReportRuntimeDiagnostics(g, BlockKartLifecycleRunning, "race", "raceFinished", w)
 }
 
 func (k *KartRig) applyKartDrive(w *BlockKartRuntimeContext, g *voplay.GameCtx, dt float64) {

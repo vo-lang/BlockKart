@@ -184,7 +184,7 @@ func (p BlockKartTuningPreset) KartControllerConfig() scene3d.KartControllerConf
 	return cfg
 }
 
-func blockKartReportVehicleDiagnostics(g *voplay.GameCtx, lifecycleState, startupPhase, phase string, w *World) {
+func blockKartReportVehicleDiagnostics(g *voplay.GameCtx, lifecycleState, startupPhase, phase string, w *BlockKartRuntimeContext) {
 	tuning := defaultBlockKartTuningPreset()
 	settings := defaultBlockKartSettings()
 	state := scene3d.KartControllerState{}
@@ -271,7 +271,7 @@ func blockKartReportVehicleDiagnostics(g *voplay.GameCtx, lifecycleState, startu
 	})
 }
 
-func blockKartReportRaceDiagnostics(g *voplay.GameCtx, lifecycleState, startupPhase, phase string, w *World) {
+func blockKartReportRaceDiagnostics(g *voplay.GameCtx, lifecycleState, startupPhase, phase string, w *BlockKartRuntimeContext) {
 	settings := defaultBlockKartSettings()
 	raceState := BlockKartRaceStateReady
 	courseTime := 0.0
@@ -330,7 +330,7 @@ func blockKartReportRaceDiagnostics(g *voplay.GameCtx, lifecycleState, startupPh
 	})
 }
 
-func wBoostTimer(w *World) float64 {
+func wBoostTimer(w *BlockKartRuntimeContext) float64 {
 	if w == nil {
 		return 0
 	}

@@ -6,13 +6,21 @@ import (
 )
 
 func blockKartReportWorldDiagnostics(g *voplay.GameCtx, lifecycleState, startupPhase, phase string, w *World) {
+	var ctx *BlockKartRuntimeContext
+	if w != nil {
+		ctx = w.BlockKartRuntimeContext
+	}
+	blockKartReportRuntimeDiagnostics(g, lifecycleState, startupPhase, phase, ctx)
+}
+
+func blockKartReportRuntimeDiagnostics(g *voplay.GameCtx, lifecycleState, startupPhase, phase string, w *BlockKartRuntimeContext) {
 	blockKartReportAssetDiagnostics(g, lifecycleState, startupPhase, phase, w)
 	blockKartReportSceneDiagnostics(g, lifecycleState, startupPhase, phase, w)
 	blockKartReportVehicleDiagnostics(g, lifecycleState, startupPhase, phase, w)
 	blockKartReportRaceDiagnostics(g, lifecycleState, startupPhase, phase, w)
 }
 
-func blockKartReportAssetDiagnostics(g *voplay.GameCtx, lifecycleState, startupPhase, phase string, w *World) {
+func blockKartReportAssetDiagnostics(g *voplay.GameCtx, lifecycleState, startupPhase, phase string, w *BlockKartRuntimeContext) {
 	assetReport := voplay.AssetReport{}
 	assetGroup := ""
 	skyboxLoaded := false
@@ -73,7 +81,7 @@ func blockKartReportAssetDiagnostics(g *voplay.GameCtx, lifecycleState, startupP
 	})
 }
 
-func blockKartReportSceneDiagnostics(g *voplay.GameCtx, lifecycleState, startupPhase, phase string, w *World) {
+func blockKartReportSceneDiagnostics(g *voplay.GameCtx, lifecycleState, startupPhase, phase string, w *BlockKartRuntimeContext) {
 	activeEntities := 0
 	modelEntities := 0
 	staticRenderableEntities := 0
