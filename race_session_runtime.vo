@@ -6,7 +6,7 @@ import (
 )
 
 func (w *World) Update(g *voplay.GameCtx, dt float64, debugOverlayVisible bool) {
-	w.core.trackRuntime.advanceRenderStress(w, g)
+	w.core.trackRuntime.advanceRenderStress(w.BlockKartRuntimeContext, g)
 	w.race.raceSession.updateKartRenderPose(w.BlockKartRuntimeContext, g.Alpha)
 	w.race.raceSession.updateRacingCamera(w.BlockKartRuntimeContext, dt, debugOverlayVisible)
 	w.core.scene.UpdateAudio()

@@ -65,11 +65,10 @@ func (t *TrackRuntime) beginRenderStressPrimitive10k(w *BlockKartRuntimePorts) {
 	}
 }
 
-func (t *TrackRuntime) advanceRenderStress(world *World, g *voplay.GameCtx) {
-	if world == nil || world.BlockKartRuntimeContext == nil || g == nil || t.renderStressPrimitive10kBatch == nil {
+func (t *TrackRuntime) advanceRenderStress(w *BlockKartRuntimePorts, g *voplay.GameCtx) {
+	if w == nil || g == nil || t.renderStressPrimitive10kBatch == nil {
 		return
 	}
-	w := world.BlockKartRuntimeContext
 	primitive := w.core.trackRuntime.ensurePrimitiveScene(w)
 	end := t.renderStressPrimitive10kIndex + blockKartRenderStressPrimitive10kChunk
 	if end > blockKartRenderStressPrimitive10kCount {
@@ -90,7 +89,7 @@ func (t *TrackRuntime) advanceRenderStress(world *World, g *voplay.GameCtx) {
 	w.hud.renderStressApplied = true
 	w.hud.message = "Render stress: " + blockKartRenderStressPrimitive10k
 	w.hud.messageTimer = 1.5
-	blockKartReportWorldDiagnostics(g, BlockKartLifecycleRunning, "renderStress", blockKartRenderStressPrimitive10k, world)
+	blockKartReportRuntimeDiagnostics(g, BlockKartLifecycleRunning, "renderStress", blockKartRenderStressPrimitive10k, w)
 }
 
 func (t *TrackRuntime) renderStressPrimitive10kPlacement(primitive *PrimitiveVisualContent, i int) scene3d.BlockKartPrimitivePlacement {
