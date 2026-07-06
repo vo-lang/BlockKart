@@ -75,7 +75,7 @@ func blockKartRenderStressPerfReportBlocked(w *BlockKartRuntimePorts) bool {
 
 func (t *TrackRuntime) beginRenderStressPrimitive10k(w *BlockKartRuntimePorts) {
 	primitive := w.core.trackRuntime.ensurePrimitiveScene(w)
-	t.renderStressPrimitive10kBatch = primitive.BeginScatterBatch()
+	t.renderStressPrimitive10kBatch = primitive.BeginStressBatch()
 	t.renderStressPrimitive10kBatch.Reserve(blockKartRenderStressPrimitive10kCount)
 	t.renderStressPrimitive10kIndex = 0
 	t.renderStressPrimitive10kCenter = w.race.startPosition
