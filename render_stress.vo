@@ -51,15 +51,24 @@ func (t *TrackRuntime) addRenderStressPrimitive10k(w *BlockKartRuntimePorts) {
 	primitive := w.core.trackRuntime.ensurePrimitiveScene(w)
 	batch := primitive.BeginScatterBatch()
 	count := 10000
+	batch.Reserve(count)
 	columns := 100
 	spacing := 2.35
 	center := w.race.startPosition
+	rotations := make([]voplay.Quat, 0, 31)
+	for i := 0; i < 31; i++ {
+		rotations = append(rotations, voplay.QuatFromAxisAngle(voplay.Vec3{Y: 1}, float64(i)*0.07))
+	}
+	scales := make([]voplay.Vec3, 0, 60)
+	for i := 0; i < 60; i++ {
+		scales = append(scales, voplay.Vec3{X: 0.58 + float64(i%4)*0.08, Y: 0.42 + float64((i/3)%5)*0.04, Z: 0.58 + float64((i/5)%4)*0.08})
+	}
 	for i := 0; i < count; i++ {
 		col := i % columns
 		row := i / columns
 		x := center.X + (float64(col) - 49.5) * spacing
 		z := center.Z - 30.0 - float64(row) * spacing
-		y := center.Y - 0.85 + math.Sin(float64(i)*0.37)*0.12
+		y := center.Y - 0.85 + float64((i%13)-6)*0.018
 		shape := primitive.RoundedBox
 		if i % 11 == 0 {
 			shape = primitive.Sphere
@@ -72,8 +81,7 @@ func (t *TrackRuntime) addRenderStressPrimitive10k(w *BlockKartRuntimePorts) {
 		} else if i % 7 == 0 {
 			material = primitive.PebbleMat
 		}
-		scale := voplay.Vec3{X: 0.58 + float64(i%4)*0.08, Y: 0.42 + float64((i/3)%5)*0.04, Z: 0.58 + float64((i/5)%4)*0.08}
-		batch.Add(scene3d.BlockKartPrimitivePlacement{Shape: shape, Material: material, Position: voplay.Vec3{X: x, Y: y, Z: z}, Rotation: voplay.QuatFromAxisAngle(voplay.Vec3{Y: 1}, float64(i%31)*0.07), Scale: scale, Flags: scene3d.BlockKartPrimitiveNoShadow, LodFar: 150})
+		batch.Add(scene3d.BlockKartPrimitivePlacement{Shape: shape, Material: material, Position: voplay.Vec3{X: x, Y: y, Z: z}, Rotation: rotations[i%31], Scale: scales[i%60], Flags: scene3d.BlockKartPrimitiveNoShadow, LodFar: 150})
 	}
 	batch.End()
 }
