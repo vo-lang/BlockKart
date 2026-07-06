@@ -13,7 +13,7 @@ func (w *World) Draw(g *voplay.GameCtx, debugOverlayVisible bool) {
 		perf = g.DebugOverlayStats()
 	}
 	perfSnapshot := voplay.PerfSnapshot{}
-	if debugOverlayVisible || w.hudPresenter.shouldPollPerfSnapshotForConsoleReport(w) {
+	if debugOverlayVisible || w.hudPresenter.shouldPollPerfSnapshotForConsoleReport(w.BlockKartRuntimeContext) {
 		perfSnapshot = g.GetPerfSnapshot()
 	}
 	if w.perfAnalyzer.ShouldReport(perfSnapshot) {
@@ -22,9 +22,9 @@ func (w *World) Draw(g *voplay.GameCtx, debugOverlayVisible bool) {
 	if w.terrainCameraView > 0 {
 		return
 	}
-	hud := w.hudPresenter.hudState(w, debugOverlayVisible, perf, perfSnapshot)
+	hud := w.hudPresenter.hudState(w.BlockKartRuntimeContext, debugOverlayVisible, perf, perfSnapshot)
 	if debugOverlayVisible {
-		w.hudPresenter.updateDebugHUDLines(w, &hud, perfSnapshot)
+		w.hudPresenter.updateDebugHUDLines(w.BlockKartRuntimeContext, &hud, perfSnapshot)
 	}
 	w.hudPresenter.Capture(hud, w.debugHudLines[:w.debugHudLineCount])
 	drawWorldHUD(&w.theme, g, &hud)

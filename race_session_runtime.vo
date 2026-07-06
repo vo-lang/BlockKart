@@ -6,8 +6,8 @@ import (
 )
 
 func (w *World) Update(g *voplay.GameCtx, dt float64, debugOverlayVisible bool) {
-	w.raceSession.updateKartRenderPose(w, g.Alpha)
-	w.raceSession.updateRacingCamera(w, dt, debugOverlayVisible)
+	w.raceSession.updateKartRenderPose(w.BlockKartRuntimeContext, g.Alpha)
+	w.raceSession.updateRacingCamera(w.BlockKartRuntimeContext, dt, debugOverlayVisible)
 	w.scene.UpdateAudio()
 	w.scene.UpdateEmitters(dt)
 	w.scene.TickAnimations(dt)

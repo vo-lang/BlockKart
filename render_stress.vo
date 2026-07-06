@@ -25,19 +25,19 @@ func (w *World) ActivateRenderStressProfile(g *voplay.GameCtx, profile string) {
 	w.renderStressProfile = profile
 	w.renderStressApplied = false
 	if profile == blockKartRenderStressPrimitive10k {
-		w.trackRuntime.addRenderStressPrimitive10k(w)
+		w.trackRuntime.addRenderStressPrimitive10k(w.BlockKartRuntimeContext)
 		w.renderStressApplied = true
 	} else if profile == blockKartRenderStressWater {
-		w.trackRuntime.addRenderStressWater(w)
+		w.trackRuntime.addRenderStressWater(w.BlockKartRuntimeContext)
 		w.renderStressApplied = true
 	} else if profile == blockKartRenderStressResourceChurn {
-		w.trackRuntime.addRenderStressResourceChurn(w)
+		w.trackRuntime.addRenderStressResourceChurn(w.BlockKartRuntimeContext)
 		w.renderStressApplied = true
 	} else if profile == blockKartRenderStressChunkedWorldDrive {
-		w.trackRuntime.addRenderStressChunkedWorldDrive(w)
+		w.trackRuntime.addRenderStressChunkedWorldDrive(w.BlockKartRuntimeContext)
 		w.renderStressApplied = true
 	} else if profile == blockKartRenderStressShadowPostMatrix {
-		w.trackRuntime.addRenderStressShadowPostMatrix(w)
+		w.trackRuntime.addRenderStressShadowPostMatrix(w.BlockKartRuntimeContext)
 		w.renderStressApplied = true
 	}
 	if w.renderStressApplied {
