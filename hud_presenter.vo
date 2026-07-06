@@ -13,10 +13,11 @@ func (w *World) Draw(g *voplay.GameCtx, debugOverlayVisible bool) {
 		perf = g.DebugOverlayStats()
 	}
 	perfSnapshot := voplay.PerfSnapshot{}
-	if debugOverlayVisible || w.hud.hudPresenter.shouldPollPerfSnapshotForConsoleReport(w.BlockKartRuntimeContext) {
+	perfReportBlocked := blockKartRenderStressPerfReportBlocked(w.BlockKartRuntimeContext)
+	if debugOverlayVisible || (!perfReportBlocked && w.hud.hudPresenter.shouldPollPerfSnapshotForConsoleReport(w.BlockKartRuntimeContext)) {
 		perfSnapshot = g.GetPerfSnapshot()
 	}
-	if w.hud.perfAnalyzer.ShouldReport(perfSnapshot) {
+	if !perfReportBlocked && w.hud.perfAnalyzer.ShouldReport(perfSnapshot) {
 		w.hud.perfAnalyzer.Report(perfSnapshot, w.hud.fixedProfiler.Stats(), g.Screen)
 	}
 	if w.hud.terrainCameraView > 0 {

@@ -64,6 +64,13 @@ func blockKartResetRenderStressPerfWindow(w *BlockKartRuntimePorts, g *voplay.Ga
 	w.hud.perfSnapshotPollFrame = 0
 }
 
+func blockKartRenderStressPerfReportBlocked(w *BlockKartRuntimePorts) bool {
+	if w == nil {
+		return false
+	}
+	return w.core.trackRuntime.renderStressPrimitive10kBatch != nil
+}
+
 func (t *TrackRuntime) beginRenderStressPrimitive10k(w *BlockKartRuntimePorts) {
 	primitive := w.core.trackRuntime.ensurePrimitiveScene(w)
 	t.renderStressPrimitive10kBatch = primitive.BeginScatterBatch()
