@@ -13,7 +13,7 @@ const (
 	blockKartRenderStressChunkedWorldDrive = "chunked-world-drive"
 	blockKartRenderStressShadowPostMatrix = "shadow-post-matrix"
 	blockKartRenderStressPrimitive10kCount = 10000
-	blockKartRenderStressPrimitive10kChunk = 128
+	blockKartRenderStressPrimitive10kChunk = 48
 	blockKartRenderStressPrimitive10kColumns = 100
 )
 
