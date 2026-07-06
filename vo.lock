@@ -55,9 +55,9 @@ deps = []
 path = "github.com/vo-lang/voplay"
 version = "v0.1.34"
 vo = "^0.1.0"
-commit = "e99a60ae1b099b46d8aa74ef7970fe96c193a8bf"
-release_manifest = "sha256:1810e0f6dd6419c1fd1a35bf5e5738bc8e546673e5beaa92a534a059261b5902"
-source = "sha256:b7da7afc9f4609b83a30d3a303ed89a0ca9bb24465c98f4f8e683593df9b212b"
+commit = "5a2625e6f6b59320ab2174fa68ed3d175e85d18f"
+release_manifest = "sha256:181253b76f2206e7cb0b3bee9e3d3d366ea2735b40de9f7a75af03f61355f7c9"
+source = "sha256:7936676b7c8ca8ec767aaf8b4abe32b3eee98b598def2d15f9ccb71f22ee17e9"
 deps = ["github.com/vo-lang/vogui", "github.com/vo-lang/vopack"]
 
 [[resolved.artifact]]
