@@ -43,10 +43,25 @@ func (w *World) ActivateRenderStressProfile(g *voplay.GameCtx, profile string) {
 		w.hud.renderStressApplied = true
 	}
 	if w.hud.renderStressApplied {
+		blockKartResetRenderStressPerfWindow(w.BlockKartRuntimeContext, g)
 		w.hud.message = "Render stress: " + profile
 		w.hud.messageTimer = 1.5
 	}
 	blockKartReportWorldDiagnostics(g, BlockKartLifecycleRunning, "renderStress", profile, w)
+}
+
+func blockKartResetRenderStressPerfWindow(w *BlockKartRuntimePorts, g *voplay.GameCtx) {
+	if w == nil || g == nil || !blockKartPerfStatsEnabled {
+		return
+	}
+	mode := voplay.PerfModeStats
+	snapshot := g.GetPerfSnapshot()
+	if snapshot.Enabled && snapshot.Mode != "" {
+		mode = snapshot.Mode
+	}
+	g.ResetPerfStats(mode)
+	w.hud.perfAnalyzer = BlockKartPerfAnalyzer{}
+	w.hud.perfSnapshotPollFrame = 0
 }
 
 func (t *TrackRuntime) beginRenderStressPrimitive10k(w *BlockKartRuntimePorts) {
@@ -87,6 +102,7 @@ func (t *TrackRuntime) advanceRenderStress(w *BlockKartRuntimePorts, g *voplay.G
 	t.renderStressPrimitive10kRotations = nil
 	t.renderStressPrimitive10kScales = nil
 	w.hud.renderStressApplied = true
+	blockKartResetRenderStressPerfWindow(w, g)
 	w.hud.message = "Render stress: " + blockKartRenderStressPrimitive10k
 	w.hud.messageTimer = 1.5
 	blockKartReportRuntimeDiagnostics(g, BlockKartLifecycleRunning, "renderStress", blockKartRenderStressPrimitive10k, w)
