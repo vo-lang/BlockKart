@@ -9,8 +9,6 @@ import (
 )
 
 const (
-	blockKartVehicleReportMarker = "__BLOCKKART_VEHICLE_REPORT__"
-	blockKartRaceReportMarker = "__BLOCKKART_RACE_REPORT__"
 	blockKartProductSaveRoot = "/persist/blockkart"
 	blockKartProductSaveKey = "product_state.v1"
 	BlockKartRaceStateReady = "Ready"
@@ -232,7 +230,7 @@ func blockKartReportVehicleDiagnostics(g *voplay.GameCtx, lifecycleState, startu
 		surface.Friction = state.SurfaceFriction
 		surface.OnRoad = state.SurfaceOnRoad
 	}
-	blockKartEmitJSON(blockKartVehicleReportMarker, []blockKartJSONField{
+	blockKartEmitVehicleReport([]blockKartJSONField{
 		blockKartJSONText("lifecycleState", lifecycleState),
 		blockKartJSONText("startupPhase", startupPhase),
 		blockKartJSONText("phase", phase),
@@ -304,7 +302,7 @@ func blockKartReportRaceDiagnostics(g *voplay.GameCtx, lifecycleState, startupPh
 		totalCollectibles = len(w.collectibles)
 		nextGate = w.nextGateLabel
 	}
-	blockKartEmitJSON(blockKartRaceReportMarker, []blockKartJSONField{
+	blockKartEmitRaceReport([]blockKartJSONField{
 		blockKartJSONText("lifecycleState", lifecycleState),
 		blockKartJSONText("startupPhase", startupPhase),
 		blockKartJSONText("phase", phase),

@@ -5,11 +5,6 @@ import (
 	"github.com/vo-lang/voplay/scene3d"
 )
 
-const (
-	blockKartAssetReportMarker = "__BLOCKKART_ASSET_REPORT__"
-	blockKartSceneReportMarker = "__BLOCKKART_SCENE_REPORT__"
-)
-
 func blockKartReportWorldDiagnostics(g *voplay.GameCtx, lifecycleState, startupPhase, phase string, w *World) {
 	blockKartReportAssetDiagnostics(g, lifecycleState, startupPhase, phase, w)
 	blockKartReportSceneDiagnostics(g, lifecycleState, startupPhase, phase, w)
@@ -48,7 +43,7 @@ func blockKartReportAssetDiagnostics(g *voplay.GameCtx, lifecycleState, startupP
 			primitiveTemplateReuses = w.runtimeCache.primitiveTemplateReuses
 		}
 	}
-	blockKartEmitJSON(blockKartAssetReportMarker, []blockKartJSONField{
+	blockKartEmitAssetReport([]blockKartJSONField{
 		blockKartJSONText("lifecycleState", lifecycleState),
 		blockKartJSONText("startupPhase", startupPhase),
 		blockKartJSONText("phase", phase),
@@ -160,7 +155,7 @@ func blockKartReportSceneDiagnostics(g *voplay.GameCtx, lifecycleState, startupP
 			visibleWaterSurfaces = diag.Primitive.VisibleWaterInstances
 		}
 	}
-	blockKartEmitJSON(blockKartSceneReportMarker, []blockKartJSONField{
+	blockKartEmitSceneReport([]blockKartJSONField{
 		blockKartJSONText("lifecycleState", lifecycleState),
 		blockKartJSONText("startupPhase", startupPhase),
 		blockKartJSONText("phase", phase),

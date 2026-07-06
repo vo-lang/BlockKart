@@ -27,7 +27,7 @@ type TrackRuntime struct {
 }
 
 type HUDPresenter struct {
-	LastState WorldHUDState
+	LastState BlockKartHUDState
 	DebugLines []string
 }
 
@@ -81,7 +81,7 @@ func (t *TrackRuntime) Bind(track *scene3d.Track, spawn *scene3d.TrackSpawnResul
 	t.Spec = spec
 }
 
-func (h *HUDPresenter) Capture(state WorldHUDState, lines []string) {
+func (h *HUDPresenter) Capture(state BlockKartHUDState, lines []string) {
 	if h == nil {
 		return
 	}

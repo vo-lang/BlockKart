@@ -5,7 +5,7 @@ import (
 	"github.com/vo-lang/voplay/scene3d"
 )
 
-func (t *TrackRuntime) buildLevel(w *World) error {
+func (t *TrackRuntime) buildLevel(w *BlockKartRuntimeContext) error {
 	return w.trackRuntime.buildPrimitiveLevel(w)
 }
 

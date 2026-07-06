@@ -47,14 +47,14 @@ type MovingObstacle struct {
 	Phase float64
 }
 
-func (r *RaceSession) addCollectible(w *World, position voplay.Vec3, tag string) {
+func (r *RaceSession) addCollectible(w *BlockKartRuntimeContext, position voplay.Vec3, tag string) {
 	primitive := w.trackRuntime.ensurePrimitiveScene(w)
 	core := primitive.AddDynamic(primitive.RoundedBox, primitive.OrbMat, position, voplay.QuatFromAxisAngle(voplay.Vec3{Y: 1}, 0.78), voplay.Vec3{X: 1.15, Y: 1.15, Z: 1.15}, w.theme.OrbColor)
 	glow := primitive.AddDynamic(primitive.Sphere, primitive.GlowMat, position.Add(voplay.Vec3{Y: -0.12}), voplay.QuatIdentity(), voplay.Vec3{X: 1.55, Y: 0.3, Z: 1.55}, w.theme.GoalTrimColor)
 	w.collectibles = append(w.collectibles, &Collectible{CorePrimitive: core, GlowPrimitive: glow, Position: position})
 }
 
-func (r *RaceSession) addCollectibleLine(w *World, start, end voplay.Vec3, count int, tag string) {
+func (r *RaceSession) addCollectibleLine(w *BlockKartRuntimeContext, start, end voplay.Vec3, count int, tag string) {
 	if count <= 1 {
 		w.raceSession.addCollectible(w, start, tag + "_0")
 		return
@@ -65,11 +65,11 @@ func (r *RaceSession) addCollectibleLine(w *World, start, end voplay.Vec3, count
 	}
 }
 
-func (r *RaceSession) addCheckpoint(w *World, position, respawn voplay.Vec3, yaw float64, label string) {
+func (r *RaceSession) addCheckpoint(w *BlockKartRuntimeContext, position, respawn voplay.Vec3, yaw float64, label string) {
 	w.checkpoints = append(w.checkpoints, newCheckpoint(position, respawn, yaw, label, checkpointRadius))
 }
 
-func (r *RaceSession) addBoostPad(w *World, position voplay.Vec3, radius float64) {
+func (r *RaceSession) addBoostPad(w *BlockKartRuntimeContext, position voplay.Vec3, radius float64) {
 	w.boostPads = append(w.boostPads, newBoostPad(position, radius))
 }
 
@@ -81,7 +81,7 @@ func newBoostPad(position voplay.Vec3, radius float64) *BoostPad {
 	return &BoostPad{Position: position, Radius: radius, RadiusSq: radius * radius}
 }
 
-func (r *RaceSession) addMovingObstacle(w *World, position, scale, axis voplay.Vec3, amplitude, speed, phase float64, tag string) {
+func (r *RaceSession) addMovingObstacle(w *BlockKartRuntimeContext, position, scale, axis voplay.Vec3, amplitude, speed, phase float64, tag string) {
 	entity := w.scene.Spawn(scene3d.EntityDesc{Position: position, Rotation: voplay.QuatIdentity(), Scale: voplay.Vec3{X: 1, Y: 1, Z: 1}, Tag: tag + "_physics", Physics: boxPhysics(scale), PickMode: scene3d.PickDisabled})
 	entity.Visible = false
 	primitive := w.trackRuntime.ensurePrimitiveScene(w)
@@ -89,7 +89,7 @@ func (r *RaceSession) addMovingObstacle(w *World, position, scale, axis voplay.V
 	w.obstacles = append(w.obstacles, &MovingObstacle{Entity: entity, Visual: visual, Origin: position, Axis: axis.Normalize(), Amplitude: amplitude, Speed: speed, Phase: phase})
 }
 
-func (r *RaceSession) updateGameplay(w *World, g *voplay.GameCtx, dt float64) {
+func (r *RaceSession) updateGameplay(w *BlockKartRuntimeContext, g *voplay.GameCtx, dt float64) {
 	w.messageTimer = maxFloat(0, w.messageTimer - dt)
 	w.boostTimer = maxFloat(0, w.boostTimer - dt)
 	if w.raceState != BlockKartRaceStateRunning {
@@ -105,7 +105,7 @@ func (r *RaceSession) updateGameplay(w *World, g *voplay.GameCtx, dt float64) {
 	w.raceSession.updateRaceProgress(w, g)
 }
 
-func (r *RaceSession) updateMovingObstacles(w *World) {
+func (r *RaceSession) updateMovingObstacles(w *BlockKartRuntimeContext) {
 	for _, obstacle := range w.obstacles {
 		if obstacle == nil || obstacle.Entity == nil {
 			continue
@@ -119,7 +119,7 @@ func (r *RaceSession) updateMovingObstacles(w *World) {
 	}
 }
 
-func (r *RaceSession) updateCollectibles(w *World) {
+func (r *RaceSession) updateCollectibles(w *BlockKartRuntimeContext) {
 	if w.player == nil {
 		return
 	}
@@ -143,7 +143,7 @@ func (r *RaceSession) updateCollectibles(w *World) {
 	}
 }
 
-func (r *RaceSession) updateBoostPads(w *World) {
+func (r *RaceSession) updateBoostPads(w *BlockKartRuntimeContext) {
 	if w.player == nil {
 		return
 	}
@@ -163,7 +163,7 @@ func (r *RaceSession) updateBoostPads(w *World) {
 	}
 }
 
-func (r *RaceSession) updateRaceProgress(w *World, g *voplay.GameCtx) {
+func (r *RaceSession) updateRaceProgress(w *BlockKartRuntimeContext, g *voplay.GameCtx) {
 	if w.finished || w.player == nil || len(w.checkpoints) == 0 {
 		return
 	}
@@ -203,7 +203,7 @@ func (r *RaceSession) updateRaceProgress(w *World, g *voplay.GameCtx) {
 	w.raceSession.refreshNextGateLabel(w)
 }
 
-func (r *RaceSession) completeRace(w *World, g *voplay.GameCtx) {
+func (r *RaceSession) completeRace(w *BlockKartRuntimeContext, g *voplay.GameCtx) {
 	w.finished = true
 	w.raceState = BlockKartRaceStateFinished
 	w.finishTime = w.courseTime
@@ -218,7 +218,7 @@ func (r *RaceSession) completeRace(w *World, g *voplay.GameCtx) {
 	w.raceSession.reportRaceResultOnce(w, g)
 }
 
-func (r *RaceSession) refreshNextGateLabel(w *World) {
+func (r *RaceSession) refreshNextGateLabel(w *BlockKartRuntimeContext) {
 	if len(w.checkpoints) == 0 {
 		w.nextGateLabel = "Start"
 		return
@@ -234,14 +234,14 @@ func (r *RaceSession) refreshNextGateLabel(w *World) {
 	w.nextGateLabel = checkpoint.Label
 }
 
-func (r *RaceSession) respawnAtCheckpoint(w *World) {
+func (r *RaceSession) respawnAtCheckpoint(w *BlockKartRuntimeContext) {
 	w.kartRig.setKartPose(w, w.checkpointPosition, w.checkpointYaw)
 	w.raceSession.updateRacingCamera(w, 0, false)
 	w.message = "Back to " + w.checkpointLabel
 	w.messageTimer = 1.2
 }
 
-func (r *RaceSession) restartRun(w *World) {
+func (r *RaceSession) restartRun(w *BlockKartRuntimeContext) {
 	w.raceState = BlockKartRaceStateReady
 	w.raceResultReported = false
 	w.courseTime = 0

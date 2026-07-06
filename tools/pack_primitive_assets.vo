@@ -1,10 +1,6 @@
 package main
 
-import (
-	"github.com/vo-lang/vopack"
-	"github.com/vo-lang/voplay/scene3d"
-	"os"
-)
+import "github.com/vo-lang/voplay/scene3d"
 
 const primitiveAssetPackPath = "assets/blockkart.vpak"
 
@@ -16,49 +12,20 @@ func mustPack(err error) {
 	}
 }
 
-func addRuntimePackFile(w *vopack.PackWriter, seen map[string]bool, path string, kind string, deps []string) {
-	if path == "" || seen[path] {
-		return
-	}
-	seen[path] = true
-	mustPack(w.AddFile(path, path, vopack.EntryOpts{Type: kind, Dependencies: deps}))
-}
-
-func mapDependencyPaths(deps []scene3d.MapDependency) []string {
-	paths := []string{}
-	for _, dep := range deps {
-		if dep.Path != "" {
-			paths = append(paths, dep.Path)
-		}
-	}
-	return paths
-}
-
 func main() {
-	mustPack(os.MkdirAll("assets", 0755))
-	mapAsset, err := scene3d.LoadMapAsset(primitiveMapAssetPath)
-	mustPack(err)
-	mapDeps := scene3d.MapAssetDependencies(mapAsset, "assets/maps/primitive_track")
-	w, err := vopack.Create(primitiveAssetPackPath)
-	mustPack(err)
-	w.SetManifestInfo("BlockKart", "primitive-track")
-	seen := map[string]bool{}
-	addRuntimePackFile(w, seen, primitiveMapAssetPath, "map", mapDependencyPaths(mapDeps))
-	for _, dep := range mapDeps {
-		addRuntimePackFile(w, seen, dep.Path, dep.Kind, nil)
-	}
-	addRuntimePackFile(w, seen, "assets/effects/grass_card_atlas.png", "texture", nil)
-	addRuntimePackFile(w, seen, "assets/skybox/right.png", "texture", nil)
-	addRuntimePackFile(w, seen, "assets/skybox/left.png", "texture", nil)
-	addRuntimePackFile(w, seen, "assets/skybox/top.png", "texture", nil)
-	addRuntimePackFile(w, seen, "assets/skybox/bottom.png", "texture", nil)
-	addRuntimePackFile(w, seen, "assets/skybox/front.png", "texture", nil)
-	addRuntimePackFile(w, seen, "assets/skybox/back.png", "texture", nil)
-	addRuntimePackFile(w, seen, "assets/audio/kart_engine.wav", "audio", nil)
-	addRuntimePackFile(w, seen, "assets/audio/kart_skid.wav", "audio", nil)
-	addRuntimePackFile(w, seen, "assets/audio/kart_boost.wav", "audio", nil)
-	addRuntimePackFile(w, seen, "assets/audio/kart_grass.wav", "audio", nil)
-	addRuntimePackFile(w, seen, "assets/audio/kart_hit.wav", "audio", nil)
-	mustPack(w.Close())
+	mustPack(scene3d.WriteBlockKartRuntimePack(primitiveAssetPackPath, primitiveMapAssetPath, "assets/maps/primitive_track", []scene3d.BlockKartRuntimePackFile{
+		scene3d.BlockKartRuntimePackFile{Path: "assets/effects/grass_card_atlas.png", Kind: "texture"},
+		scene3d.BlockKartRuntimePackFile{Path: "assets/skybox/right.png", Kind: "texture"},
+		scene3d.BlockKartRuntimePackFile{Path: "assets/skybox/left.png", Kind: "texture"},
+		scene3d.BlockKartRuntimePackFile{Path: "assets/skybox/top.png", Kind: "texture"},
+		scene3d.BlockKartRuntimePackFile{Path: "assets/skybox/bottom.png", Kind: "texture"},
+		scene3d.BlockKartRuntimePackFile{Path: "assets/skybox/front.png", Kind: "texture"},
+		scene3d.BlockKartRuntimePackFile{Path: "assets/skybox/back.png", Kind: "texture"},
+		scene3d.BlockKartRuntimePackFile{Path: "assets/audio/kart_engine.wav", Kind: "audio"},
+		scene3d.BlockKartRuntimePackFile{Path: "assets/audio/kart_skid.wav", Kind: "audio"},
+		scene3d.BlockKartRuntimePackFile{Path: "assets/audio/kart_boost.wav", Kind: "audio"},
+		scene3d.BlockKartRuntimePackFile{Path: "assets/audio/kart_grass.wav", Kind: "audio"},
+		scene3d.BlockKartRuntimePackFile{Path: "assets/audio/kart_hit.wav", Kind: "audio"},
+	}))
 	println("packed", primitiveAssetPackPath)
 }

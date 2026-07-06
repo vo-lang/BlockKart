@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"math"
 	"github.com/vo-lang/voplay"
-	"github.com/vo-lang/voplay/primitive3d"
 	"github.com/vo-lang/voplay/scene3d"
 )
 
@@ -22,86 +21,20 @@ const (
 	primitiveTerrainY = -4.0
 	primitiveTerrainHeight = 38.0
 	primitiveLandmarkScale = 1.42
-	primitiveStaticBatchCellSize = 72.0
-	primitiveTreeDetailBatchCellSize = 36.0
-	primitiveRoadsideDetailBatchCellSize = 28.0
-	primitiveSmallDetailBatchCellSize = 24.0
-	primitiveFlowerDetailBatchCellSize = 16.0
-	primitiveScatterBatchCellSize = 36.0
 	primitiveTreeLodFar = 320.0
 	primitiveRoadsidePropLodFar = 190.0
 	primitiveSmallPropLodFar = 150.0
 	primitiveFlowerClumpLodFar = 88.0
 	primitiveContactShadowLodFar = 118.0
-	primitiveLayerStatic = "blockkart_static_primitives"
-	primitiveLayerTreeDetail = "blockkart_tree_detail_primitives"
-	primitiveLayerRoadsideDetail = "blockkart_roadside_detail_primitives"
-	primitiveLayerSmallDetail = "blockkart_small_detail_primitives"
-	primitiveLayerFlowerDetail = "blockkart_flower_detail_primitives"
-	primitiveLayerScatter = "blockkart_scatter_primitives"
-	primitiveLayerDynamic = "blockkart_dynamic_primitives"
 )
 
-type PrimitiveVisualContent struct {
-	ProductPrimitives *scene3d.ProductPrimitiveAuthoring
-	Static *primitive3d.Layer
-	TreeDetailStatic *primitive3d.Layer
-	RoadsideDetailStatic *primitive3d.Layer
-	SmallDetailStatic *primitive3d.Layer
-	FlowerDetailStatic *primitive3d.Layer
-	ScatterStatic *primitive3d.Layer
-	Dynamic *primitive3d.Layer
-	Box primitive3d.ShapeID
-	RoundedBox primitive3d.ShapeID
-	Sphere primitive3d.ShapeID
-	Cylinder primitive3d.ShapeID
-	Cone primitive3d.ShapeID
-	Wedge primitive3d.ShapeID
-	GrassCard primitive3d.ShapeID
-	NeedleLeaf primitive3d.ShapeID
-	RoadMat primitive3d.MaterialID
-	RoadStripeMat primitive3d.MaterialID
-	GrassMat primitive3d.MaterialID
-	GrassCardMat primitive3d.MaterialID
-	MeadowMat primitive3d.MaterialID
-	DirtDetailMat primitive3d.MaterialID
-	StoneMat primitive3d.MaterialID
-	PebbleMat primitive3d.MaterialID
-	CliffMat primitive3d.MaterialID
-	PaleStoneMat primitive3d.MaterialID
-	WoodMat primitive3d.MaterialID
-	LeafMat primitive3d.MaterialID
-	BushMat primitive3d.MaterialID
-	FlowerYellowMat primitive3d.MaterialID
-	FlowerWhiteMat primitive3d.MaterialID
-	WaterMat primitive3d.MaterialID
-	SignMat primitive3d.MaterialID
-	SignArrowMat primitive3d.MaterialID
-	PlayerMat primitive3d.MaterialID
-	TrimMat primitive3d.MaterialID
-	OrangeTrimMat primitive3d.MaterialID
-	WhiteMat primitive3d.MaterialID
-	TopBlueMat primitive3d.MaterialID
-	VisorMat primitive3d.MaterialID
-	DriverMat primitive3d.MaterialID
-	WheelMat primitive3d.MaterialID
-	MetalMat primitive3d.MaterialID
-	BoostMat primitive3d.MaterialID
-	GlowMat primitive3d.MaterialID
-	OrbMat primitive3d.MaterialID
-	HazardMat primitive3d.MaterialID
-	CloudMat primitive3d.MaterialID
-	CloudShadowMat primitive3d.MaterialID
-	ContactShadowMat primitive3d.MaterialID
-	TowerWallMat primitive3d.MaterialID
-	TowerRoofMat primitive3d.MaterialID
-}
+type PrimitiveVisualContent = scene3d.BlockKartPrimitiveContent
 
 type BlockKartPrimitiveTemplate struct {
 	Scene *PrimitiveVisualContent
 }
 
-type PrimitivePart = scene3d.PrimitiveAuthoringPart
+type PrimitivePart = scene3d.BlockKartPrimitivePart
 
 type PrimitiveKartBodyPart struct {
 	Part *PrimitivePart
@@ -139,7 +72,7 @@ type primitiveTrackPointDef struct {
 	Width float64
 }
 
-func (t *TrackRuntime) ensurePrimitiveScene(w *World) *PrimitiveVisualContent {
+func (t *TrackRuntime) ensurePrimitiveScene(w *BlockKartRuntimeContext) *PrimitiveVisualContent {
 	if w.primitive != nil {
 		return w.primitive
 	}
@@ -175,157 +108,15 @@ func (t *BlockKartPrimitiveTemplate) Instantiate(scene *scene3d.Scene) *Primitiv
 	if t == nil || t.Scene == nil {
 		return nil
 	}
-	source := t.Scene
-	primitive := *source
-	primitive.ProductPrimitives = source.ProductPrimitives.CloneForScene(scene, blockKartPrimitiveLayer(primitiveLayerDynamic, primitive3d.DynamicLayer, 0, false))
-	primitive.bindPrimitiveLayers()
-	return &primitive
-}
-
-func blockKartPrimitiveLayer(name string, kind primitive3d.LayerKind, cellSize float64, preload bool) scene3d.PrimitiveBatchAuthoring {
-	return scene3d.PrimitiveBatchAuthoring{Name: name, Kind: kind, Chunk: scene3d.ChunkAuthoring{CellSize: cellSize, PreloadChunks: preload}}
-}
-
-func blockKartPrimitiveLayers() []scene3d.PrimitiveBatchAuthoring {
-	return []scene3d.PrimitiveBatchAuthoring{
-		blockKartPrimitiveLayer(primitiveLayerStatic, primitive3d.StaticLayer, primitiveStaticBatchCellSize, true),
-		blockKartPrimitiveLayer(primitiveLayerTreeDetail, primitive3d.StaticLayer, primitiveTreeDetailBatchCellSize, true),
-		blockKartPrimitiveLayer(primitiveLayerRoadsideDetail, primitive3d.StaticLayer, primitiveRoadsideDetailBatchCellSize, true),
-		blockKartPrimitiveLayer(primitiveLayerSmallDetail, primitive3d.StaticLayer, primitiveSmallDetailBatchCellSize, true),
-		blockKartPrimitiveLayer(primitiveLayerFlowerDetail, primitive3d.StaticLayer, primitiveFlowerDetailBatchCellSize, true),
-		blockKartPrimitiveLayer(primitiveLayerScatter, primitive3d.StaticLayer, primitiveScatterBatchCellSize, true),
-		blockKartPrimitiveLayer(primitiveLayerDynamic, primitive3d.DynamicLayer, 0, false),
-	}
-}
-
-func (p *PrimitiveVisualContent) bindPrimitiveLayers() {
-	if p == nil || p.ProductPrimitives == nil {
-		return
-	}
-	p.Static = p.ProductPrimitives.Layer(primitiveLayerStatic)
-	p.TreeDetailStatic = p.ProductPrimitives.Layer(primitiveLayerTreeDetail)
-	p.RoadsideDetailStatic = p.ProductPrimitives.Layer(primitiveLayerRoadsideDetail)
-	p.SmallDetailStatic = p.ProductPrimitives.Layer(primitiveLayerSmallDetail)
-	p.FlowerDetailStatic = p.ProductPrimitives.Layer(primitiveLayerFlowerDetail)
-	p.ScatterStatic = p.ProductPrimitives.Layer(primitiveLayerScatter)
-	p.Dynamic = p.ProductPrimitives.Layer(primitiveLayerDynamic)
+	return t.Scene.CloneForScene(scene)
 }
 
 func newPrimitiveVisualContent(scene *scene3d.Scene, assets *voplay.Assets) (*PrimitiveVisualContent, error) {
-	authoring := scene3d.NewProductPrimitiveRuntime(scene, scene3d.ProductPrimitiveAuthoringDesc{Layers: blockKartPrimitiveLayers()})
-	p := &PrimitiveVisualContent{ProductPrimitives: authoring}
-	p.bindPrimitiveLayers()
-	grassCardTexture, grassCardErr := assets.Texture(blockKartAssetPath("effects/grass_card_atlas.png"))
-	if grassCardErr != nil {
-		return nil, grassCardErr
-	}
-	p.Box = authoring.Shape(primitive3d.ShapeDesc{Kind: primitive3d.ShapeBox})
-	p.RoundedBox = authoring.Shape(primitive3d.ShapeDesc{Kind: primitive3d.ShapeRoundedBox, BevelRadius: 0.08, Segments: 4})
-	p.Sphere = authoring.Shape(primitive3d.ShapeDesc{Kind: primitive3d.ShapeSphere, Segments: 8})
-	p.Cylinder = authoring.Shape(primitive3d.ShapeDesc{Kind: primitive3d.ShapeCylinder, Segments: 10})
-	p.Cone = authoring.Shape(primitive3d.ShapeDesc{Kind: primitive3d.ShapeCone, Segments: 8})
-	p.Wedge = authoring.Shape(primitive3d.ShapeDesc{Kind: primitive3d.ShapeWedge})
-	p.GrassCard = authoring.Shape(primitive3d.ShapeDesc{Kind: primitive3d.ShapePlane, Width: 1, Depth: 1, SubX: 1, SubZ: 1})
-	p.NeedleLeaf = authoring.Shape(primitive3d.ShapeDesc{Kind: primitive3d.ShapeCone, Segments: 5})
-	p.RoadMat = p.material(primitive3d.MaterialRoadAsphalt, voplay.Hex(0x414443), 0.84, 0, voplay.Color{})
-	p.RoadStripeMat = p.material(primitive3d.MaterialToyPlastic, voplay.Hex(0xfff4dd), 0.48, 0, voplay.Color{})
-	p.GrassMat = p.material(primitive3d.MaterialGrass, voplay.Hex(0x4f9737), 0.64, 0, voplay.Color{})
-	p.GrassCardMat = p.grassCardMaterial(grassCardTexture)
-	p.MeadowMat = p.material(primitive3d.MaterialGrass, voplay.Hex(0x86a346), 0.66, 0, voplay.Color{})
-	p.DirtDetailMat = p.material(primitive3d.MaterialStone, voplay.Hex(0x9a6738), 0.88, 0, voplay.Color{})
-	p.StoneMat = p.material(primitive3d.MaterialStone, voplay.Hex(0x8f8778), 0.82, 0, voplay.Color{})
-	p.PebbleMat = p.material(primitive3d.MaterialStone, voplay.Hex(0xa89a84), 0.82, 0, voplay.Color{})
-	p.CliffMat = p.material(primitive3d.MaterialStone, voplay.Hex(0x82684f), 0.84, 0, voplay.Color{})
-	p.PaleStoneMat = p.material(primitive3d.MaterialStone, voplay.Hex(0xa99c84), 0.78, 0, voplay.Color{})
-	p.WoodMat = p.material(primitive3d.MaterialWood, voplay.Hex(0x7a4a26), 0.76, 0, voplay.Color{})
-	p.LeafMat = p.material(primitive3d.MaterialGrass, voplay.Hex(0x205f34), 0.66, 0, voplay.Color{})
-	p.BushMat = p.material(primitive3d.MaterialGrass, voplay.Hex(0x327638), 0.66, 0, voplay.Color{})
-	p.FlowerYellowMat = p.material(primitive3d.MaterialToyPlastic, voplay.Hex(0xffdd35), 0.42, 0, voplay.Color{})
-	p.FlowerWhiteMat = p.material(primitive3d.MaterialToyPlastic, voplay.Hex(0xfff7df), 0.46, 0, voplay.Color{})
-	p.WaterMat = p.material(primitive3d.MaterialWater, voplay.Hex(0x2ba6ee).WithAlpha(0.74), 0.14, 0, voplay.Color{})
-	p.SignMat = p.material(primitive3d.MaterialToyPlastic, voplay.Hex(0xffd234), 0.30, 0, voplay.Color{})
-	p.SignArrowMat = p.material(primitive3d.MaterialRubber, voplay.Hex(0x121519), 0.72, 0, voplay.Color{})
-	p.PlayerMat = p.material(primitive3d.MaterialToyPlastic, voplay.Hex(0x0078ff), 0.18, 0, voplay.Color{})
-	p.TrimMat = p.material(primitive3d.MaterialToyPlastic, voplay.Hex(0xffe43a), 0.20, 0, voplay.Color{})
-	p.OrangeTrimMat = p.material(primitive3d.MaterialToyPlastic, voplay.Hex(0xff8a00), 0.20, 0, voplay.Color{})
-	p.WhiteMat = p.material(primitive3d.MaterialToyPlastic, voplay.Hex(0xfffbec), 0.16, 0, voplay.Color{})
-	p.TopBlueMat = p.material(primitive3d.MaterialToyPlastic, voplay.Hex(0x19c9ff), 0.16, 0, voplay.Color{})
-	p.VisorMat = p.material(primitive3d.MaterialToyPlastic, voplay.Hex(0x061742), 0.18, 0, voplay.Color{})
-	p.DriverMat = p.material(primitive3d.MaterialToyPlastic, voplay.Hex(0xff7f18), 0.20, 0, voplay.Color{})
-	p.WheelMat = p.material(primitive3d.MaterialRubber, voplay.Hex(0x171d29), 0.82, 0, voplay.Color{})
-	p.MetalMat = p.material(primitive3d.MaterialStone, voplay.Hex(0xdce8f4), 0.34, 0.02, voplay.Color{})
-	p.BoostMat = p.material(primitive3d.MaterialGlow, voplay.Hex(0x28cfff), 0.22, 0, voplay.Hex(0x28cfff))
-	p.GlowMat = p.material(primitive3d.MaterialGlow, voplay.Hex(0xffe45c), 0.24, 0, voplay.Hex(0xffe45c))
-	p.OrbMat = p.material(primitive3d.MaterialGlow, voplay.Hex(0xff85cc), 0.26, 0, voplay.Hex(0xff65be))
-	p.HazardMat = p.material(primitive3d.MaterialToyPlastic, voplay.Hex(0xf23b58), 0.38, 0, voplay.Color{})
-	p.CloudMat = p.material(primitive3d.MaterialToyPlastic, voplay.Hex(0xffffff), 0.47, 0, voplay.Color{})
-	p.CloudShadowMat = p.material(primitive3d.MaterialToyPlastic, voplay.Hex(0xd9eef7), 0.55, 0, voplay.Color{})
-	p.ContactShadowMat = p.material(primitive3d.MaterialRubber, voplay.Hex(0x11100d).WithAlpha(0.16), 0.98, 0, voplay.Color{})
-	p.TowerWallMat = p.material(primitive3d.MaterialStone, voplay.Hex(0xcfae72), 0.68, 0, voplay.Color{})
-	p.TowerRoofMat = p.material(primitive3d.MaterialToyPlastic, voplay.Hex(0xf04a32), 0.34, 0, voplay.Color{})
-	return p, nil
+	return scene3d.NewBlockKartPrimitiveContent(scene, assets)
 }
 
-func (p *PrimitiveVisualContent) material(preset primitive3d.MaterialPreset, color voplay.Color, roughness, metallic float64, emissive voplay.Color) primitive3d.MaterialID {
-	base := voplay.MaterialDesc{BaseColor: color, Roughness: roughness, Metallic: metallic, UVScale: 1}
-	if emissive != (voplay.Color{}) {
-		base.EmissiveColor = emissive
-	}
-	return p.ProductPrimitives.Material(scene3d.SurfaceMaterialAuthoring{Preset: preset, Base: base})
-}
-
-func (p *PrimitiveVisualContent) grassCardMaterial(albedo voplay.TextureID) primitive3d.MaterialID {
-	base := voplay.MaterialDesc{BaseColor: voplay.Color{R: 1.0, G: 1.0, B: 0.96, A: 1}, Albedo: albedo, Roughness: 0.88, Metallic: 0, UVScale: 1, DetailStrength: 0.006, MacroBlend: 0.001, RoughnessResponse: 0.38, ToonRampResponse: 0.34, EmissiveColor: voplay.Color{R: 0.135, G: 0.235, B: 0.060, A: 1}, ShadingMode: voplay.MaterialShadingToon, FilterMode: voplay.MaterialFilterNearest}
-	return p.ProductPrimitives.Material(scene3d.SurfaceMaterialAuthoring{Preset: primitive3d.MaterialGrass, Base: base})
-}
-
-func (p *PrimitiveVisualContent) PlaceStatic(shape primitive3d.ShapeID, material primitive3d.MaterialID, position voplay.Vec3, rotation voplay.Quat, scale voplay.Vec3, tint voplay.Color) primitive3d.ObjectID {
-	return p.PlaceStaticWithFlags(shape, material, position, rotation, scale, tint, primitive3d.InstanceFlags(0))
-}
-
-func (p *PrimitiveVisualContent) PlaceStaticWithFlags(shape primitive3d.ShapeID, material primitive3d.MaterialID, position voplay.Vec3, rotation voplay.Quat, scale voplay.Vec3, tint voplay.Color, flags primitive3d.InstanceFlags) primitive3d.ObjectID {
-	return scene3d.ProductPrimitivePlace(p.ProductPrimitives, primitiveLayerStatic, scene3d.PrimitiveInstanceAuthoring{Shape: shape, Material: material, Position: position, Rotation: rotation, Scale: scale, Tint: tint, Flags: flags})
-}
-
-func (p *PrimitiveVisualContent) PlaceDetail(shape primitive3d.ShapeID, material primitive3d.MaterialID, position voplay.Vec3, rotation voplay.Quat, scale voplay.Vec3, tint voplay.Color, lodFar float64) primitive3d.ObjectID {
-	if material == p.ContactShadowMat {
-		return 0
-	}
-	flags := p.detailFlags(shape, material, lodFar)
-	detailLodFar := lodFar
-	return scene3d.ProductPrimitivePlace(p.ProductPrimitives, p.detailLayerNameForLod(detailLodFar), scene3d.PrimitiveInstanceAuthoring{Shape: shape, Material: material, Position: position, Rotation: rotation, Scale: scale, Tint: tint, Flags: flags, LodFar: detailLodFar})
-}
-
-func (p *PrimitiveVisualContent) detailFlags(shape primitive3d.ShapeID, material primitive3d.MaterialID, lodFar float64) primitive3d.InstanceFlags {
-	if shape == p.GrassCard || material == p.GrassCardMat || lodFar <= primitiveFlowerClumpLodFar {
-		return primitive3d.InstanceNoShadow
-	}
-	return primitive3d.InstanceFlags(0)
-}
-
-func (p *PrimitiveVisualContent) detailLayerNameForLod(lodFar float64) string {
-	if lodFar >= primitiveTreeLodFar {
-		return primitiveLayerTreeDetail
-	}
-	if lodFar >= primitiveRoadsidePropLodFar {
-		return primitiveLayerRoadsideDetail
-	}
-	if lodFar <= primitiveFlowerClumpLodFar {
-		return primitiveLayerFlowerDetail
-	}
-	return primitiveLayerSmallDetail
-}
-
-func (p *PrimitiveVisualContent) AddDynamic(shape primitive3d.ShapeID, material primitive3d.MaterialID, position voplay.Vec3, rotation voplay.Quat, scale voplay.Vec3, tint voplay.Color) *PrimitivePart {
-	return p.AddDynamicWithFlags(shape, material, position, rotation, scale, tint, primitive3d.InstanceFlags(0))
-}
-
-func (p *PrimitiveVisualContent) AddDynamicWithFlags(shape primitive3d.ShapeID, material primitive3d.MaterialID, position voplay.Vec3, rotation voplay.Quat, scale voplay.Vec3, tint voplay.Color, flags primitive3d.InstanceFlags) *PrimitivePart {
-	return scene3d.ProductPrimitiveDynamic(p.ProductPrimitives, primitiveLayerDynamic, scene3d.PrimitiveInstanceAuthoring{Shape: shape, Material: material, Position: position, Rotation: rotation, Scale: scale, Tint: tint, Flags: flags})
-}
-
-func blockKartHighFrequencyPrimitiveFlags() primitive3d.InstanceFlags {
-	return primitive3d.InstanceNoShadow
+func blockKartHighFrequencyPrimitiveFlags() scene3d.BlockKartPrimitiveFlags {
+	return scene3d.BlockKartPrimitiveNoShadow
 }
 
 func hidePrimitivePart(part *PrimitivePart) {
@@ -340,7 +131,7 @@ func showPrimitivePart(part *PrimitivePart) {
 	}
 }
 
-func (t *TrackRuntime) buildPrimitiveLevel(w *World) error {
+func (t *TrackRuntime) buildPrimitiveLevel(w *BlockKartRuntimeContext) error {
 	prof := newBlockKartStartupProfiler("BlockKart primitive")
 	primitive := w.trackRuntime.ensurePrimitiveScene(w)
 	templateReused := w.primitiveTemplateReused
@@ -397,18 +188,8 @@ func (t *TrackRuntime) buildPrimitiveLevel(w *World) error {
 		prof.Mark("reuseStaticLayerChunks")
 		return nil
 	}
-	primitive.ProductPrimitives.BuildLayer(primitiveLayerStatic)
-	prof.Mark("buildStaticLayer")
-	primitive.ProductPrimitives.BuildLayer(primitiveLayerTreeDetail)
-	prof.Mark("buildTreeDetailLayer")
-	primitive.ProductPrimitives.BuildLayer(primitiveLayerRoadsideDetail)
-	prof.Mark("buildRoadsideDetailLayer")
-	primitive.ProductPrimitives.BuildLayer(primitiveLayerSmallDetail)
-	prof.Mark("buildSmallDetailLayer")
-	primitive.ProductPrimitives.BuildLayer(primitiveLayerFlowerDetail)
-	prof.Mark("buildFlowerDetailLayer")
-	primitive.ProductPrimitives.BuildLayer(primitiveLayerScatter)
-	prof.Mark("buildScatterLayer")
+	primitive.BuildStaticLayers()
+	prof.Mark("buildStaticPrimitiveLayers")
 	if w.runtimeCache != nil && w.runtimeCache.primitiveTemplate == nil {
 		w.runtimeCache.primitiveTemplate = newBlockKartPrimitiveTemplate(primitive)
 		if w.runtimeCache.primitiveTemplate != nil {
@@ -418,7 +199,7 @@ func (t *TrackRuntime) buildPrimitiveLevel(w *World) error {
 	return nil
 }
 
-func (t *TrackRuntime) preparePrimitiveMapAsset(w *World) error {
+func (t *TrackRuntime) preparePrimitiveMapAsset(w *BlockKartRuntimeContext) error {
 	if w.primitiveMap != nil {
 		return nil
 	}
@@ -432,7 +213,7 @@ func (t *TrackRuntime) preparePrimitiveMapAsset(w *World) error {
 		return errors.New("BlockKart assets unavailable")
 	}
 	w.assets.BeginGroup(worldAssetGroup)
-	prepared, err := scene3d.PrepareMapWithAssets(w.assets, blockKartAssetPath("maps/primitive_track/blockkart.map.json"))
+	prepared, err := scene3d.PrepareBlockKartMapAsset(w.assets, blockKartAssetPath("maps/primitive_track/blockkart.map.json"))
 	w.assets.EndGroup()
 	if err != nil {
 		return err
@@ -449,7 +230,7 @@ func newPrimitiveTrackAsset() *scene3d.TrackAsset {
 	return defaultBlockKartTrackSpec().TrackAsset()
 }
 
-func (t *TrackRuntime) spawnPrimitiveTrackTerrain(w *World, track *scene3d.Track) (*scene3d.TrackSpawnResult, error) {
+func (t *TrackRuntime) spawnPrimitiveTrackTerrain(w *BlockKartRuntimeContext, track *scene3d.Track) (*scene3d.TrackSpawnResult, error) {
 	if track == nil {
 		return nil, errors.New("BlockKart primitive track unavailable")
 	}
@@ -462,7 +243,7 @@ func (t *TrackRuntime) spawnPrimitiveTrackTerrain(w *World, track *scene3d.Track
 			return nil, err
 		}
 	}
-	return scene3d.SpawnPreparedMapTrackMeshTerrain(w.scene, track, w.primitiveMap, defaultBlockKartTrackSpec().TerrainMesh)
+	return scene3d.SpawnBlockKartMapTrackMeshTerrain(w.scene, track, w.primitiveMap, defaultBlockKartTrackSpec().TerrainMesh)
 }
 
 func primitiveTrackControlPoints() []scene3d.TrackControlPoint {
@@ -529,7 +310,7 @@ func primitiveTrackSegmentCount(track *scene3d.Track) int {
 	return count
 }
 
-func (t *TrackRuntime) spawnPrimitiveKartVisuals(w *World) {
+func (t *TrackRuntime) spawnPrimitiveKartVisuals(w *BlockKartRuntimeContext) {
 	primitive := w.trackRuntime.ensurePrimitiveScene(w)
 	pos := w.startPosition
 	rot := w.kartRig.kartRotation(w)
@@ -564,7 +345,7 @@ func (t *TrackRuntime) spawnPrimitiveKartVisuals(w *World) {
 	w.kartFlameRightPrimitive.SetVisible(false)
 }
 
-func (t *TrackRuntime) syncPrimitiveKartVisuals(w *World, pos voplay.Vec3, rot voplay.Quat) {
+func (t *TrackRuntime) syncPrimitiveKartVisuals(w *BlockKartRuntimeContext, pos voplay.Vec3, rot voplay.Quat) {
 	boostVisible := w.hudPresenter.isBoosting(w)
 	state := w.trackRuntime.currentPrimitiveKartVisualState(w, pos, rot, boostVisible)
 	if w.kartPrimitiveVisualStateValid && w.kartPrimitiveVisualState == state {
@@ -597,7 +378,7 @@ func (t *TrackRuntime) syncPrimitiveKartVisuals(w *World, pos voplay.Vec3, rot v
 	}
 }
 
-func (t *TrackRuntime) currentPrimitiveKartVisualState(w *World, pos voplay.Vec3, rot voplay.Quat, boostVisible bool) PrimitiveKartVisualState {
+func (t *TrackRuntime) currentPrimitiveKartVisualState(w *BlockKartRuntimeContext, pos voplay.Vec3, rot voplay.Quat, boostVisible bool) PrimitiveKartVisualState {
 	state := PrimitiveKartVisualState{Position: pos, Rotation: rot.Normalize(), BoostVisible: boostVisible}
 	if w.vehicle == nil {
 		return state
@@ -612,7 +393,7 @@ func (t *TrackRuntime) currentPrimitiveKartVisualState(w *World, pos voplay.Vec3
 	return state
 }
 
-func (t *TrackRuntime) assignPrimitiveKartWheelState(w *World, state *PrimitiveKartVisualState, index int, steer, spin float64) {
+func (t *TrackRuntime) assignPrimitiveKartWheelState(w *BlockKartRuntimeContext, state *PrimitiveKartVisualState, index int, steer, spin float64) {
 	if state == nil {
 		return
 	}
@@ -635,11 +416,11 @@ func (t *TrackRuntime) assignPrimitiveKartWheelState(w *World, state *PrimitiveK
 	}
 }
 
-func (t *TrackRuntime) addPrimitiveKartBodyPart(w *World, primitive *PrimitiveVisualContent, pos voplay.Vec3, rot voplay.Quat, shape primitive3d.ShapeID, material primitive3d.MaterialID, local voplay.Vec3, localRot voplay.Quat, scale voplay.Vec3, tint voplay.Color) *PrimitivePart {
-	return w.trackRuntime.addPrimitiveKartBodyPartWithFlags(w, primitive, pos, rot, shape, material, local, localRot, scale, tint, primitive3d.InstanceFlags(0))
+func (t *TrackRuntime) addPrimitiveKartBodyPart(w *BlockKartRuntimeContext, primitive *PrimitiveVisualContent, pos voplay.Vec3, rot voplay.Quat, shape scene3d.BlockKartPrimitiveShape, material scene3d.BlockKartPrimitiveMaterial, local voplay.Vec3, localRot voplay.Quat, scale voplay.Vec3, tint voplay.Color) *PrimitivePart {
+	return w.trackRuntime.addPrimitiveKartBodyPartWithFlags(w, primitive, pos, rot, shape, material, local, localRot, scale, tint, scene3d.BlockKartPrimitiveFlags(0))
 }
 
-func (t *TrackRuntime) addPrimitiveKartBodyPartWithFlags(w *World, primitive *PrimitiveVisualContent, pos voplay.Vec3, rot voplay.Quat, shape primitive3d.ShapeID, material primitive3d.MaterialID, local voplay.Vec3, localRot voplay.Quat, scale voplay.Vec3, tint voplay.Color, flags primitive3d.InstanceFlags) *PrimitivePart {
+func (t *TrackRuntime) addPrimitiveKartBodyPartWithFlags(w *BlockKartRuntimeContext, primitive *PrimitiveVisualContent, pos voplay.Vec3, rot voplay.Quat, shape scene3d.BlockKartPrimitiveShape, material scene3d.BlockKartPrimitiveMaterial, local voplay.Vec3, localRot voplay.Quat, scale voplay.Vec3, tint voplay.Color, flags scene3d.BlockKartPrimitiveFlags) *PrimitivePart {
 	local = primitiveKartScaleVec(local)
 	scale = primitiveKartScaleVec(scale)
 	part := primitive.AddDynamicWithFlags(shape, material, pos.Add(rot.RotateVec3(local)), rot.Mul(localRot), scale, tint, flags)
@@ -647,7 +428,7 @@ func (t *TrackRuntime) addPrimitiveKartBodyPartWithFlags(w *World, primitive *Pr
 	return part
 }
 
-func (t *TrackRuntime) addPrimitiveKartWheelVisual(w *World, primitive *PrimitiveVisualContent, pos voplay.Vec3, rot voplay.Quat, local voplay.Vec3, steer bool, wheelIndex int, sideSign float64) {
+func (t *TrackRuntime) addPrimitiveKartWheelVisual(w *BlockKartRuntimeContext, primitive *PrimitiveVisualContent, pos voplay.Vec3, rot voplay.Quat, local voplay.Vec3, steer bool, wheelIndex int, sideSign float64) {
 	if sideSign == 0 {
 		sideSign = 1
 		if local.X < 0 {
@@ -667,21 +448,21 @@ func (t *TrackRuntime) addPrimitiveKartWheelVisual(w *World, primitive *Primitiv
 	w.kartWheelVisuals = append(w.kartWheelVisuals, PrimitiveKartWheelVisual{Tire: tire, Rim: rim, Hub: hub, Stripe: stripe, Local: local, Steer: steer, WheelIndex: wheelIndex, SideSign: sideSign})
 }
 
-func (t *TrackRuntime) syncPrimitiveKartBodyPart(w *World, body PrimitiveKartBodyPart, pos voplay.Vec3, rot voplay.Quat) {
+func (t *TrackRuntime) syncPrimitiveKartBodyPart(w *BlockKartRuntimeContext, body PrimitiveKartBodyPart, pos voplay.Vec3, rot voplay.Quat) {
 	if body.Part == nil || !body.Part.Visible {
 		return
 	}
-	scene3d.ProductPrimitiveSetPose(body.Part, pos.Add(rot.RotateVec3(body.Local)), rot.Mul(body.LocalRotation))
+	scene3d.SetBlockKartPrimitivePose(body.Part, pos.Add(rot.RotateVec3(body.Local)), rot.Mul(body.LocalRotation))
 }
 
-func (t *TrackRuntime) syncPrimitiveKartPart(w *World, part *PrimitivePart, pos voplay.Vec3, rot voplay.Quat, local voplay.Vec3, partRot voplay.Quat) {
+func (t *TrackRuntime) syncPrimitiveKartPart(w *BlockKartRuntimeContext, part *PrimitivePart, pos voplay.Vec3, rot voplay.Quat, local voplay.Vec3, partRot voplay.Quat) {
 	if part == nil {
 		return
 	}
-	scene3d.ProductPrimitiveSetPose(part, pos.Add(rot.RotateVec3(local)), partRot)
+	scene3d.SetBlockKartPrimitivePose(part, pos.Add(rot.RotateVec3(local)), partRot)
 }
 
-func (t *TrackRuntime) syncPrimitiveKartWheelVisual(w *World, wheel PrimitiveKartWheelVisual, pos voplay.Vec3, rot voplay.Quat, axisRot voplay.Quat, visualState PrimitiveKartVisualState) {
+func (t *TrackRuntime) syncPrimitiveKartWheelVisual(w *BlockKartRuntimeContext, wheel PrimitiveKartWheelVisual, pos voplay.Vec3, rot voplay.Quat, axisRot voplay.Quat, visualState PrimitiveKartVisualState) {
 	if wheel.Tire == nil {
 		return
 	}
@@ -696,18 +477,18 @@ func (t *TrackRuntime) syncPrimitiveKartWheelVisual(w *World, wheel PrimitiveKar
 		spinRot = wheelRot.Mul(voplay.QuatFromAxisAngle(voplay.Vec3{X: 1}, spin))
 	}
 	cylinderRot := wheelRot.Mul(axisRot)
-	scene3d.ProductPrimitiveSetPose(wheel.Tire, wheelPos, cylinderRot)
+	scene3d.SetBlockKartPrimitivePose(wheel.Tire, wheelPos, cylinderRot)
 	sideDir := wheelRot.RotateVec3(voplay.Vec3{X: wheel.SideSign})
 	facePos := wheelPos.Add(sideDir.Scale(0.29 * primitiveKartVisualScale))
 	if wheel.Rim != nil {
-		scene3d.ProductPrimitiveSetPose(wheel.Rim, facePos, cylinderRot)
+		scene3d.SetBlockKartPrimitivePose(wheel.Rim, facePos, cylinderRot)
 	}
 	if wheel.Hub != nil {
-		scene3d.ProductPrimitiveSetPose(wheel.Hub, facePos.Add(sideDir.Scale(0.035 * primitiveKartVisualScale)), cylinderRot)
+		scene3d.SetBlockKartPrimitivePose(wheel.Hub, facePos.Add(sideDir.Scale(0.035 * primitiveKartVisualScale)), cylinderRot)
 	}
 	if wheel.Stripe != nil {
 		radial := spinRot.RotateVec3(voplay.Vec3{Y: 0.17 * primitiveKartVisualScale})
-		scene3d.ProductPrimitiveSetPose(wheel.Stripe, facePos.Add(sideDir.Scale(0.012 * primitiveKartVisualScale)).Add(radial), spinRot)
+		scene3d.SetBlockKartPrimitivePose(wheel.Stripe, facePos.Add(sideDir.Scale(0.012 * primitiveKartVisualScale)).Add(radial), spinRot)
 	}
 }
 
@@ -731,7 +512,7 @@ func primitiveKartScaleVec(v voplay.Vec3) voplay.Vec3 {
 	return voplay.Vec3{X: v.X * primitiveKartVisualScale, Y: v.Y * primitiveKartVisualScale, Z: v.Z * primitiveKartVisualScale}
 }
 
-func (t *TrackRuntime) syncPrimitiveKartWheel(w *World, part *PrimitivePart, pos voplay.Vec3, rot voplay.Quat, local voplay.Vec3, steer bool, wheelIndex int, axisRot voplay.Quat) {
+func (t *TrackRuntime) syncPrimitiveKartWheel(w *BlockKartRuntimeContext, part *PrimitivePart, pos voplay.Vec3, rot voplay.Quat, local voplay.Vec3, steer bool, wheelIndex int, axisRot voplay.Quat) {
 	if part == nil {
 		return
 	}
@@ -751,5 +532,5 @@ func (t *TrackRuntime) syncPrimitiveKartWheel(w *World, part *PrimitivePart, pos
 		wheelRot = wheelRot.Mul(voplay.QuatFromAxisAngle(voplay.Vec3{X: 1}, spin))
 	}
 	wheelRot = wheelRot.Mul(axisRot)
-	scene3d.ProductPrimitiveSetPose(part, wheelPos, wheelRot)
+	scene3d.SetBlockKartPrimitivePose(part, wheelPos, wheelRot)
 }

@@ -27,8 +27,6 @@ const (
 	BlockKartSubsystemAudio = "Audio"
 	BlockKartSubsystemInput = "Input"
 	BlockKartSubsystemGameplay = "Gameplay"
-	blockKartLifecycleReportMarker = "__BLOCKKART_LIFECYCLE__"
-	blockKartFailureReportMarker = "__BLOCKKART_FAILURE_REPORT__"
 )
 
 type BlockKartFailureReport struct {
@@ -48,7 +46,7 @@ func blockKartReportLifecycle(g *voplay.GameCtx, state, startupPhase string) {
 	if g != nil {
 		g.SetLifecycle(state, startupPhase)
 	}
-	println(blockKartLifecycleReportMarker + blockKartLifecycleJSON(state, startupPhase))
+	blockKartEmitLifecycleReport(state, startupPhase)
 }
 
 func blockKartReportFailure(g *voplay.GameCtx, report *BlockKartFailureReport) {
@@ -59,5 +57,5 @@ func blockKartReportFailure(g *voplay.GameCtx, report *BlockKartFailureReport) {
 		g.SetLifecycle(report.LifecycleState, report.StartupPhase)
 		g.ReportIssue(voplay.GameIssue{Owner: report.Owner, Subsystem: report.Subsystem, DeveloperMessage: report.DeveloperMessage, PlayerMessage: report.PlayerMessage})
 	}
-	println(blockKartFailureReportMarker + report.JSON())
+	blockKartEmitFailureReport(report)
 }

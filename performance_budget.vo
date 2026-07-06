@@ -17,7 +17,6 @@ const (
 	blockKartPerfStatsEnabled = true
 	blockKartPerfReports = true
 	blockKartPerfVerboseConsoleReports = false
-	blockKartPerfReportMarker = "__VOPLAY_PERF_REPORT__"
 	blockKartFixedPhaseConsoleReports = false
 	blockKartFixedPhaseLogCooldownFrames = 60
 	blockKartFixedStepBudgetMs = 1000.0 / blockKartTargetFPS * 0.85
@@ -190,7 +189,7 @@ func (a *BlockKartPerfAnalyzer) Report(snapshot voplay.PerfSnapshot, fixed Block
 	gate := voplay.EvaluatePerfGate(snapshot, blockKartPerfGateConfig(snapshot))
 	status := blockKartPerfStatus(snapshot)
 	screenMPixels := float64(screen.PixelWidth * screen.PixelHeight) / 1000000.0
-	println(blockKartPerfReportMarker + voplay.EncodePerfSummaryReport("blockkart", frame, snapshot, window, status, gate, voplay.PerfSummaryFixedStats{TotalMs: fixed.TotalMs, PeakTotalMs: fixed.PeakTotalMs, SlowFrames: fixed.WindowSlowFrames, Frames: fixed.WindowFrames, SlowestPhase: fixed.SlowestPhase, SlowestPhaseMs: fixed.SlowestPhaseMs, MaxSlowFrames: blockKartPerfGateMaxSlowFrames}, screen))
+	blockKartEmitPerfReport(voplay.EncodePerfSummaryReport("blockkart", frame, snapshot, window, status, gate, voplay.PerfSummaryFixedStats{TotalMs: fixed.TotalMs, PeakTotalMs: fixed.PeakTotalMs, SlowFrames: fixed.WindowSlowFrames, Frames: fixed.WindowFrames, SlowestPhase: fixed.SlowestPhase, SlowestPhaseMs: fixed.SlowestPhaseMs, MaxSlowFrames: blockKartPerfGateMaxSlowFrames}, screen))
 	if !blockKartPerfVerboseConsoleReports {
 		return
 	}
@@ -319,7 +318,7 @@ func blockKartPerfActiveWorkP99Budget(snapshot voplay.PerfSnapshot) float64 {
 	return budget * blockKartPerfGateActiveWorkP99Multiplier
 }
 
-func blockKartApplyPerfSnapshotToHUD(hud *WorldHUDState, snapshot voplay.PerfSnapshot) {
+func blockKartApplyPerfSnapshotToHUD(hud *BlockKartHUDState, snapshot voplay.PerfSnapshot) {
 	if hud == nil || !snapshot.Enabled {
 		return
 	}

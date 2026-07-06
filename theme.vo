@@ -61,7 +61,7 @@ func applyWorldTheme(theme WorldTheme, scene *scene3d.Scene, settings BlockKartS
 	applyBlockKartQualityProfile(scene, settings)
 }
 
-type WorldHUDState struct {
+type BlockKartHUDState struct {
 	RaceState string
 	Time float64
 	FinishTime float64
@@ -181,7 +181,7 @@ type WorldHUDState struct {
 	DebugLineCount int
 }
 
-func drawWorldHUD(theme *WorldTheme, g *voplay.GameCtx, hud *WorldHUDState) {
+func drawWorldHUD(theme *WorldTheme, g *voplay.GameCtx, hud *BlockKartHUDState) {
 	if voplay.IsCompactTouchLayout(g.Screen.Width, g.Screen.Height) {
 		drawCompactWorldHUD(theme, g, hud)
 		return
@@ -317,7 +317,7 @@ func drawWorldHUD(theme *WorldTheme, g *voplay.GameCtx, hud *WorldHUDState) {
 	}
 }
 
-func drawCompactWorldHUD(theme *WorldTheme, g *voplay.GameCtx, hud *WorldHUDState) {
+func drawCompactWorldHUD(theme *WorldTheme, g *voplay.GameCtx, hud *BlockKartHUDState) {
 	if blockKartIsPortraitLayout(g.Screen.Width, g.Screen.Height) {
 		drawPortraitWorldHUD(theme, g, hud)
 		return
@@ -407,7 +407,7 @@ func drawCompactWorldHUD(theme *WorldTheme, g *voplay.GameCtx, hud *WorldHUDStat
 	}
 }
 
-func drawPortraitWorldHUD(theme *WorldTheme, g *voplay.GameCtx, hud *WorldHUDState) {
+func drawPortraitWorldHUD(theme *WorldTheme, g *voplay.GameCtx, hud *BlockKartHUDState) {
 	w := float64(g.Screen.Width)
 	screen := g.Screen.Rect()
 	panelInset := 10.0
