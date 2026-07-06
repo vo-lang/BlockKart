@@ -24,6 +24,11 @@ type TrackRuntime struct {
 	Track *scene3d.Track
 	Spawn *scene3d.TrackSpawnResult
 	Spec BlockKartTrackSpec
+	renderStressPrimitive10kBatch *scene3d.BlockKartPrimitiveBatch
+	renderStressPrimitive10kIndex int
+	renderStressPrimitive10kCenter voplay.Vec3
+	renderStressPrimitive10kRotations []voplay.Quat
+	renderStressPrimitive10kScales []voplay.Vec3
 }
 
 type HUDPresenter struct {
