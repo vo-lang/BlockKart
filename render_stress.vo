@@ -62,6 +62,7 @@ func blockKartResetRenderStressPerfWindow(w *BlockKartRuntimePorts, g *voplay.Ga
 	g.ResetPerfStats(mode)
 	w.hud.perfAnalyzer = BlockKartPerfAnalyzer{}
 	w.hud.perfSnapshotPollFrame = 0
+	w.hud.perfSnapshotFastPolls = blockKartPerfPostResetFastPolls
 }
 
 func blockKartRenderStressPerfReportBlocked(w *BlockKartRuntimePorts) bool {

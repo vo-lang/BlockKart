@@ -151,6 +151,7 @@ type BlockKartRuntimeHudState struct {
 	perfAnalyzer BlockKartPerfAnalyzer
 	fixedProfiler BlockKartFixedStepProfiler
 	perfSnapshotPollFrame int
+	perfSnapshotFastPolls int
 	renderStressProfile string
 	renderStressApplied bool
 	debugHudLines [18]string
