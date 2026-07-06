@@ -15,6 +15,7 @@ const (
 	blockKartRenderStressPrimitive10kCount = 10000
 	blockKartRenderStressPrimitive10kChunk = 48
 	blockKartRenderStressPrimitive10kColumns = 100
+	blockKartRenderStressPrimitive10kCullOffset = 240.0
 )
 
 func (w *World) ActivateRenderStressProfile(g *voplay.GameCtx, profile string) {
@@ -121,7 +122,7 @@ func (t *TrackRuntime) renderStressPrimitive10kPlacement(primitive *PrimitiveVis
 	col := i % blockKartRenderStressPrimitive10kColumns
 	row := i / blockKartRenderStressPrimitive10kColumns
 	x := t.renderStressPrimitive10kCenter.X + (float64(col) - 49.5) * spacing
-	z := t.renderStressPrimitive10kCenter.Z - 30.0 - float64(row) * spacing
+	z := t.renderStressPrimitive10kCenter.Z - blockKartRenderStressPrimitive10kCullOffset - float64(row) * spacing
 	y := t.renderStressPrimitive10kCenter.Y - 0.85 + float64((i%13)-6)*0.018
 	shape := primitive.RoundedBox
 	if i % 11 == 0 {
