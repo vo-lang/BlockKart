@@ -155,7 +155,7 @@ func (s *PlayState) Update(g *voplay.GameCtx, dt float64) {
 func (s *PlayState) Draw(g *voplay.GameCtx) {
 	clearColor := defaultWorldTheme().SkyColor
 	if s.world != nil {
-		clearColor = s.world.theme.SkyColor
+		clearColor = s.world.input.theme.SkyColor
 	}
 	g.Draw.ClearColor(clearColor)
 	if s.failure != nil {
@@ -216,7 +216,7 @@ func (s *PlayState) restartRun(g *voplay.GameCtx) {
 	}
 	s.setLifecycle(g, BlockKartLifecycleRestarting, "raceRestart")
 	s.captureRacePersistence()
-	s.world.raceSession.restartRun(s.world.BlockKartRuntimeContext)
+	s.world.race.raceSession.restartRun(s.world.BlockKartRuntimeContext)
 	s.world.SetRenderDebugMode(s.renderDebugMode)
 	s.world.SetHeroCameraVisible(s.heroCameraVisible)
 	s.elapsed = 0
@@ -228,10 +228,10 @@ func (s *PlayState) captureRacePersistence() {
 	if s == nil || s.world == nil {
 		return
 	}
-	s.settings = s.world.settings
-	if s.world.bestTimeSet {
-		improved := !s.bestTimeSet || s.world.bestTime < s.bestTime
-		s.bestTime = s.world.bestTime
+	s.settings = s.world.input.settings
+	if s.world.race.bestTimeSet {
+		improved := !s.bestTimeSet || s.world.race.bestTime < s.bestTime
+		s.bestTime = s.world.race.bestTime
 		s.bestTimeSet = true
 		if improved {
 			s.persistRacePersistence()
@@ -243,10 +243,10 @@ func (s *PlayState) applyRacePersistenceToWorld(w *World) {
 	if s == nil || w == nil {
 		return
 	}
-	w.settings = s.settings
+	w.input.settings = s.settings
 	if s.bestTimeSet {
-		w.bestTime = s.bestTime
-		w.bestTimeSet = true
+		w.race.bestTime = s.bestTime
+		w.race.bestTimeSet = true
 	}
 }
 
@@ -271,7 +271,7 @@ func (s *PlayState) persistRacePersistence() {
 	}
 	s.settings = blockKartSaveProductState(s.settings, s.bestTime, s.bestTimeSet)
 	if s.world != nil {
-		s.world.settings = s.settings
+		s.world.input.settings = s.settings
 	}
 }
 

@@ -184,7 +184,7 @@ func (p BlockKartTuningPreset) KartControllerConfig() scene3d.KartControllerConf
 	return cfg
 }
 
-func blockKartReportVehicleDiagnostics(g *voplay.GameCtx, lifecycleState, startupPhase, phase string, w *BlockKartRuntimeContext) {
+func blockKartReportVehicleDiagnostics(g *voplay.GameCtx, lifecycleState, startupPhase, phase string, w *BlockKartRuntimePorts) {
 	tuning := defaultBlockKartTuningPreset()
 	settings := defaultBlockKartSettings()
 	state := scene3d.KartControllerState{}
@@ -199,13 +199,13 @@ func blockKartReportVehicleDiagnostics(g *voplay.GameCtx, lifecycleState, startu
 	wheelMaxCompression := 0.0
 	roadEdgeAssist := false
 	if w != nil {
-		tuning = w.tuning
-		settings = w.settings
-		state = w.lastControllerState
-		intent = w.lastVehicleIntent.Normalized()
-		roadEdgeAssist = w.roadEdgeAssistActive
-		if w.vehicle != nil {
-			telemetry = scene3d.ProductVehicleTelemetry(w.vehicle)
+		tuning = w.input.tuning
+		settings = w.input.settings
+		state = w.kart.lastControllerState
+		intent = w.kart.lastVehicleIntent.Normalized()
+		roadEdgeAssist = w.kart.roadEdgeAssistActive
+		if w.core.vehicle != nil {
+			telemetry = scene3d.ProductVehicleTelemetry(w.core.vehicle)
 			speed = math.Abs(telemetry.Speed)
 			grounded = telemetry.Grounded
 			if telemetry.Surface.ID != "" {
@@ -271,7 +271,7 @@ func blockKartReportVehicleDiagnostics(g *voplay.GameCtx, lifecycleState, startu
 	})
 }
 
-func blockKartReportRaceDiagnostics(g *voplay.GameCtx, lifecycleState, startupPhase, phase string, w *BlockKartRuntimeContext) {
+func blockKartReportRaceDiagnostics(g *voplay.GameCtx, lifecycleState, startupPhase, phase string, w *BlockKartRuntimePorts) {
 	settings := defaultBlockKartSettings()
 	raceState := BlockKartRaceStateReady
 	courseTime := 0.0
@@ -287,20 +287,20 @@ func blockKartReportRaceDiagnostics(g *voplay.GameCtx, lifecycleState, startupPh
 	totalCollectibles := 0
 	nextGate := "Start"
 	if w != nil {
-		settings = w.settings
-		raceState = w.raceState
-		courseTime = w.courseTime
-		finishTime = w.finishTime
-		bestTime = w.bestTime
-		bestTimeSet = w.bestTimeSet
-		finished = w.finished
-		lap = w.lap
-		totalLaps = w.totalLaps
-		nextCheckpoint = w.nextCheckpoint
-		checkpoints = len(w.checkpoints)
-		collected = w.collected
-		totalCollectibles = len(w.collectibles)
-		nextGate = w.nextGateLabel
+		settings = w.input.settings
+		raceState = w.race.raceState
+		courseTime = w.race.courseTime
+		finishTime = w.race.finishTime
+		bestTime = w.race.bestTime
+		bestTimeSet = w.race.bestTimeSet
+		finished = w.race.finished
+		lap = w.race.lap
+		totalLaps = w.race.totalLaps
+		nextCheckpoint = w.race.nextCheckpoint
+		checkpoints = len(w.race.checkpoints)
+		collected = w.race.collected
+		totalCollectibles = len(w.race.collectibles)
+		nextGate = w.race.nextGateLabel
 	}
 	blockKartEmitRaceReport([]blockKartJSONField{
 		blockKartJSONText("lifecycleState", lifecycleState),
@@ -330,12 +330,12 @@ func blockKartReportRaceDiagnostics(g *voplay.GameCtx, lifecycleState, startupPh
 	})
 }
 
-func wBoostTimer(w *BlockKartRuntimeContext) float64 {
+func wBoostTimer(w *BlockKartRuntimePorts) float64 {
 	if w == nil {
 		return 0
 	}
-	if w.kartController != nil && w.kartController.BoostTimer > w.boostTimer {
-		return w.kartController.BoostTimer
+	if w.core.kartController != nil && w.core.kartController.BoostTimer > w.kart.boostTimer {
+		return w.core.kartController.BoostTimer
 	}
-	return w.boostTimer
+	return w.kart.boostTimer
 }

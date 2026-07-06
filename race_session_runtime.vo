@@ -6,55 +6,55 @@ import (
 )
 
 func (w *World) Update(g *voplay.GameCtx, dt float64, debugOverlayVisible bool) {
-	w.raceSession.updateKartRenderPose(w.BlockKartRuntimeContext, g.Alpha)
-	w.raceSession.updateRacingCamera(w.BlockKartRuntimeContext, dt, debugOverlayVisible)
-	w.scene.UpdateAudio()
-	w.scene.UpdateEmitters(dt)
-	w.scene.TickAnimations(dt)
-	if debugOverlayVisible && w.racingDebugOverlay != nil {
-		w.racingDebugOverlay.Update(w.scene)
+	w.race.raceSession.updateKartRenderPose(w.BlockKartRuntimeContext, g.Alpha)
+	w.race.raceSession.updateRacingCamera(w.BlockKartRuntimeContext, dt, debugOverlayVisible)
+	w.core.scene.UpdateAudio()
+	w.core.scene.UpdateEmitters(dt)
+	w.core.scene.TickAnimations(dt)
+	if debugOverlayVisible && w.hud.racingDebugOverlay != nil {
+		w.hud.racingDebugOverlay.Update(w.core.scene)
 	}
 }
 
-func (r *RaceSession) updateRacingCamera(w *BlockKartRuntimeContext, dt float64, debugOverlayVisible bool) {
-	if w.camera == nil || w.scene == nil {
+func (r *RaceSession) updateRacingCamera(w *BlockKartRuntimePorts, dt float64, debugOverlayVisible bool) {
+	if w.core.camera == nil || w.core.scene == nil {
 		return
 	}
-	if w.terrainCameraView > 0 {
-		w.raceSession.updateTerrainCaptureCamera(w)
+	if w.hud.terrainCameraView > 0 {
+		w.race.raceSession.updateTerrainCaptureCamera(w)
 		return
 	}
-	if w.heroCameraVisible {
-		w.raceSession.updateHeroInspectionCamera(w)
+	if w.hud.heroCameraVisible {
+		w.race.raceSession.updateHeroInspectionCamera(w)
 		return
 	}
-	target := scene3d.RacingCameraTarget{Position: w.startPosition, Forward: voplay.QuatFromAxisAngle(voplay.Vec3{Y: 1}, w.startYaw).RotateVec3(voplay.Vec3{Z: -1})}
-	if w.vehicle != nil {
-		target = scene3d.RacingCameraTargetFromVehicle(w.vehicle)
-		if sample, ok := w.kartRenderPose.RenderSample(); ok {
+	target := scene3d.RacingCameraTarget{Position: w.race.startPosition, Forward: voplay.QuatFromAxisAngle(voplay.Vec3{Y: 1}, w.race.startYaw).RotateVec3(voplay.Vec3{Z: -1})}
+	if w.core.vehicle != nil {
+		target = scene3d.RacingCameraTargetFromVehicle(w.core.vehicle)
+		if sample, ok := w.kart.kartRenderPose.RenderSample(); ok {
 			target.Position = sample.Position
 			target.Forward = sample.Rotation.RotateVec3(voplay.Vec3{Z: -1})
 			target.Velocity = sample.Velocity
 			target.Speed = sample.Speed
 		}
-		target.Position = w.raceSession.stabilizedCameraTargetPosition(w, target.Position)
+		target.Position = w.race.raceSession.stabilizedCameraTargetPosition(w, target.Position)
 	}
-	target.Boost = w.hudPresenter.isBoosting(w)
-	if w.drifting {
-		target.Drift = w.lastSteer
+	target.Boost = w.hud.hudPresenter.isBoosting(w)
+	if w.kart.drifting {
+		target.Drift = w.kart.lastSteer
 	}
 	if debugOverlayVisible {
-		w.cameraTelemetry.Record(target, dt)
+		w.hud.cameraTelemetry.Record(target, dt)
 	}
-	w.camera.UpdateCamera(&w.scene.Camera, w.scene, target, dt)
+	w.core.camera.UpdateCamera(&w.core.scene.Camera, w.core.scene, target, dt)
 }
 
-func (r *RaceSession) stabilizedCameraTargetPosition(w *BlockKartRuntimeContext, position voplay.Vec3) voplay.Vec3 {
-	if w.track == nil {
+func (r *RaceSession) stabilizedCameraTargetPosition(w *BlockKartRuntimePorts, position voplay.Vec3) voplay.Vec3 {
+	if w.core.track == nil {
 		return position
 	}
-	point := w.track.ClosestPoint(position)
-	pose := w.track.PoseAt(point.Distance)
+	point := w.core.track.ClosestPoint(position)
+	pose := w.core.track.PoseAt(point.Distance)
 	minY := pose.Position.Y + kartSpawnRideHeight
 	if position.Y < minY {
 		position.Y = minY
@@ -62,125 +62,125 @@ func (r *RaceSession) stabilizedCameraTargetPosition(w *BlockKartRuntimeContext,
 	return position
 }
 
-func (r *RaceSession) beginKartPhysicsStep(w *BlockKartRuntimeContext) {
-	if w.player == nil {
+func (r *RaceSession) beginKartPhysicsStep(w *BlockKartRuntimePorts) {
+	if w.core.player == nil {
 		return
 	}
-	if !w.kartRenderPose.Initialized() {
-		w.raceSession.resetKartRenderPose(w, w.player.Position(), w.kartRig.kartVisualRotation(w))
+	if !w.kart.kartRenderPose.Initialized() {
+		w.race.raceSession.resetKartRenderPose(w, w.core.player.Position(), w.kart.kartRig.kartVisualRotation(w))
 		return
 	}
-	w.kartRenderPose.BeginStep()
+	w.kart.kartRenderPose.BeginStep()
 }
 
-func (r *RaceSession) endKartPhysicsStep(w *BlockKartRuntimeContext) {
-	if w.player == nil {
+func (r *RaceSession) endKartPhysicsStep(w *BlockKartRuntimePorts) {
+	if w.core.player == nil {
 		return
 	}
-	pos := w.player.Position()
-	if w.vehicle != nil {
-		pos = w.vehicle.Position()
+	pos := w.core.player.Position()
+	if w.core.vehicle != nil {
+		pos = w.core.vehicle.Position()
 	}
-	rot := w.kartRig.kartVisualRotation(w)
+	rot := w.kart.kartRig.kartVisualRotation(w)
 	vel := voplay.Vec3{}
-	if w.vehicle != nil {
-		vel = w.vehicle.LinearVelocity()
+	if w.core.vehicle != nil {
+		vel = w.core.vehicle.LinearVelocity()
 	}
-	speed := w.raceSession.currentKartRenderSpeed(w)
+	speed := w.race.raceSession.currentKartRenderSpeed(w)
 	sample := NewKartRenderSample(pos, rot, vel, speed)
-	if !w.kartRenderPose.Initialized() {
-		w.raceSession.resetKartRenderPose(w, pos, rot)
+	if !w.kart.kartRenderPose.Initialized() {
+		w.race.raceSession.resetKartRenderPose(w, pos, rot)
 		return
 	}
-	w.kartRenderPose.Commit(sample)
+	w.kart.kartRenderPose.Commit(sample)
 }
 
-func (r *RaceSession) resetKartRenderPose(w *BlockKartRuntimeContext, pos voplay.Vec3, rot voplay.Quat) {
-	sample := w.kartRenderPose.Reset(pos, rot)
-	w.kartRig.syncKartVisualsAt(w, sample.Position, sample.Rotation)
-	w.cameraTelemetry.ResetAnchor()
+func (r *RaceSession) resetKartRenderPose(w *BlockKartRuntimePorts, pos voplay.Vec3, rot voplay.Quat) {
+	sample := w.kart.kartRenderPose.Reset(pos, rot)
+	w.kart.kartRig.syncKartVisualsAt(w, sample.Position, sample.Rotation)
+	w.hud.cameraTelemetry.ResetAnchor()
 }
 
-func (r *RaceSession) updateKartRenderPose(w *BlockKartRuntimeContext, alpha float64) {
-	if w.player == nil {
+func (r *RaceSession) updateKartRenderPose(w *BlockKartRuntimePorts, alpha float64) {
+	if w.core.player == nil {
 		return
 	}
-	if !w.kartRenderPose.Initialized() {
-		w.raceSession.resetKartRenderPose(w, w.player.Position(), w.kartRig.kartVisualRotation(w))
+	if !w.kart.kartRenderPose.Initialized() {
+		w.race.raceSession.resetKartRenderPose(w, w.core.player.Position(), w.kart.kartRig.kartVisualRotation(w))
 	}
-	sample := w.kartRenderPose.Interpolate(alpha)
-	w.kartRig.syncKartVisualsAt(w, sample.Position, sample.Rotation)
+	sample := w.kart.kartRenderPose.Interpolate(alpha)
+	w.kart.kartRig.syncKartVisualsAt(w, sample.Position, sample.Rotation)
 }
 
-func (r *RaceSession) currentKartRenderSpeed(w *BlockKartRuntimeContext) float64 {
-	if w.vehicle != nil {
-		telemetry := scene3d.ProductVehicleTelemetry(w.vehicle)
+func (r *RaceSession) currentKartRenderSpeed(w *BlockKartRuntimePorts) float64 {
+	if w.core.vehicle != nil {
+		telemetry := scene3d.ProductVehicleTelemetry(w.core.vehicle)
 		return telemetry.Speed
 	}
-	return w.kartSpeed
+	return w.kart.kartSpeed
 }
 
-func (r *RaceSession) updateHeroInspectionCamera(w *BlockKartRuntimeContext) {
-	if w.scene == nil {
+func (r *RaceSession) updateHeroInspectionCamera(w *BlockKartRuntimePorts) {
+	if w.core.scene == nil {
 		return
 	}
 	target := voplay.Vec3{X: 76, Y: 5.4, Z: 113}
 	position := voplay.Vec3{X: 91, Y: 10.2, Z: 98}
-	if w.track != nil {
-		pose := w.track.PoseAt(48)
+	if w.core.track != nil {
+		pose := w.core.track.PoseAt(48)
 		target = pose.Position.Sub(pose.Right.Scale(pose.HalfWidth + 34.0)).Add(voplay.Vec3{Y: 4.8})
 		position = target.Add(pose.Right.Scale(24.0)).Sub(pose.Forward.Scale(32.0)).Add(voplay.Vec3{Y: 27.0})
 	}
-	w.scene.Camera.LookAt(position, target)
-	w.scene.Camera.Fov = 42
+	w.core.scene.Camera.LookAt(position, target)
+	w.core.scene.Camera.Fov = 42
 }
 
 func (w *World) CycleTerrainCameraView() int {
-	w.terrainCameraView++
-	if w.terrainCameraView > 4 {
-		w.terrainCameraView = 0
+	w.hud.terrainCameraView++
+	if w.hud.terrainCameraView > 4 {
+		w.hud.terrainCameraView = 0
 	}
-	return w.terrainCameraView
+	return w.hud.terrainCameraView
 }
 
-func (r *RaceSession) updateTerrainCaptureCamera(w *BlockKartRuntimeContext) {
-	if w.scene == nil {
+func (r *RaceSession) updateTerrainCaptureCamera(w *BlockKartRuntimePorts) {
+	if w.core.scene == nil {
 		return
 	}
-	if w.track == nil {
-		w.scene.Camera.LookAt(voplay.Vec3{X: 0, Y: 58, Z: 96}, voplay.Vec3{X: 0, Y: 0, Z: 0})
-		w.scene.Camera.Fov = 48
+	if w.core.track == nil {
+		w.core.scene.Camera.LookAt(voplay.Vec3{X: 0, Y: 58, Z: 96}, voplay.Vec3{X: 0, Y: 0, Z: 0})
+		w.core.scene.Camera.Fov = 48
 		return
 	}
-	start := w.track.DistanceAlongTrack(w.startPosition)
-	length := w.track.Length()
+	start := w.core.track.DistanceAlongTrack(w.race.startPosition)
+	length := w.core.track.Length()
 	if length <= 0 {
 		length = 1
 	}
-	if w.terrainCameraView == 1 {
+	if w.hud.terrainCameraView == 1 {
 		target := voplay.Vec3{X: 0, Y: 0.0, Z: 1}
 		position := voplay.Vec3{X: 0, Y: 950, Z: 0}
-		w.scene.Camera.LookAt(position, target)
-		w.scene.Camera.Fov = 62
+		w.core.scene.Camera.LookAt(position, target)
+		w.core.scene.Camera.Fov = 62
 		return
 	}
-	if w.terrainCameraView == 2 {
-		pose := w.track.PoseAt(start + length * 0.02)
+	if w.hud.terrainCameraView == 2 {
+		pose := w.core.track.PoseAt(start + length * 0.02)
 		target := pose.Position.Add(pose.Forward.Scale(92)).Add(voplay.Vec3{Y: 5.0})
 		position := pose.Position.Sub(pose.Forward.Scale(178)).Sub(pose.Right.Scale(34)).Add(voplay.Vec3{Y: 104})
-		w.scene.Camera.LookAt(position, target)
-		w.scene.Camera.Fov = 54
+		w.core.scene.Camera.LookAt(position, target)
+		w.core.scene.Camera.Fov = 54
 		return
 	}
-	if w.terrainCameraView == 3 {
+	if w.hud.terrainCameraView == 3 {
 		target := voplay.Vec3{X: 12, Y: 1.6, Z: -8}
 		position := voplay.Vec3{X: 440, Y: 185, Z: 305}
-		w.scene.Camera.LookAt(position, target)
-		w.scene.Camera.Fov = 56
+		w.core.scene.Camera.LookAt(position, target)
+		w.core.scene.Camera.Fov = 56
 		return
 	}
 	target := voplay.Vec3{X: -36, Y: 2.8, Z: 6}
 	position := voplay.Vec3{X: -485, Y: 170, Z: 255}
-	w.scene.Camera.LookAt(position, target)
-	w.scene.Camera.Fov = 55
+	w.core.scene.Camera.LookAt(position, target)
+	w.core.scene.Camera.Fov = 55
 }

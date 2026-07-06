@@ -7,64 +7,64 @@ import (
 )
 
 func (w *World) Draw(g *voplay.GameCtx, debugOverlayVisible bool) {
-	w.scene.Draw(g.Draw)
+	w.core.scene.Draw(g.Draw)
 	perf := voplay.DebugOverlayStats{}
 	if debugOverlayVisible {
 		perf = g.DebugOverlayStats()
 	}
 	perfSnapshot := voplay.PerfSnapshot{}
-	if debugOverlayVisible || w.hudPresenter.shouldPollPerfSnapshotForConsoleReport(w.BlockKartRuntimeContext) {
+	if debugOverlayVisible || w.hud.hudPresenter.shouldPollPerfSnapshotForConsoleReport(w.BlockKartRuntimeContext) {
 		perfSnapshot = g.GetPerfSnapshot()
 	}
-	if w.perfAnalyzer.ShouldReport(perfSnapshot) {
-		w.perfAnalyzer.Report(perfSnapshot, w.fixedProfiler.Stats(), g.Screen)
+	if w.hud.perfAnalyzer.ShouldReport(perfSnapshot) {
+		w.hud.perfAnalyzer.Report(perfSnapshot, w.hud.fixedProfiler.Stats(), g.Screen)
 	}
-	if w.terrainCameraView > 0 {
+	if w.hud.terrainCameraView > 0 {
 		return
 	}
-	hud := w.hudPresenter.hudState(w.BlockKartRuntimeContext, debugOverlayVisible, perf, perfSnapshot)
+	hud := w.hud.hudPresenter.hudState(w.BlockKartRuntimeContext, debugOverlayVisible, perf, perfSnapshot)
 	if debugOverlayVisible {
-		w.hudPresenter.updateDebugHUDLines(w.BlockKartRuntimeContext, &hud, perfSnapshot)
+		w.hud.hudPresenter.updateDebugHUDLines(w.BlockKartRuntimeContext, &hud, perfSnapshot)
 	}
-	w.hudPresenter.Capture(hud, w.debugHudLines[:w.debugHudLineCount])
-	drawWorldHUD(&w.theme, g, &hud)
-	w.touchControls.Draw(g.Draw)
+	w.hud.hudPresenter.Capture(hud, w.hud.debugHudLines[:w.hud.debugHudLineCount])
+	drawWorldHUD(&w.input.theme, g, &hud)
+	w.input.touchControls.Draw(g.Draw)
 }
 
-func (h *HUDPresenter) shouldPollPerfSnapshotForConsoleReport(w *BlockKartRuntimeContext) bool {
+func (h *HUDPresenter) shouldPollPerfSnapshotForConsoleReport(w *BlockKartRuntimePorts) bool {
 	if !blockKartPerfReports {
 		return false
 	}
-	w.perfSnapshotPollFrame++
+	w.hud.perfSnapshotPollFrame++
 	firstReportFrame := blockKartPerfWarmupFrames + blockKartPerfWindowFrames
-	if w.perfSnapshotPollFrame < firstReportFrame {
+	if w.hud.perfSnapshotPollFrame < firstReportFrame {
 		return false
 	}
-	return (w.perfSnapshotPollFrame - firstReportFrame) % blockKartPerfSnapshotPollFrames == 0
+	return (w.hud.perfSnapshotPollFrame - firstReportFrame) % blockKartPerfSnapshotPollFrames == 0
 }
 
 func (w *World) PrepareRender(g *voplay.GameCtx) {
-	if w == nil || w.scene == nil || g == nil || g.Draw == nil {
+	if w == nil || w.core.scene == nil || g == nil || g.Draw == nil {
 		return
 	}
-	w.scene.Prepare(g.Draw)
+	w.core.scene.Prepare(g.Draw)
 }
 
-func (h *HUDPresenter) updateTouchControls(w *BlockKartRuntimeContext, g *voplay.GameCtx) {
-	snapshot := w.touchControls.Read(g)
-	w.touchInput = snapshot.Input
-	w.touchInputActive = snapshot.Active
-	w.touchResetPressed = snapshot.ResetPressed
+func (h *HUDPresenter) updateTouchControls(w *BlockKartRuntimePorts, g *voplay.GameCtx) {
+	snapshot := w.input.touchControls.Read(g)
+	w.input.touchInput = snapshot.Input
+	w.input.touchInputActive = snapshot.Active
+	w.input.touchResetPressed = snapshot.ResetPressed
 }
 
-func (h *HUDPresenter) resetPlayer(w *BlockKartRuntimeContext) {
-	w.raceSession.respawnAtCheckpoint(w)
+func (h *HUDPresenter) resetPlayer(w *BlockKartRuntimePorts) {
+	w.race.raceSession.respawnAtCheckpoint(w)
 }
 
-func (h *HUDPresenter) hudState(w *BlockKartRuntimeContext, debugOverlayVisible bool, perf voplay.DebugOverlayStats, perfSnapshot voplay.PerfSnapshot) BlockKartHUDState {
-	if w.vehicle != nil {
-		telemetry := scene3d.ProductVehicleTelemetry(w.vehicle)
-		w.kartSpeed = telemetry.Speed
+func (h *HUDPresenter) hudState(w *BlockKartRuntimePorts, debugOverlayVisible bool, perf voplay.DebugOverlayStats, perfSnapshot voplay.PerfSnapshot) BlockKartHUDState {
+	if w.core.vehicle != nil {
+		telemetry := scene3d.ProductVehicleTelemetry(w.core.vehicle)
+		w.kart.kartSpeed = telemetry.Speed
 	}
 	renderDebugMode := scene3d.RenderDebugLit
 	stats := scene3d.SceneRenderStats{}
@@ -73,12 +73,12 @@ func (h *HUDPresenter) hudState(w *BlockKartRuntimeContext, debugOverlayVisible 
 	primitiveChunks := 0
 	primitiveVisibleChunks := 0
 	primitiveGroups := 0
-	if w.scene != nil {
-		diagnostics := scene3d.ProductSceneDiagnostics(w.scene)
+	if w.core.scene != nil {
+		diagnostics := scene3d.ProductSceneDiagnostics(w.core.scene)
 		renderDebugMode = diagnostics.RenderDebugMode
 	}
-	if debugOverlayVisible && w.scene != nil {
-		diagnostics := scene3d.ProductSceneDiagnostics(w.scene)
+	if debugOverlayVisible && w.core.scene != nil {
+		diagnostics := scene3d.ProductSceneDiagnostics(w.core.scene)
 		stats = diagnostics.Render
 		primitiveStats := diagnostics.Primitive
 		primitiveInstances = primitiveStats.TotalInstances
@@ -88,16 +88,16 @@ func (h *HUDPresenter) hudState(w *BlockKartRuntimeContext, debugOverlayVisible 
 		primitiveGroups = primitiveStats.ShapeMaterialGroups
 	}
 	trackEntities := 0
-	if debugOverlayVisible && w.trackResult != nil {
-		trackEntities = len(w.trackResult.Entities)
+	if debugOverlayVisible && w.core.trackResult != nil {
+		trackEntities = len(w.core.trackResult.Entities)
 	}
 	vehicleGrounded := false
 	wheelContacts := 0
 	wheelCount := 0
 	wheelMaxSlip := 0.0
 	wheelMaxCompression := 0.0
-	if debugOverlayVisible && w.vehicle != nil {
-		telemetry := scene3d.ProductVehicleTelemetry(w.vehicle)
+	if debugOverlayVisible && w.core.vehicle != nil {
+		telemetry := scene3d.ProductVehicleTelemetry(w.core.vehicle)
 		vehicleGrounded = telemetry.Grounded
 		wheelContacts = telemetry.ContactCount
 		wheelCount = telemetry.WheelCount
@@ -107,59 +107,59 @@ func (h *HUDPresenter) hudState(w *BlockKartRuntimeContext, debugOverlayVisible 
 		}
 		wheelMaxCompression = telemetry.MaxSuspensionCompression
 	}
-	camera := w.cameraTelemetry.Snapshot()
-	hud := BlockKartHUDState{RaceState: w.raceState, Time: w.courseTime, FinishTime: w.finishTime, BestTime: w.bestTime, BestTimeSet: w.bestTimeSet, Collected: w.collected, TotalCollectibles: len(w.collectibles), Checkpoint: w.checkpointLabel, NextGate: w.nextGateLabel, Lap: w.lap, TotalLaps: w.totalLaps, Speed: math.Abs(w.kartSpeed), Boosting: w.hudPresenter.isBoosting(w), Drifting: w.drifting, DriftCharge: w.driftCharge, Message: w.message, MessageTimer: w.messageTimer, Finished: w.finished, DebugOverlayVisible: debugOverlayVisible, RenderDebugMode: renderDebugMode, HeroCameraVisible: w.heroCameraVisible, SettingsStorageStatus: w.settings.StorageStatus, PerfFPS: perf.FPS, PerfFrameMs: perf.FrameMs, PerfLogicMs: perf.LogicMs, PerfInputMs: perf.InputMs, PerfAdvanceMs: perf.AdvanceMs, PerfDrawMs: perf.DrawMs, PerfOverlayMs: perf.OverlayMs, PerfBudgetMs: perf.FrameBudgetMs, PerfMaxFrameMs: perf.MaxFrameMs, PerfMaxLogicMs: perf.MaxLogicMs, PerfDrawBytes: perf.DrawBytes, PerfSubmitBytes: perf.SubmitBytes, PerfFixedSteps: perf.FixedSteps, PerfSlowFrames: perf.SlowFrames, PerfSlowLogs: perf.SlowLogs, PerfWorkSlowFrames: perf.WorkSlowFrames, PerfWorkSlowLogs: perf.WorkSlowLogs, PerfLastSlowReason: perf.LastSlowReason, PerfLastSlowFrameMs: perf.LastSlowFrameMs, PerfLastSlowLogicMs: perf.LastSlowLogicMs, PerfLastWorkSlowReason: perf.LastWorkSlowReason, PerfLastWorkSlowFrameMs: perf.LastWorkSlowFrameMs, PerfLastWorkSlowLogicMs: perf.LastWorkSlowLogicMs, PerfWindowFrames: perf.WindowFrames, PerfWindowSlowFrames: perf.WindowSlowFrames, PerfWindowLastSlowGapFrames: perf.WindowLastSlowGapFrames, PerfWindowLastSlowGapMs: perf.WindowLastSlowGapMs, PerfWindowWorkSlowFrames: perf.WindowWorkSlowFrames, PerfWindowLastWorkSlowGapFrames: perf.WindowLastWorkSlowGapFrames, PerfWindowLastWorkSlowGapMs: perf.WindowLastWorkSlowGapMs, PerfFrameP50Ms: perf.FrameP50Ms, PerfFrameP90Ms: perf.FrameP90Ms, PerfFrameP99Ms: perf.FrameP99Ms, PerfLogicP50Ms: perf.LogicP50Ms, PerfLogicP90Ms: perf.LogicP90Ms, PerfLogicP99Ms: perf.LogicP99Ms, PerfAdvanceP90Ms: perf.AdvanceP90Ms, PerfDrawP90Ms: perf.DrawP90Ms, PerfDrawP99Ms: perf.DrawP99Ms, PerfRenderFrame: perf.RenderFrame, PerfRenderLoopMs: perf.RenderLoopMs, PerfRenderPaceWaitMs: perf.RenderPaceWaitMs, PerfRenderReplyWaitMs: perf.RenderReplyWaitMs, PerfRenderSubmitMs: perf.RenderSubmitMs, PerfRenderDisplayPulseMs: perf.RenderDisplayPulseMs, PerfRenderDrawBytes: perf.RenderDrawBytes, PerfRenderFrameDivisor: perf.RenderFrameDivisor, PerfRenderAttribution: perf.RenderAttribution, PerfRenderWindowFrames: perf.RenderWindowFrames, PerfRenderWindowSlowFrames: perf.RenderWindowSlowFrames, PerfRenderWindowLastSlowGapFrames: perf.RenderWindowLastSlowGapFrames, PerfRenderWindowLastSlowGapMs: perf.RenderWindowLastSlowGapMs, PerfRenderCadenceSlowFrames: perf.RenderCadenceSlowFrames, PerfRenderReplySlowFrames: perf.RenderReplySlowFrames, PerfRenderSubmitSlowFrames: perf.RenderSubmitSlowFrames, PerfRenderUnattributedSlowFrames: perf.RenderUnattributedSlowFrames, PerfRenderLoopP50Ms: perf.RenderLoopP50Ms, PerfRenderLoopP90Ms: perf.RenderLoopP90Ms, PerfRenderLoopP99Ms: perf.RenderLoopP99Ms, PerfRenderPaceWaitP90Ms: perf.RenderPaceWaitP90Ms, PerfRenderReplyWaitP90Ms: perf.RenderReplyWaitP90Ms, PerfRenderSubmitP90Ms: perf.RenderSubmitP90Ms, SceneActive: stats.ActiveEntities, SceneVisible: stats.VisibleEntities, SceneCulled: stats.CulledEntities, SceneModels: stats.ModelEntities, SceneUpserts: stats.UpsertedObjects, SceneDestroyed: stats.DestroyedObjects, SceneBatchEligible: stats.BatchEligibleObjects, SceneBatchGroups: stats.BatchGroups, SceneFlushMs: stats.FlushCpuMs, SceneFrameMs: stats.FrameCpuMs, TrackEntities: trackEntities, PrimitiveInstances: primitiveInstances, PrimitiveVisibleInstances: primitiveVisibleInstances, PrimitiveChunks: primitiveChunks, PrimitiveChunksVisible: primitiveVisibleChunks, PrimitiveGroups: primitiveGroups, KartGrounded: vehicleGrounded, WheelContacts: wheelContacts, WheelCount: wheelCount, KartSlipPeak: wheelMaxSlip, WheelMaxCompression: wheelMaxCompression, CameraTargetStep: camera.Step, CameraTargetStepMax: camera.StepMax, CameraTargetResidual: camera.Residual, CameraTargetResidualMax: camera.ResidualMax, CameraTargetYStep: camera.YStep, CameraTargetYStepMax: camera.YStepMax, CameraSpeedStep: camera.SpeedStep, CameraSpeedStepMax: camera.SpeedStepMax}
+	camera := w.hud.cameraTelemetry.Snapshot()
+	hud := BlockKartHUDState{RaceState: w.race.raceState, Time: w.race.courseTime, FinishTime: w.race.finishTime, BestTime: w.race.bestTime, BestTimeSet: w.race.bestTimeSet, Collected: w.race.collected, TotalCollectibles: len(w.race.collectibles), Checkpoint: w.race.checkpointLabel, NextGate: w.race.nextGateLabel, Lap: w.race.lap, TotalLaps: w.race.totalLaps, Speed: math.Abs(w.kart.kartSpeed), Boosting: w.hud.hudPresenter.isBoosting(w), Drifting: w.kart.drifting, DriftCharge: w.kart.driftCharge, Message: w.hud.message, MessageTimer: w.hud.messageTimer, Finished: w.race.finished, DebugOverlayVisible: debugOverlayVisible, RenderDebugMode: renderDebugMode, HeroCameraVisible: w.hud.heroCameraVisible, SettingsStorageStatus: w.input.settings.StorageStatus, PerfFPS: perf.FPS, PerfFrameMs: perf.FrameMs, PerfLogicMs: perf.LogicMs, PerfInputMs: perf.InputMs, PerfAdvanceMs: perf.AdvanceMs, PerfDrawMs: perf.DrawMs, PerfOverlayMs: perf.OverlayMs, PerfBudgetMs: perf.FrameBudgetMs, PerfMaxFrameMs: perf.MaxFrameMs, PerfMaxLogicMs: perf.MaxLogicMs, PerfDrawBytes: perf.DrawBytes, PerfSubmitBytes: perf.SubmitBytes, PerfFixedSteps: perf.FixedSteps, PerfSlowFrames: perf.SlowFrames, PerfSlowLogs: perf.SlowLogs, PerfWorkSlowFrames: perf.WorkSlowFrames, PerfWorkSlowLogs: perf.WorkSlowLogs, PerfLastSlowReason: perf.LastSlowReason, PerfLastSlowFrameMs: perf.LastSlowFrameMs, PerfLastSlowLogicMs: perf.LastSlowLogicMs, PerfLastWorkSlowReason: perf.LastWorkSlowReason, PerfLastWorkSlowFrameMs: perf.LastWorkSlowFrameMs, PerfLastWorkSlowLogicMs: perf.LastWorkSlowLogicMs, PerfWindowFrames: perf.WindowFrames, PerfWindowSlowFrames: perf.WindowSlowFrames, PerfWindowLastSlowGapFrames: perf.WindowLastSlowGapFrames, PerfWindowLastSlowGapMs: perf.WindowLastSlowGapMs, PerfWindowWorkSlowFrames: perf.WindowWorkSlowFrames, PerfWindowLastWorkSlowGapFrames: perf.WindowLastWorkSlowGapFrames, PerfWindowLastWorkSlowGapMs: perf.WindowLastWorkSlowGapMs, PerfFrameP50Ms: perf.FrameP50Ms, PerfFrameP90Ms: perf.FrameP90Ms, PerfFrameP99Ms: perf.FrameP99Ms, PerfLogicP50Ms: perf.LogicP50Ms, PerfLogicP90Ms: perf.LogicP90Ms, PerfLogicP99Ms: perf.LogicP99Ms, PerfAdvanceP90Ms: perf.AdvanceP90Ms, PerfDrawP90Ms: perf.DrawP90Ms, PerfDrawP99Ms: perf.DrawP99Ms, PerfRenderFrame: perf.RenderFrame, PerfRenderLoopMs: perf.RenderLoopMs, PerfRenderPaceWaitMs: perf.RenderPaceWaitMs, PerfRenderReplyWaitMs: perf.RenderReplyWaitMs, PerfRenderSubmitMs: perf.RenderSubmitMs, PerfRenderDisplayPulseMs: perf.RenderDisplayPulseMs, PerfRenderDrawBytes: perf.RenderDrawBytes, PerfRenderFrameDivisor: perf.RenderFrameDivisor, PerfRenderAttribution: perf.RenderAttribution, PerfRenderWindowFrames: perf.RenderWindowFrames, PerfRenderWindowSlowFrames: perf.RenderWindowSlowFrames, PerfRenderWindowLastSlowGapFrames: perf.RenderWindowLastSlowGapFrames, PerfRenderWindowLastSlowGapMs: perf.RenderWindowLastSlowGapMs, PerfRenderCadenceSlowFrames: perf.RenderCadenceSlowFrames, PerfRenderReplySlowFrames: perf.RenderReplySlowFrames, PerfRenderSubmitSlowFrames: perf.RenderSubmitSlowFrames, PerfRenderUnattributedSlowFrames: perf.RenderUnattributedSlowFrames, PerfRenderLoopP50Ms: perf.RenderLoopP50Ms, PerfRenderLoopP90Ms: perf.RenderLoopP90Ms, PerfRenderLoopP99Ms: perf.RenderLoopP99Ms, PerfRenderPaceWaitP90Ms: perf.RenderPaceWaitP90Ms, PerfRenderReplyWaitP90Ms: perf.RenderReplyWaitP90Ms, PerfRenderSubmitP90Ms: perf.RenderSubmitP90Ms, SceneActive: stats.ActiveEntities, SceneVisible: stats.VisibleEntities, SceneCulled: stats.CulledEntities, SceneModels: stats.ModelEntities, SceneUpserts: stats.UpsertedObjects, SceneDestroyed: stats.DestroyedObjects, SceneBatchEligible: stats.BatchEligibleObjects, SceneBatchGroups: stats.BatchGroups, SceneFlushMs: stats.FlushCpuMs, SceneFrameMs: stats.FrameCpuMs, TrackEntities: trackEntities, PrimitiveInstances: primitiveInstances, PrimitiveVisibleInstances: primitiveVisibleInstances, PrimitiveChunks: primitiveChunks, PrimitiveChunksVisible: primitiveVisibleChunks, PrimitiveGroups: primitiveGroups, KartGrounded: vehicleGrounded, WheelContacts: wheelContacts, WheelCount: wheelCount, KartSlipPeak: wheelMaxSlip, WheelMaxCompression: wheelMaxCompression, CameraTargetStep: camera.Step, CameraTargetStepMax: camera.StepMax, CameraTargetResidual: camera.Residual, CameraTargetResidualMax: camera.ResidualMax, CameraTargetYStep: camera.YStep, CameraTargetYStepMax: camera.YStepMax, CameraSpeedStep: camera.SpeedStep, CameraSpeedStepMax: camera.SpeedStepMax}
 	if debugOverlayVisible {
 		blockKartApplyPerfSnapshotToHUD(&hud, perfSnapshot)
 	}
 	return hud
 }
 
-func (h *HUDPresenter) updateDebugHUDLines(w *BlockKartRuntimeContext, hud *BlockKartHUDState, perfSnapshot voplay.PerfSnapshot) {
-	w.debugHudFrame++
-	if w.debugHudLineCount == 0 || w.debugHudFrame >= 10 {
-		fixed := w.fixedProfiler.Stats()
-		w.debugHudFrame = 0
-		w.debugHudLineCount = 18
-		w.debugHudLines[0] = "F3 perf  fps " + formatHudFloat(hud.PerfFPS, 1) + "  frame " + formatHudMs(hud.PerfFrameMs) + " / budget " + formatHudMs(hud.PerfBudgetMs) + "  logic " + formatHudMs(hud.PerfLogicMs)
-		w.debugHudLines[1] = "slow " + itoa(hud.PerfSlowFrames) + " logs " + itoa(hud.PerfSlowLogs) + " work " + itoa(hud.PerfWorkSlowFrames) + " logs " + itoa(hud.PerfWorkSlowLogs)
-		w.debugHudLines[2] = "max frame " + formatHudMs(hud.PerfMaxFrameMs) + "  max logic " + formatHudMs(hud.PerfMaxLogicMs) + "  fixed steps " + itoa(hud.PerfFixedSteps) + "  bytes " + formatHudBytes(hud.PerfDrawBytes)
-		w.debugHudLines[3] = "BK fixed last/peak " + formatHudMs(fixed.TotalMs) + "/" + formatHudMs(fixed.PeakTotalMs) + "  slow " + itoa(fixed.WindowSlowFrames) + "/" + itoa(fixed.WindowFrames) + "  worst " + fixed.SlowestPhase + ":" + formatHudMs(fixed.SlowestPhaseMs)
-		w.debugHudLines[4] = "BK phase touch/game/drive/assist/phys/audio " + formatHudMs(fixed.TouchMs) + "/" + formatHudMs(fixed.GameplayMs) + "/" + formatHudMs(fixed.DriveMs) + "/" + formatHudMs(fixed.AssistMs) + "/" + formatHudMs(fixed.PhysicsMs) + "/" + formatHudMs(fixed.AudioMs) + " slept " + boolHud(fixed.Slept)
-		w.debugHudLines[5] = "engine phase input/advance/draw/overlay " + formatHudMs(hud.PerfInputMs) + "/" + formatHudMs(hud.PerfAdvanceMs) + "/" + formatHudMs(hud.PerfDrawMs) + "/" + formatHudMs(hud.PerfOverlayMs)
+func (h *HUDPresenter) updateDebugHUDLines(w *BlockKartRuntimePorts, hud *BlockKartHUDState, perfSnapshot voplay.PerfSnapshot) {
+	w.hud.debugHudFrame++
+	if w.hud.debugHudLineCount == 0 || w.hud.debugHudFrame >= 10 {
+		fixed := w.hud.fixedProfiler.Stats()
+		w.hud.debugHudFrame = 0
+		w.hud.debugHudLineCount = 18
+		w.hud.debugHudLines[0] = "F3 perf  fps " + formatHudFloat(hud.PerfFPS, 1) + "  frame " + formatHudMs(hud.PerfFrameMs) + " / budget " + formatHudMs(hud.PerfBudgetMs) + "  logic " + formatHudMs(hud.PerfLogicMs)
+		w.hud.debugHudLines[1] = "slow " + itoa(hud.PerfSlowFrames) + " logs " + itoa(hud.PerfSlowLogs) + " work " + itoa(hud.PerfWorkSlowFrames) + " logs " + itoa(hud.PerfWorkSlowLogs)
+		w.hud.debugHudLines[2] = "max frame " + formatHudMs(hud.PerfMaxFrameMs) + "  max logic " + formatHudMs(hud.PerfMaxLogicMs) + "  fixed steps " + itoa(hud.PerfFixedSteps) + "  bytes " + formatHudBytes(hud.PerfDrawBytes)
+		w.hud.debugHudLines[3] = "BK fixed last/peak " + formatHudMs(fixed.TotalMs) + "/" + formatHudMs(fixed.PeakTotalMs) + "  slow " + itoa(fixed.WindowSlowFrames) + "/" + itoa(fixed.WindowFrames) + "  worst " + fixed.SlowestPhase + ":" + formatHudMs(fixed.SlowestPhaseMs)
+		w.hud.debugHudLines[4] = "BK phase touch/game/drive/assist/phys/audio " + formatHudMs(fixed.TouchMs) + "/" + formatHudMs(fixed.GameplayMs) + "/" + formatHudMs(fixed.DriveMs) + "/" + formatHudMs(fixed.AssistMs) + "/" + formatHudMs(fixed.PhysicsMs) + "/" + formatHudMs(fixed.AudioMs) + " slept " + boolHud(fixed.Slept)
+		w.hud.debugHudLines[5] = "engine phase input/advance/draw/overlay " + formatHudMs(hud.PerfInputMs) + "/" + formatHudMs(hud.PerfAdvanceMs) + "/" + formatHudMs(hud.PerfDrawMs) + "/" + formatHudMs(hud.PerfOverlayMs)
 		if perfSnapshot.Enabled {
 			window := blockKartPerfReportingWindow(perfSnapshot)
 			current := perfSnapshot.Current
 			workload := current.RendererWorkload
 			gpu := current.GpuQueue
-			w.debugHudLines[6] = "perf frame p50/90/99/max " + formatHudMs(window.FrameP50Ms) + "/" + formatHudMs(window.FrameP90Ms) + "/" + formatHudMs(window.FrameP99Ms) + "/" + formatHudMs(window.FrameMaxMs) + "  slow " + itoa(window.SlowFrames) + "/" + itoa(window.Frames)
-			w.debugHudLines[7] = "perf p90 game/draw/render/gpu/hud " + formatHudMs(window.GameCpuP90Ms) + "/" + formatHudMs(window.DrawEncodeP90Ms) + "/" + formatHudMs(window.RenderSubmitP90Ms) + "/" + formatHudMs(window.GpuWorkDoneP90Ms) + "/" + formatHudMs(window.HudP90Ms)
-			w.debugHudLines[8] = "perf cause " + current.Classification.PrimaryCause + "  secondary " + current.Classification.SecondaryCause + "  queue " + gpu.QueueDepthClass
-			w.debugHudLines[9] = "gpu now work/inflight/probe " + formatHudMs(gpu.SubmittedWorkDoneMs) + "/" + itoa(gpu.InFlightSubmits) + "/" + formatHudMs(gpu.ProbeOverheadMs) + "  submit " + formatHudMs(current.RendererCpu.QueueSubmitCpuMs)
-			w.debugHudLines[10] = "work draws model/prim/sprite/text/batch " + itoa(workload.ModelDraws) + "/" + itoa(workload.PrimitiveDraws) + "/" + itoa(workload.SpriteDraws) + "/" + itoa(workload.TextDraws) + "/" + itoa(workload.InstancedBatches)
-			w.debugHudLines[11] = "work inst/tri/upload/chunks " + itoa(workload.Instances) + "/" + itoa(workload.Triangles) + "/" + formatHudBytes(workload.UploadBytes) + "/" + itoa(workload.PrimitiveChunks) + " churn " + itoa(workload.BufferCreates) + "/" + itoa(workload.BindGroupCreates) + "/" + itoa(workload.TextureUploads)
+			w.hud.debugHudLines[6] = "perf frame p50/90/99/max " + formatHudMs(window.FrameP50Ms) + "/" + formatHudMs(window.FrameP90Ms) + "/" + formatHudMs(window.FrameP99Ms) + "/" + formatHudMs(window.FrameMaxMs) + "  slow " + itoa(window.SlowFrames) + "/" + itoa(window.Frames)
+			w.hud.debugHudLines[7] = "perf p90 game/draw/render/gpu/hud " + formatHudMs(window.GameCpuP90Ms) + "/" + formatHudMs(window.DrawEncodeP90Ms) + "/" + formatHudMs(window.RenderSubmitP90Ms) + "/" + formatHudMs(window.GpuWorkDoneP90Ms) + "/" + formatHudMs(window.HudP90Ms)
+			w.hud.debugHudLines[8] = "perf cause " + current.Classification.PrimaryCause + "  secondary " + current.Classification.SecondaryCause + "  queue " + gpu.QueueDepthClass
+			w.hud.debugHudLines[9] = "gpu now work/inflight/probe " + formatHudMs(gpu.SubmittedWorkDoneMs) + "/" + itoa(gpu.InFlightSubmits) + "/" + formatHudMs(gpu.ProbeOverheadMs) + "  submit " + formatHudMs(current.RendererCpu.QueueSubmitCpuMs)
+			w.hud.debugHudLines[10] = "work draws model/prim/sprite/text/batch " + itoa(workload.ModelDraws) + "/" + itoa(workload.PrimitiveDraws) + "/" + itoa(workload.SpriteDraws) + "/" + itoa(workload.TextDraws) + "/" + itoa(workload.InstancedBatches)
+			w.hud.debugHudLines[11] = "work inst/tri/upload/chunks " + itoa(workload.Instances) + "/" + itoa(workload.Triangles) + "/" + formatHudBytes(workload.UploadBytes) + "/" + itoa(workload.PrimitiveChunks) + " churn " + itoa(workload.BufferCreates) + "/" + itoa(workload.BindGroupCreates) + "/" + itoa(workload.TextureUploads)
 		} else {
-			w.debugHudLines[6] = "240f frame p50/90/99 " + formatHudMs(hud.PerfFrameP50Ms) + "/" + formatHudMs(hud.PerfFrameP90Ms) + "/" + formatHudMs(hud.PerfFrameP99Ms) + "  slow " + itoa(hud.PerfWindowSlowFrames) + "/" + itoa(hud.PerfWindowFrames) + " gap " + itoa(hud.PerfWindowLastSlowGapFrames) + "/" + formatHudMs(hud.PerfWindowLastSlowGapMs)
-			w.debugHudLines[7] = "240f logic p50/90/99 " + formatHudMs(hud.PerfLogicP50Ms) + "/" + formatHudMs(hud.PerfLogicP90Ms) + "/" + formatHudMs(hud.PerfLogicP99Ms) + "  work " + itoa(hud.PerfWindowWorkSlowFrames) + " gap " + itoa(hud.PerfWindowLastWorkSlowGapFrames) + "/" + formatHudMs(hud.PerfWindowLastWorkSlowGapMs)
-			w.debugHudLines[8] = "240f advance/draw p90/99 " + formatHudMs(hud.PerfAdvanceP90Ms) + "/" + formatHudMs(hud.PerfDrawP90Ms) + "/" + formatHudMs(hud.PerfDrawP99Ms)
-			w.debugHudLines[9] = "render now loop/pace/reply/submit " + formatHudMs(hud.PerfRenderLoopMs) + "/" + formatHudMs(hud.PerfRenderPaceWaitMs) + "/" + formatHudMs(hud.PerfRenderReplyWaitMs) + "/" + formatHudMs(hud.PerfRenderSubmitMs) + "  attr " + hud.PerfRenderAttribution + "  bytes " + formatHudBytes(hud.PerfRenderDrawBytes)
-			w.debugHudLines[10] = "render 240f loop p50/90/99 " + formatHudMs(hud.PerfRenderLoopP50Ms) + "/" + formatHudMs(hud.PerfRenderLoopP90Ms) + "/" + formatHudMs(hud.PerfRenderLoopP99Ms) + "  pulse " + formatHudMs(hud.PerfRenderDisplayPulseMs) + " x" + itoa(hud.PerfRenderFrameDivisor)
-			w.debugHudLines[11] = "render p90 pace/reply/submit " + formatHudMs(hud.PerfRenderPaceWaitP90Ms) + "/" + formatHudMs(hud.PerfRenderReplyWaitP90Ms) + "/" + formatHudMs(hud.PerfRenderSubmitP90Ms) + "  slow " + itoa(hud.PerfRenderWindowSlowFrames) + "/" + itoa(hud.PerfRenderWindowFrames) + " gap " + itoa(hud.PerfRenderWindowLastSlowGapFrames) + "/" + formatHudMs(hud.PerfRenderWindowLastSlowGapMs) + " c/r/s/u " + itoa(hud.PerfRenderCadenceSlowFrames) + "/" + itoa(hud.PerfRenderReplySlowFrames) + "/" + itoa(hud.PerfRenderSubmitSlowFrames) + "/" + itoa(hud.PerfRenderUnattributedSlowFrames)
+			w.hud.debugHudLines[6] = "240f frame p50/90/99 " + formatHudMs(hud.PerfFrameP50Ms) + "/" + formatHudMs(hud.PerfFrameP90Ms) + "/" + formatHudMs(hud.PerfFrameP99Ms) + "  slow " + itoa(hud.PerfWindowSlowFrames) + "/" + itoa(hud.PerfWindowFrames) + " gap " + itoa(hud.PerfWindowLastSlowGapFrames) + "/" + formatHudMs(hud.PerfWindowLastSlowGapMs)
+			w.hud.debugHudLines[7] = "240f logic p50/90/99 " + formatHudMs(hud.PerfLogicP50Ms) + "/" + formatHudMs(hud.PerfLogicP90Ms) + "/" + formatHudMs(hud.PerfLogicP99Ms) + "  work " + itoa(hud.PerfWindowWorkSlowFrames) + " gap " + itoa(hud.PerfWindowLastWorkSlowGapFrames) + "/" + formatHudMs(hud.PerfWindowLastWorkSlowGapMs)
+			w.hud.debugHudLines[8] = "240f advance/draw p90/99 " + formatHudMs(hud.PerfAdvanceP90Ms) + "/" + formatHudMs(hud.PerfDrawP90Ms) + "/" + formatHudMs(hud.PerfDrawP99Ms)
+			w.hud.debugHudLines[9] = "render now loop/pace/reply/submit " + formatHudMs(hud.PerfRenderLoopMs) + "/" + formatHudMs(hud.PerfRenderPaceWaitMs) + "/" + formatHudMs(hud.PerfRenderReplyWaitMs) + "/" + formatHudMs(hud.PerfRenderSubmitMs) + "  attr " + hud.PerfRenderAttribution + "  bytes " + formatHudBytes(hud.PerfRenderDrawBytes)
+			w.hud.debugHudLines[10] = "render 240f loop p50/90/99 " + formatHudMs(hud.PerfRenderLoopP50Ms) + "/" + formatHudMs(hud.PerfRenderLoopP90Ms) + "/" + formatHudMs(hud.PerfRenderLoopP99Ms) + "  pulse " + formatHudMs(hud.PerfRenderDisplayPulseMs) + " x" + itoa(hud.PerfRenderFrameDivisor)
+			w.hud.debugHudLines[11] = "render p90 pace/reply/submit " + formatHudMs(hud.PerfRenderPaceWaitP90Ms) + "/" + formatHudMs(hud.PerfRenderReplyWaitP90Ms) + "/" + formatHudMs(hud.PerfRenderSubmitP90Ms) + "  slow " + itoa(hud.PerfRenderWindowSlowFrames) + "/" + itoa(hud.PerfRenderWindowFrames) + " gap " + itoa(hud.PerfRenderWindowLastSlowGapFrames) + "/" + formatHudMs(hud.PerfRenderWindowLastSlowGapMs) + " c/r/s/u " + itoa(hud.PerfRenderCadenceSlowFrames) + "/" + itoa(hud.PerfRenderReplySlowFrames) + "/" + itoa(hud.PerfRenderSubmitSlowFrames) + "/" + itoa(hud.PerfRenderUnattributedSlowFrames)
 		}
-		w.debugHudLines[12] = "scene active/visible/culled/model " + itoa(hud.SceneActive) + "/" + itoa(hud.SceneVisible) + "/" + itoa(hud.SceneCulled) + "/" + itoa(hud.SceneModels)
-		w.debugHudLines[13] = "scene upsert/destroy/batch/groups " + itoa(hud.SceneUpserts) + "/" + itoa(hud.SceneDestroyed) + "/" + itoa(hud.SceneBatchEligible) + "/" + itoa(hud.SceneBatchGroups)
-		w.debugHudLines[14] = "scene cpu flush " + formatHudMs(hud.SceneFlushMs) + "  frame " + formatHudMs(hud.SceneFrameMs) + "  track ents " + itoa(hud.TrackEntities)
-		w.debugHudLines[15] = "primitive inst visible/total " + itoa(hud.PrimitiveVisibleInstances) + "/" + itoa(hud.PrimitiveInstances) + "  chunks " + itoa(hud.PrimitiveChunksVisible) + "/" + itoa(hud.PrimitiveChunks)
-		w.debugHudLines[16] = "primitive groups " + itoa(hud.PrimitiveGroups)
-		w.debugHudLines[17] = "vehicle grounded " + boolHud(hud.KartGrounded) + "  wheels " + itoa(hud.WheelContacts) + "/" + itoa(hud.WheelCount) + "  slip " + formatHudFloat(hud.KartSlipPeak, 2) + "  comp " + formatHudFloat(hud.WheelMaxCompression, 2)
+		w.hud.debugHudLines[12] = "scene active/visible/culled/model " + itoa(hud.SceneActive) + "/" + itoa(hud.SceneVisible) + "/" + itoa(hud.SceneCulled) + "/" + itoa(hud.SceneModels)
+		w.hud.debugHudLines[13] = "scene upsert/destroy/batch/groups " + itoa(hud.SceneUpserts) + "/" + itoa(hud.SceneDestroyed) + "/" + itoa(hud.SceneBatchEligible) + "/" + itoa(hud.SceneBatchGroups)
+		w.hud.debugHudLines[14] = "scene cpu flush " + formatHudMs(hud.SceneFlushMs) + "  frame " + formatHudMs(hud.SceneFrameMs) + "  track ents " + itoa(hud.TrackEntities)
+		w.hud.debugHudLines[15] = "primitive inst visible/total " + itoa(hud.PrimitiveVisibleInstances) + "/" + itoa(hud.PrimitiveInstances) + "  chunks " + itoa(hud.PrimitiveChunksVisible) + "/" + itoa(hud.PrimitiveChunks)
+		w.hud.debugHudLines[16] = "primitive groups " + itoa(hud.PrimitiveGroups)
+		w.hud.debugHudLines[17] = "vehicle grounded " + boolHud(hud.KartGrounded) + "  wheels " + itoa(hud.WheelContacts) + "/" + itoa(hud.WheelCount) + "  slip " + formatHudFloat(hud.KartSlipPeak, 2) + "  comp " + formatHudFloat(hud.WheelMaxCompression, 2)
 	}
-	hud.DebugLines = w.debugHudLines
-	hud.DebugLineCount = w.debugHudLineCount
+	hud.DebugLines = w.hud.debugHudLines
+	hud.DebugLineCount = w.hud.debugHudLineCount
 }
 
-func (h *HUDPresenter) isBoosting(w *BlockKartRuntimeContext) bool {
-	if w.boostTimer > 0 {
+func (h *HUDPresenter) isBoosting(w *BlockKartRuntimePorts) bool {
+	if w.kart.boostTimer > 0 {
 		return true
 	}
-	return w.kartController != nil && w.kartController.BoostTimer > 0
+	return w.core.kartController != nil && w.core.kartController.BoostTimer > 0
 }

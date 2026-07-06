@@ -7,12 +7,12 @@ import (
 	"github.com/vo-lang/voplay/scene3d"
 )
 
-func (t *TrackRuntime) buildPrimitiveTrackVisuals(w *BlockKartRuntimeContext, track *scene3d.Track) {
-	w.trackRuntime.addPrimitiveLandmarks(w, track)
-	w.trackRuntime.addContinuousPrimitiveRoadVisuals(w, track)
-	w.trackRuntime.addPrimitiveRoadsideMicroDetails(w, track)
-	w.trackRuntime.addPrimitiveTerrainGroves(w)
-	w.trackRuntime.addPrimitiveHeroRoadsideClusters(w, track)
+func (t *TrackRuntime) buildPrimitiveTrackVisuals(w *BlockKartRuntimePorts, track *scene3d.Track) {
+	w.core.trackRuntime.addPrimitiveLandmarks(w, track)
+	w.core.trackRuntime.addContinuousPrimitiveRoadVisuals(w, track)
+	w.core.trackRuntime.addPrimitiveRoadsideMicroDetails(w, track)
+	w.core.trackRuntime.addPrimitiveTerrainGroves(w)
+	w.core.trackRuntime.addPrimitiveHeroRoadsideClusters(w, track)
 	count := primitiveTrackSampleCount(track)
 	length := track.Length()
 	step := length / float64(count)
@@ -20,29 +20,29 @@ func (t *TrackRuntime) buildPrimitiveTrackVisuals(w *BlockKartRuntimeContext, tr
 		distance := float64(i) * step + step * 0.5
 		pose := track.PoseAt(distance)
 		if i % 7 == 0 {
-			w.trackRuntime.addPrimitiveFencePair(w, pose, step * 2.35)
+			w.core.trackRuntime.addPrimitiveFencePair(w, pose, step * 2.35)
 		}
 		if i % 3 == 1 {
-			w.trackRuntime.addPrimitiveTreeAtPose(w, pose, pose.HalfWidth + 18.0 + float64((i * 7) % 18), 0.88 + float64(i % 5) * 0.10)
+			w.core.trackRuntime.addPrimitiveTreeAtPose(w, pose, pose.HalfWidth + 18.0 + float64((i * 7) % 18), 0.88 + float64(i % 5) * 0.10)
 		}
 		if i % 4 == 2 {
-			w.trackRuntime.addPrimitiveTreeAtPose(w, pose, -(pose.HalfWidth + 22.0 + float64((i * 5) % 24)), 0.82 + float64(i % 4) * 0.09)
+			w.core.trackRuntime.addPrimitiveTreeAtPose(w, pose, -(pose.HalfWidth + 22.0 + float64((i * 5) % 24)), 0.82 + float64(i % 4) * 0.09)
 		}
 		if i % 5 == 2 {
-			w.trackRuntime.addPrimitiveBushClusterAtPose(w, pose, pose.HalfWidth + 8.4)
+			w.core.trackRuntime.addPrimitiveBushClusterAtPose(w, pose, pose.HalfWidth + 8.4)
 		}
 		if i % 5 == 4 {
-			w.trackRuntime.addPrimitiveBushClusterAtPose(w, pose, -(pose.HalfWidth + 8.8))
+			w.core.trackRuntime.addPrimitiveBushClusterAtPose(w, pose, -(pose.HalfWidth + 8.8))
 		}
 		if i % 10 == 4 {
-			w.trackRuntime.addPrimitiveSignAtPose(w, pose, pose.HalfWidth + 5.6)
+			w.core.trackRuntime.addPrimitiveSignAtPose(w, pose, pose.HalfWidth + 5.6)
 		}
 		if i % 8 == 2 {
-			w.trackRuntime.addPrimitiveRocksAtPose(w, pose, -(pose.HalfWidth + 12.5))
+			w.core.trackRuntime.addPrimitiveRocksAtPose(w, pose, -(pose.HalfWidth + 12.5))
 		}
 	}
-	w.trackRuntime.addPrimitiveStartGantry(w, primitiveTrackStartPose(track))
-	w.trackRuntime.addPrimitiveClouds(w)
+	w.core.trackRuntime.addPrimitiveStartGantry(w, primitiveTrackStartPose(track))
+	w.core.trackRuntime.addPrimitiveClouds(w)
 }
 
 func primitiveTrackStartPose(track *scene3d.Track) scene3d.TrackPose {
@@ -69,20 +69,20 @@ func primitiveTrackStartDistance(track *scene3d.Track) float64 {
 	return 0
 }
 
-func (t *TrackRuntime) applyPrimitiveTrackSpawn(w *BlockKartRuntimeContext, track *scene3d.Track) {
+func (t *TrackRuntime) applyPrimitiveTrackSpawn(w *BlockKartRuntimePorts, track *scene3d.Track) {
 	pose := primitiveTrackStartPose(track)
-	w.startPosition = primitiveRidePosition(pose.Position)
-	w.startYaw = pose.Yaw
-	w.checkpointPosition = w.startPosition
-	w.checkpointYaw = w.startYaw
-	w.kartYaw = w.startYaw
+	w.race.startPosition = primitiveRidePosition(pose.Position)
+	w.race.startYaw = pose.Yaw
+	w.race.checkpointPosition = w.race.startPosition
+	w.race.checkpointYaw = w.race.startYaw
+	w.kart.kartYaw = w.race.startYaw
 }
 
-func (t *TrackRuntime) populatePrimitiveTrackCheckpoints(w *BlockKartRuntimeContext, track *scene3d.Track) {
+func (t *TrackRuntime) populatePrimitiveTrackCheckpoints(w *BlockKartRuntimePorts, track *scene3d.Track) {
 	if track == nil || track.Asset() == nil {
 		return
 	}
-	w.checkpoints = nil
+	w.race.checkpoints = nil
 	for _, gate := range track.Asset().Gates {
 		pose := track.PoseAt(gate.Distance)
 		respawn := track.RespawnPoseNear(pose.Position)
@@ -90,65 +90,65 @@ func (t *TrackRuntime) populatePrimitiveTrackCheckpoints(w *BlockKartRuntimeCont
 		if radius <= 0 {
 			radius = checkpointRadius
 		}
-		w.checkpoints = append(w.checkpoints, newCheckpoint(primitiveRidePosition(pose.Position), primitiveRidePosition(respawn.Position), respawn.Yaw, gate.Name, radius))
+		w.race.checkpoints = append(w.race.checkpoints, newCheckpoint(primitiveRidePosition(pose.Position), primitiveRidePosition(respawn.Position), respawn.Yaw, gate.Name, radius))
 	}
-	w.raceSession.refreshNextGateLabel(w)
+	w.race.raceSession.refreshNextGateLabel(w)
 }
 
 func primitiveRidePosition(position voplay.Vec3) voplay.Vec3 {
 	return position.Add(voplay.Vec3{Y: kartSpawnRideHeight})
 }
 
-func (t *TrackRuntime) addContinuousPrimitiveRoadVisuals(w *BlockKartRuntimeContext, track *scene3d.Track) {
+func (t *TrackRuntime) addContinuousPrimitiveRoadVisuals(w *BlockKartRuntimePorts, track *scene3d.Track) {
 	if track == nil {
 		return
 	}
-	if w.primitiveMap == nil {
-		w.message = "Primitive map unavailable"
-		w.messageTimer = 3
+	if w.core.primitiveMap == nil {
+		w.hud.message = "Primitive map unavailable"
+		w.hud.messageTimer = 3
 		return
 	}
 	names := defaultBlockKartTrackSpec().VisualRoadMeshes
 	for _, name := range names {
-		_, err := scene3d.SpawnBlockKartMapMesh(w.scene, w.primitiveMap, name)
+		_, err := scene3d.ProductBlockKartMapMesh(w.core.scene, w.core.primitiveMap, name)
 		if err != nil {
-			w.message = "Road assets failed"
-			w.messageTimer = 3
-			fmt.Println(w.message)
+			w.hud.message = "Road assets failed"
+			w.hud.messageTimer = 3
+			fmt.Println(w.hud.message)
 			fmt.Println(name + ": " + err.Error())
 			return
 		}
 	}
 }
 
-func (t *TrackRuntime) spawnPrimitiveCachedMapMeshes(w *BlockKartRuntimeContext, track *scene3d.Track) {
-	w.trackRuntime.addContinuousPrimitiveRoadVisuals(w, track)
-	if track == nil || w.primitiveMap == nil {
+func (t *TrackRuntime) spawnPrimitiveCachedMapMeshes(w *BlockKartRuntimePorts, track *scene3d.Track) {
+	w.core.trackRuntime.addContinuousPrimitiveRoadVisuals(w, track)
+	if track == nil || w.core.primitiveMap == nil {
 		return
 	}
-	_, creekErr := scene3d.SpawnBlockKartMapMesh(w.scene, w.primitiveMap, "hero_creek")
+	_, creekErr := scene3d.ProductBlockKartMapMesh(w.core.scene, w.core.primitiveMap, "hero_creek")
 	if creekErr != nil {
-		w.message = "Creek asset failed"
-		w.messageTimer = 3
-		fmt.Println(w.message + ": " + creekErr.Error())
+		w.hud.message = "Creek asset failed"
+		w.hud.messageTimer = 3
+		fmt.Println(w.hud.message + ": " + creekErr.Error())
 	}
 }
 
-func (t *TrackRuntime) addPrimitiveRoadsideMicroDetails(w *BlockKartRuntimeContext, track *scene3d.Track) {
+func (t *TrackRuntime) addPrimitiveRoadsideMicroDetails(w *BlockKartRuntimePorts, track *scene3d.Track) {
 	if track == nil {
 		return
 	}
-	if w.primitiveMap == nil {
-		w.message = "Roadside primitive map unavailable"
-		w.messageTimer = 3
+	if w.core.primitiveMap == nil {
+		w.hud.message = "Roadside primitive map unavailable"
+		w.hud.messageTimer = 3
 		return
 	}
-	primitive := w.trackRuntime.ensurePrimitiveScene(w)
-	_, err := scene3d.SpawnBlockKartRoadsideBakedContent(w.scene, w.assets, w.primitiveMap, primitive, "roadside_meadow")
+	primitive := w.core.trackRuntime.ensurePrimitiveScene(w)
+	_, err := scene3d.ProductBlockKartRoadsideContent(w.core.scene, w.core.assets, w.core.primitiveMap, primitive, "roadside_meadow")
 	if err != nil {
-		w.message = "Roadside primitive asset failed: " + err.Error()
-		w.messageTimer = 3
-		fmt.Println(w.message)
+		w.hud.message = "Roadside primitive asset failed: " + err.Error()
+		w.hud.messageTimer = 3
+		fmt.Println(w.hud.message)
 	}
 }
 
@@ -161,43 +161,43 @@ func primitiveScatterNoise2D(x, z float64) float64 {
 	return v
 }
 
-func (t *TrackRuntime) addPrimitiveLandmarks(w *BlockKartRuntimeContext, track *scene3d.Track) {
-	w.trackRuntime.addPrimitiveMountainRange(w)
-	w.trackRuntime.addPrimitiveHeroCreek(w, track)
-	w.trackRuntime.addPrimitiveHeroHillTower(w, track)
+func (t *TrackRuntime) addPrimitiveLandmarks(w *BlockKartRuntimePorts, track *scene3d.Track) {
+	w.core.trackRuntime.addPrimitiveMountainRange(w)
+	w.core.trackRuntime.addPrimitiveHeroCreek(w, track)
+	w.core.trackRuntime.addPrimitiveHeroHillTower(w, track)
 }
 
-func (t *TrackRuntime) addPrimitiveHeroHillTower(w *BlockKartRuntimeContext, track *scene3d.Track) {
+func (t *TrackRuntime) addPrimitiveHeroHillTower(w *BlockKartRuntimePorts, track *scene3d.Track) {
 	if track == nil {
-		w.trackRuntime.addPrimitiveHillTowerAtWorld(w, primitiveSceneryVec3(126, 0.8, 206))
+		w.core.trackRuntime.addPrimitiveHillTowerAtWorld(w, primitiveSceneryVec3(126, 0.8, 206))
 		return
 	}
 	length := track.Length()
 	distance := primitiveTrackStartDistance(track) + length * 0.085
 	pose := track.PoseAt(distance)
 	base := pose.Position.Add(pose.Right.Scale(pose.HalfWidth + 60.0)).Add(pose.Forward.Scale(18.0)).Add(voplay.Vec3{Y: 1.6})
-	w.trackRuntime.addPrimitiveHillTowerAtWorld(w, base)
+	w.core.trackRuntime.addPrimitiveHillTowerAtWorld(w, base)
 }
 
-func (t *TrackRuntime) addPrimitiveHeroCreek(w *BlockKartRuntimeContext, track *scene3d.Track) {
+func (t *TrackRuntime) addPrimitiveHeroCreek(w *BlockKartRuntimePorts, track *scene3d.Track) {
 	if track == nil {
 		return
 	}
-	if w.primitiveMap == nil {
-		w.message = "Primitive map unavailable"
-		w.messageTimer = 3
+	if w.core.primitiveMap == nil {
+		w.hud.message = "Primitive map unavailable"
+		w.hud.messageTimer = 3
 		return
 	}
-	primitive := w.trackRuntime.ensurePrimitiveScene(w)
+	primitive := w.core.trackRuntime.ensurePrimitiveScene(w)
 	length := track.Length()
 	startDistance := primitiveTrackStartDistance(track)
 	start := startDistance - length * 0.025
 	end := startDistance + length * 0.130
-	_, creekErr := scene3d.SpawnBlockKartMapMesh(w.scene, w.primitiveMap, "hero_creek")
+	_, creekErr := scene3d.ProductBlockKartMapMesh(w.core.scene, w.core.primitiveMap, "hero_creek")
 	if creekErr != nil {
-		w.message = "Creek asset failed"
-		w.messageTimer = 3
-		fmt.Println(w.message + ": " + creekErr.Error())
+		w.hud.message = "Creek asset failed"
+		w.hud.messageTimer = 3
+		fmt.Println(w.hud.message + ": " + creekErr.Error())
 		return
 	}
 	count := 42
@@ -207,143 +207,143 @@ func (t *TrackRuntime) addPrimitiveHeroCreek(w *BlockKartRuntimeContext, track *
 		pose := track.PoseAt(distance)
 		wobble := math.Sin(float64(i) * 0.72) * 3.8
 		base := pose.Position.Add(pose.Right.Scale(-(pose.HalfWidth + 30.0 + wobble)))
-		base = w.trackRuntime.primitiveTerrainSurfacePosition(w, base, 0.12)
+		base = w.core.trackRuntime.terrainSurfacePose(w, base, 0.12)
 		if i % 2 == 0 {
-			bank := w.trackRuntime.primitiveTerrainSurfacePosition(w, base.Add(pose.Right.Scale(3.4)), 0.20)
-			primitive.PlaceDetail(primitive.RoundedBox, primitive.PebbleMat, bank, pose.Rotation, voplay.Vec3{X: 1.05, Y: 0.16, Z: step * 0.48}, voplay.Color{}, primitiveSmallPropLodFar)
+			bank := w.core.trackRuntime.terrainSurfacePose(w, base.Add(pose.Right.Scale(3.4)), 0.20)
+			scene3d.ProductBlockKartDetail(primitive, primitive.RoundedBox, primitive.PebbleMat, bank, pose.Rotation, voplay.Vec3{X: 1.05, Y: 0.16, Z: step * 0.48}, voplay.Color{}, primitiveSmallPropLodFar)
 		}
 		if i % 3 == 1 {
-			rockPos := w.trackRuntime.primitiveTerrainSurfacePosition(w, base.Add(pose.Right.Scale(-4.5)), 0)
-			primitive.PlaceDetail(primitive.RoundedBox, primitive.StoneMat, rockPos.Add(voplay.Vec3{Y: 0.42}), pose.Rotation, voplay.Vec3{X: 2.15, Y: 0.74, Z: 1.45}, voplay.Color{}, primitiveSmallPropLodFar)
-			primitive.PlaceDetail(primitive.RoundedBox, primitive.PaleStoneMat, rockPos.Add(pose.Forward.Scale(1.15)).Add(voplay.Vec3{Y: 0.24}), pose.Rotation, voplay.Vec3{X: 1.02, Y: 0.42, Z: 0.82}, voplay.Color{}, primitiveSmallPropLodFar)
+			rockPos := w.core.trackRuntime.terrainSurfacePose(w, base.Add(pose.Right.Scale(-4.5)), 0)
+			scene3d.ProductBlockKartDetail(primitive, primitive.RoundedBox, primitive.StoneMat, rockPos.Add(voplay.Vec3{Y: 0.42}), pose.Rotation, voplay.Vec3{X: 2.15, Y: 0.74, Z: 1.45}, voplay.Color{}, primitiveSmallPropLodFar)
+			scene3d.ProductBlockKartDetail(primitive, primitive.RoundedBox, primitive.PaleStoneMat, rockPos.Add(pose.Forward.Scale(1.15)).Add(voplay.Vec3{Y: 0.24}), pose.Rotation, voplay.Vec3{X: 1.02, Y: 0.42, Z: 0.82}, voplay.Color{}, primitiveSmallPropLodFar)
 		}
 		if i % 4 == 2 {
-			w.trackRuntime.addPrimitiveBushClusterAtPose(w, pose, -(pose.HalfWidth + 34.0 + wobble))
+			w.core.trackRuntime.addPrimitiveBushClusterAtPose(w, pose, -(pose.HalfWidth + 34.0 + wobble))
 		}
 	}
 }
 
-func (t *TrackRuntime) addPrimitiveLakeAndBridge(w *BlockKartRuntimeContext, track *scene3d.Track) {
-	primitive := w.trackRuntime.ensurePrimitiveScene(w)
+func (t *TrackRuntime) addPrimitiveLakeAndBridge(w *BlockKartRuntimePorts, track *scene3d.Track) {
+	primitive := w.core.trackRuntime.ensurePrimitiveScene(w)
 	lake := primitiveSceneryVec3(44, -0.30, 8)
-	primitive.PlaceStatic(primitive.RoundedBox, primitive.WaterMat, lake, voplay.QuatIdentity(), primitiveLandmarkVec3(62, 0.12, 39), voplay.Color{})
+	scene3d.ProductBlockKartStatic(primitive, primitive.RoundedBox, primitive.WaterMat, lake, voplay.QuatIdentity(), primitiveLandmarkVec3(62, 0.12, 39), voplay.Color{})
 	for i := 0; i < 12; i++ {
 		a := float64(i) / 12.0 * math.Pi * 2
 		x := lake.X + math.Cos(a) * 33.0 * primitiveLandmarkScale
 		z := lake.Z + math.Sin(a) * 21.0 * primitiveLandmarkScale
 		scale := 1.2 + float64(i % 4) * 0.16
-		primitive.PlaceStatic(primitive.RoundedBox, primitive.StoneMat, voplay.Vec3{X: x, Y: 0.12, Z: z}, voplay.QuatFromAxisAngle(voplay.Vec3{Y: 1}, a), primitiveLandmarkVec3(2.2 * scale, 0.54, 1.45 * scale), voplay.Color{})
+		scene3d.ProductBlockKartStatic(primitive, primitive.RoundedBox, primitive.StoneMat, voplay.Vec3{X: x, Y: 0.12, Z: z}, voplay.QuatFromAxisAngle(voplay.Vec3{Y: 1}, a), primitiveLandmarkVec3(2.2 * scale, 0.54, 1.45 * scale), voplay.Color{})
 	}
-	w.trackRuntime.addPrimitiveStoneBridge(w, track.PoseAt(track.Length() * 0.46))
+	w.core.trackRuntime.addPrimitiveStoneBridge(w, track.PoseAt(track.Length() * 0.46))
 }
 
-func (t *TrackRuntime) addPrimitiveStoneBridge(w *BlockKartRuntimeContext, pose scene3d.TrackPose) {
-	primitive := w.trackRuntime.ensurePrimitiveScene(w)
+func (t *TrackRuntime) addPrimitiveStoneBridge(w *BlockKartRuntimePorts, pose scene3d.TrackPose) {
+	primitive := w.core.trackRuntime.ensurePrimitiveScene(w)
 	deckPos := pose.Position.Add(voplay.Vec3{Y: -0.10})
-	primitive.PlaceStatic(primitive.RoundedBox, primitive.PaleStoneMat, deckPos, pose.Rotation, voplay.Vec3{X: pose.HalfWidth * 2 + 4.0, Y: 0.72, Z: 8.6}, voplay.Color{})
+	scene3d.ProductBlockKartStatic(primitive, primitive.RoundedBox, primitive.PaleStoneMat, deckPos, pose.Rotation, voplay.Vec3{X: pose.HalfWidth * 2 + 4.0, Y: 0.72, Z: 8.6}, voplay.Color{})
 	for i := -2; i <= 2; i++ {
 		lateral := float64(i) * 4.6
 		col := deckPos.Add(pose.Right.Scale(lateral)).Add(voplay.Vec3{Y: -1.55})
-		primitive.PlaceStatic(primitive.RoundedBox, primitive.PaleStoneMat, col, pose.Rotation, voplay.Vec3{X: 1.25, Y: 2.9, Z: 1.2}, voplay.Color{})
+		scene3d.ProductBlockKartStatic(primitive, primitive.RoundedBox, primitive.PaleStoneMat, col, pose.Rotation, voplay.Vec3{X: 1.25, Y: 2.9, Z: 1.2}, voplay.Color{})
 		if i < 2 {
 			archCenter := deckPos.Add(pose.Right.Scale(lateral + 2.3)).Add(voplay.Vec3{Y: -0.55})
-			primitive.PlaceStatic(primitive.RoundedBox, primitive.PaleStoneMat, archCenter, pose.Rotation, voplay.Vec3{X: 2.7, Y: 0.55, Z: 1.1}, voplay.Color{})
+			scene3d.ProductBlockKartStatic(primitive, primitive.RoundedBox, primitive.PaleStoneMat, archCenter, pose.Rotation, voplay.Vec3{X: 2.7, Y: 0.55, Z: 1.1}, voplay.Color{})
 		}
 	}
 	railY := deckPos.Add(voplay.Vec3{Y: 1.0})
-	primitive.PlaceStatic(primitive.RoundedBox, primitive.WoodMat, railY.Add(pose.Right.Scale(pose.HalfWidth + 1.8)), pose.Rotation, voplay.Vec3{X: 0.26, Y: 0.22, Z: 9.2}, voplay.Color{})
-	primitive.PlaceStatic(primitive.RoundedBox, primitive.WoodMat, railY.Sub(pose.Right.Scale(pose.HalfWidth + 1.8)), pose.Rotation, voplay.Vec3{X: 0.26, Y: 0.22, Z: 9.2}, voplay.Color{})
+	scene3d.ProductBlockKartStatic(primitive, primitive.RoundedBox, primitive.WoodMat, railY.Add(pose.Right.Scale(pose.HalfWidth + 1.8)), pose.Rotation, voplay.Vec3{X: 0.26, Y: 0.22, Z: 9.2}, voplay.Color{})
+	scene3d.ProductBlockKartStatic(primitive, primitive.RoundedBox, primitive.WoodMat, railY.Sub(pose.Right.Scale(pose.HalfWidth + 1.8)), pose.Rotation, voplay.Vec3{X: 0.26, Y: 0.22, Z: 9.2}, voplay.Color{})
 }
 
-func (t *TrackRuntime) addPrimitiveWaterfall(w *BlockKartRuntimeContext) {
-	primitive := w.trackRuntime.ensurePrimitiveScene(w)
+func (t *TrackRuntime) addPrimitiveWaterfall(w *BlockKartRuntimePorts) {
+	primitive := w.core.trackRuntime.ensurePrimitiveScene(w)
 	base := primitiveSceneryVec3(-96, 0, -24)
-	primitive.PlaceStatic(primitive.RoundedBox, primitive.CliffMat, base.Add(primitiveLandmarkVec3(0, 2.2, 0)), voplay.QuatIdentity(), primitiveLandmarkVec3(34, 4.8, 17), voplay.Color{})
-	primitive.PlaceStatic(primitive.RoundedBox, primitive.GrassMat, base.Add(primitiveLandmarkVec3(0, 4.95, -0.4)), voplay.QuatIdentity(), primitiveLandmarkVec3(36, 0.52, 18), voplay.Color{})
-	primitive.PlaceStatic(primitive.RoundedBox, primitive.CliffMat, base.Add(primitiveLandmarkVec3(-8, 6.5, -3)), voplay.QuatIdentity(), primitiveLandmarkVec3(16, 3.1, 10), voplay.Color{})
-	primitive.PlaceStatic(primitive.RoundedBox, primitive.MeadowMat, base.Add(primitiveLandmarkVec3(-8, 8.25, -3)), voplay.QuatIdentity(), primitiveLandmarkVec3(17, 0.46, 11), voplay.Color{})
+	scene3d.ProductBlockKartStatic(primitive, primitive.RoundedBox, primitive.CliffMat, base.Add(primitiveLandmarkVec3(0, 2.2, 0)), voplay.QuatIdentity(), primitiveLandmarkVec3(34, 4.8, 17), voplay.Color{})
+	scene3d.ProductBlockKartStatic(primitive, primitive.RoundedBox, primitive.GrassMat, base.Add(primitiveLandmarkVec3(0, 4.95, -0.4)), voplay.QuatIdentity(), primitiveLandmarkVec3(36, 0.52, 18), voplay.Color{})
+	scene3d.ProductBlockKartStatic(primitive, primitive.RoundedBox, primitive.CliffMat, base.Add(primitiveLandmarkVec3(-8, 6.5, -3)), voplay.QuatIdentity(), primitiveLandmarkVec3(16, 3.1, 10), voplay.Color{})
+	scene3d.ProductBlockKartStatic(primitive, primitive.RoundedBox, primitive.MeadowMat, base.Add(primitiveLandmarkVec3(-8, 8.25, -3)), voplay.QuatIdentity(), primitiveLandmarkVec3(17, 0.46, 11), voplay.Color{})
 	for i := 0; i < 5; i++ {
 		x := base.X + (-7.5 + float64(i) * 3.4) * primitiveLandmarkScale
-		primitive.PlaceStatic(primitive.RoundedBox, primitive.WaterMat, voplay.Vec3{X: x, Y: 4.3 * primitiveLandmarkScale, Z: base.Z + 8.55 * primitiveLandmarkScale}, voplay.QuatIdentity(), primitiveLandmarkVec3(2.4, 7.8, 0.45), voplay.Color{})
+		scene3d.ProductBlockKartStatic(primitive, primitive.RoundedBox, primitive.WaterMat, voplay.Vec3{X: x, Y: 4.3 * primitiveLandmarkScale, Z: base.Z + 8.55 * primitiveLandmarkScale}, voplay.QuatIdentity(), primitiveLandmarkVec3(2.4, 7.8, 0.45), voplay.Color{})
 	}
-	primitive.PlaceStatic(primitive.RoundedBox, primitive.WaterMat, base.Add(primitiveLandmarkVec3(0, -0.22, 17)), voplay.QuatIdentity(), primitiveLandmarkVec3(38, 0.12, 20), voplay.Color{})
+	scene3d.ProductBlockKartStatic(primitive, primitive.RoundedBox, primitive.WaterMat, base.Add(primitiveLandmarkVec3(0, -0.22, 17)), voplay.QuatIdentity(), primitiveLandmarkVec3(38, 0.12, 20), voplay.Color{})
 	for i := 0; i < 7; i++ {
-		w.trackRuntime.addPrimitiveTreeAtWorld(w, base.Add(primitiveLandmarkVec3(-14 + float64(i) * 4.8, 8.5, -9 + float64((i * 5) % 7))), (0.78 + float64(i % 3) * 0.08) * primitiveLandmarkScale)
+		w.core.trackRuntime.addPrimitiveTreeAtWorld(w, base.Add(primitiveLandmarkVec3(-14 + float64(i) * 4.8, 8.5, -9 + float64((i * 5) % 7))), (0.78 + float64(i % 3) * 0.08) * primitiveLandmarkScale)
 	}
 }
 
-func (t *TrackRuntime) addPrimitiveMountainRange(w *BlockKartRuntimeContext) {
-	primitive := w.trackRuntime.ensurePrimitiveScene(w)
+func (t *TrackRuntime) addPrimitiveMountainRange(w *BlockKartRuntimePorts) {
+	primitive := w.core.trackRuntime.ensurePrimitiveScene(w)
 	for i := 0; i < 8; i++ {
 		x := (-126.0 + float64(i) * 36.0) * primitiveMapPlanarScale
 		z := (-148.0 - float64((i * 13) % 24)) * primitiveMapPlanarScale
 		h := (6.5 + float64((i * 7) % 5)) * primitiveLandmarkScale
 		rot := voplay.QuatFromAxisAngle(voplay.Vec3{Y: 1}, float64(i) * 0.21)
-		primitive.PlaceStatic(primitive.RoundedBox, primitive.CliffMat, voplay.Vec3{X: x, Y: h * 0.25, Z: z}, rot, primitiveLandmarkVec3(24, h * 0.55 / primitiveLandmarkScale, 16), voplay.Color{})
-		primitive.PlaceStatic(primitive.RoundedBox, primitive.MeadowMat, voplay.Vec3{X: x + 1.5 * primitiveLandmarkScale, Y: h * 0.55, Z: z - 0.5 * primitiveLandmarkScale}, rot, primitiveLandmarkVec3(21, 0.9, 14), voplay.Color{})
-		primitive.PlaceStatic(primitive.Cone, primitive.PaleStoneMat, voplay.Vec3{X: x + 3 * primitiveLandmarkScale, Y: h + 1.4 * primitiveLandmarkScale, Z: z}, voplay.QuatIdentity(), primitiveLandmarkVec3(13, 9.4, 13), voplay.Color{})
+		scene3d.ProductBlockKartStatic(primitive, primitive.RoundedBox, primitive.CliffMat, voplay.Vec3{X: x, Y: h * 0.25, Z: z}, rot, primitiveLandmarkVec3(24, h * 0.55 / primitiveLandmarkScale, 16), voplay.Color{})
+		scene3d.ProductBlockKartStatic(primitive, primitive.RoundedBox, primitive.MeadowMat, voplay.Vec3{X: x + 1.5 * primitiveLandmarkScale, Y: h * 0.55, Z: z - 0.5 * primitiveLandmarkScale}, rot, primitiveLandmarkVec3(21, 0.9, 14), voplay.Color{})
+		scene3d.ProductBlockKartStatic(primitive, primitive.Cone, primitive.PaleStoneMat, voplay.Vec3{X: x + 3 * primitiveLandmarkScale, Y: h + 1.4 * primitiveLandmarkScale, Z: z}, voplay.QuatIdentity(), primitiveLandmarkVec3(13, 9.4, 13), voplay.Color{})
 	}
 }
 
-func (t *TrackRuntime) addPrimitiveHillTower(w *BlockKartRuntimeContext, pose scene3d.TrackPose) {
+func (t *TrackRuntime) addPrimitiveHillTower(w *BlockKartRuntimePorts, pose scene3d.TrackPose) {
 	base := pose.Position.Sub(pose.Right.Scale(pose.HalfWidth + 42)).Add(voplay.Vec3{Y: 0.8})
-	w.trackRuntime.addPrimitiveHillTowerAtWorld(w, base)
+	w.core.trackRuntime.addPrimitiveHillTowerAtWorld(w, base)
 }
 
-func (t *TrackRuntime) addPrimitiveHillTowerAtWorld(w *BlockKartRuntimeContext, base voplay.Vec3) {
-	primitive := w.trackRuntime.ensurePrimitiveScene(w)
-	base = w.trackRuntime.primitiveTerrainSurfacePosition(w, base, 0.8)
-	primitive.PlaceStatic(primitive.Cylinder, primitive.CliffMat, base.Add(voplay.Vec3{Y: 2.15}), voplay.QuatIdentity(), voplay.Vec3{X: 37, Y: 4.4, Z: 27}, voplay.Color{})
-	primitive.PlaceStatic(primitive.Cylinder, primitive.CliffMat, base.Add(voplay.Vec3{X: -3.8, Y: 3.42, Z: 2.4}), voplay.QuatIdentity(), voplay.Vec3{X: 32, Y: 2.4, Z: 23}, voplay.Color{R: 0.90, G: 0.82, B: 0.68, A: 1})
-	primitive.PlaceStatic(primitive.Cylinder, primitive.GrassMat, base.Add(voplay.Vec3{Y: 4.92}), voplay.QuatIdentity(), voplay.Vec3{X: 36, Y: 0.70, Z: 26}, voplay.Color{R: 0.86, G: 0.96, B: 0.70, A: 1})
+func (t *TrackRuntime) addPrimitiveHillTowerAtWorld(w *BlockKartRuntimePorts, base voplay.Vec3) {
+	primitive := w.core.trackRuntime.ensurePrimitiveScene(w)
+	base = w.core.trackRuntime.terrainSurfacePose(w, base, 0.8)
+	scene3d.ProductBlockKartStatic(primitive, primitive.Cylinder, primitive.CliffMat, base.Add(voplay.Vec3{Y: 2.15}), voplay.QuatIdentity(), voplay.Vec3{X: 37, Y: 4.4, Z: 27}, voplay.Color{})
+	scene3d.ProductBlockKartStatic(primitive, primitive.Cylinder, primitive.CliffMat, base.Add(voplay.Vec3{X: -3.8, Y: 3.42, Z: 2.4}), voplay.QuatIdentity(), voplay.Vec3{X: 32, Y: 2.4, Z: 23}, voplay.Color{R: 0.90, G: 0.82, B: 0.68, A: 1})
+	scene3d.ProductBlockKartStatic(primitive, primitive.Cylinder, primitive.GrassMat, base.Add(voplay.Vec3{Y: 4.92}), voplay.QuatIdentity(), voplay.Vec3{X: 36, Y: 0.70, Z: 26}, voplay.Color{R: 0.86, G: 0.96, B: 0.70, A: 1})
 	tower := base.Add(voplay.Vec3{Y: 5.55})
-	primitive.PlaceStatic(primitive.Cylinder, primitive.TowerWallMat, tower.Add(voplay.Vec3{Y: 3.7}), voplay.QuatIdentity(), voplay.Vec3{X: 5.8, Y: 7.5, Z: 5.8}, voplay.Color{})
-	primitive.PlaceStatic(primitive.RoundedBox, primitive.TowerWallMat, tower.Add(voplay.Vec3{Y: 8.05}), voplay.QuatIdentity(), voplay.Vec3{X: 8.6, Y: 1.55, Z: 8.6}, voplay.Color{})
-	primitive.PlaceStatic(primitive.Cone, primitive.TowerRoofMat, tower.Add(voplay.Vec3{Y: 10.0}), voplay.QuatIdentity(), voplay.Vec3{X: 9.8, Y: 3.8, Z: 9.8}, voplay.Color{})
+	scene3d.ProductBlockKartStatic(primitive, primitive.Cylinder, primitive.TowerWallMat, tower.Add(voplay.Vec3{Y: 3.7}), voplay.QuatIdentity(), voplay.Vec3{X: 5.8, Y: 7.5, Z: 5.8}, voplay.Color{})
+	scene3d.ProductBlockKartStatic(primitive, primitive.RoundedBox, primitive.TowerWallMat, tower.Add(voplay.Vec3{Y: 8.05}), voplay.QuatIdentity(), voplay.Vec3{X: 8.6, Y: 1.55, Z: 8.6}, voplay.Color{})
+	scene3d.ProductBlockKartStatic(primitive, primitive.Cone, primitive.TowerRoofMat, tower.Add(voplay.Vec3{Y: 10.0}), voplay.QuatIdentity(), voplay.Vec3{X: 9.8, Y: 3.8, Z: 9.8}, voplay.Color{})
 	for i := 0; i < 8; i++ {
 		a := float64(i) / 8.0 * math.Pi * 2
 		post := tower.Add(voplay.Vec3{X: math.Cos(a) * 13.2, Y: 6.75, Z: math.Sin(a) * 10.4})
-		primitive.PlaceDetail(primitive.Cylinder, primitive.WoodMat, post, voplay.QuatIdentity(), voplay.Vec3{X: 0.28, Y: 1.34, Z: 0.28}, voplay.Color{}, primitiveRoadsidePropLodFar)
+		scene3d.ProductBlockKartDetail(primitive, primitive.Cylinder, primitive.WoodMat, post, voplay.QuatIdentity(), voplay.Vec3{X: 0.28, Y: 1.34, Z: 0.28}, voplay.Color{}, primitiveRoadsidePropLodFar)
 	}
-	w.trackRuntime.addPrimitiveTreeAtWorld(w, base.Add(voplay.Vec3{X: -15, Y: 5.75, Z: -8}), 0.96)
-	w.trackRuntime.addPrimitiveTreeAtWorld(w, base.Add(voplay.Vec3{X: 15, Y: 5.75, Z: 9}), 0.90)
+	w.core.trackRuntime.addPrimitiveTreeAtWorld(w, base.Add(voplay.Vec3{X: -15, Y: 5.75, Z: -8}), 0.96)
+	w.core.trackRuntime.addPrimitiveTreeAtWorld(w, base.Add(voplay.Vec3{X: 15, Y: 5.75, Z: 9}), 0.90)
 }
 
-func (t *TrackRuntime) addPrimitiveTunnelPortal(w *BlockKartRuntimeContext, pose scene3d.TrackPose) {
-	primitive := w.trackRuntime.ensurePrimitiveScene(w)
+func (t *TrackRuntime) addPrimitiveTunnelPortal(w *BlockKartRuntimePorts, pose scene3d.TrackPose) {
+	primitive := w.core.trackRuntime.ensurePrimitiveScene(w)
 	center := pose.Position.Add(voplay.Vec3{Y: 2.0})
-	primitive.PlaceStatic(primitive.RoundedBox, primitive.CliffMat, center.Add(voplay.Vec3{Y: 1.6}), pose.Rotation, voplay.Vec3{X: pose.HalfWidth * 2 + 12, Y: 7.6, Z: 8.5}, voplay.Color{})
-	primitive.PlaceStatic(primitive.RoundedBox, primitive.RoadMat, center.Add(voplay.Vec3{Y: -1.25}), pose.Rotation, voplay.Vec3{X: pose.HalfWidth * 2 + 2.0, Y: 3.9, Z: 9.0}, voplay.Color{})
-	primitive.PlaceStatic(primitive.RoundedBox, primitive.PaleStoneMat, center.Add(pose.Right.Scale(-(pose.HalfWidth + 1.4))), pose.Rotation, voplay.Vec3{X: 2.0, Y: 5.6, Z: 9.6}, voplay.Color{})
-	primitive.PlaceStatic(primitive.RoundedBox, primitive.PaleStoneMat, center.Add(pose.Right.Scale(pose.HalfWidth + 1.4)), pose.Rotation, voplay.Vec3{X: 2.0, Y: 5.6, Z: 9.6}, voplay.Color{})
-	primitive.PlaceStatic(primitive.RoundedBox, primitive.PaleStoneMat, center.Add(voplay.Vec3{Y: 3.2}), pose.Rotation, voplay.Vec3{X: pose.HalfWidth * 2 + 6.0, Y: 1.7, Z: 9.7}, voplay.Color{})
-	primitive.PlaceStatic(primitive.Sphere, primitive.GlowMat, center.Add(pose.Right.Scale(-pose.HalfWidth * 0.62)).Add(voplay.Vec3{Y: 0.15}), pose.Rotation, voplay.Vec3{X: 0.6, Y: 0.6, Z: 0.6}, voplay.Color{})
-	primitive.PlaceStatic(primitive.Sphere, primitive.GlowMat, center.Add(pose.Right.Scale(pose.HalfWidth * 0.62)).Add(voplay.Vec3{Y: 0.15}), pose.Rotation, voplay.Vec3{X: 0.6, Y: 0.6, Z: 0.6}, voplay.Color{})
+	scene3d.ProductBlockKartStatic(primitive, primitive.RoundedBox, primitive.CliffMat, center.Add(voplay.Vec3{Y: 1.6}), pose.Rotation, voplay.Vec3{X: pose.HalfWidth * 2 + 12, Y: 7.6, Z: 8.5}, voplay.Color{})
+	scene3d.ProductBlockKartStatic(primitive, primitive.RoundedBox, primitive.RoadMat, center.Add(voplay.Vec3{Y: -1.25}), pose.Rotation, voplay.Vec3{X: pose.HalfWidth * 2 + 2.0, Y: 3.9, Z: 9.0}, voplay.Color{})
+	scene3d.ProductBlockKartStatic(primitive, primitive.RoundedBox, primitive.PaleStoneMat, center.Add(pose.Right.Scale(-(pose.HalfWidth + 1.4))), pose.Rotation, voplay.Vec3{X: 2.0, Y: 5.6, Z: 9.6}, voplay.Color{})
+	scene3d.ProductBlockKartStatic(primitive, primitive.RoundedBox, primitive.PaleStoneMat, center.Add(pose.Right.Scale(pose.HalfWidth + 1.4)), pose.Rotation, voplay.Vec3{X: 2.0, Y: 5.6, Z: 9.6}, voplay.Color{})
+	scene3d.ProductBlockKartStatic(primitive, primitive.RoundedBox, primitive.PaleStoneMat, center.Add(voplay.Vec3{Y: 3.2}), pose.Rotation, voplay.Vec3{X: pose.HalfWidth * 2 + 6.0, Y: 1.7, Z: 9.7}, voplay.Color{})
+	scene3d.ProductBlockKartStatic(primitive, primitive.Sphere, primitive.GlowMat, center.Add(pose.Right.Scale(-pose.HalfWidth * 0.62)).Add(voplay.Vec3{Y: 0.15}), pose.Rotation, voplay.Vec3{X: 0.6, Y: 0.6, Z: 0.6}, voplay.Color{})
+	scene3d.ProductBlockKartStatic(primitive, primitive.Sphere, primitive.GlowMat, center.Add(pose.Right.Scale(pose.HalfWidth * 0.62)).Add(voplay.Vec3{Y: 0.15}), pose.Rotation, voplay.Vec3{X: 0.6, Y: 0.6, Z: 0.6}, voplay.Color{})
 }
 
-func (t *TrackRuntime) addPrimitiveFencePair(w *BlockKartRuntimeContext, pose scene3d.TrackPose, step float64) {
-	primitive := w.trackRuntime.ensurePrimitiveScene(w)
+func (t *TrackRuntime) addPrimitiveFencePair(w *BlockKartRuntimePorts, pose scene3d.TrackPose, step float64) {
+	primitive := w.core.trackRuntime.ensurePrimitiveScene(w)
 	for _, side := range []float64{-1, 1} {
 		base := pose.Position.Add(pose.Right.Scale(side * (pose.HalfWidth + 6.4)))
-		base = w.trackRuntime.primitiveTerrainSurfacePosition(w, base, 0.06)
+		base = w.core.trackRuntime.terrainSurfacePose(w, base, 0.06)
 		postRot := voplay.QuatIdentity()
-		primitive.PlaceDetail(primitive.Cylinder, primitive.WoodMat, base.Add(voplay.Vec3{Y: 0.90}), postRot, voplay.Vec3{X: 0.26, Y: 1.80, Z: 0.26}, voplay.Color{}, primitiveRoadsidePropLodFar)
+		scene3d.ProductBlockKartDetail(primitive, primitive.Cylinder, primitive.WoodMat, base.Add(voplay.Vec3{Y: 0.90}), postRot, voplay.Vec3{X: 0.26, Y: 1.80, Z: 0.26}, voplay.Color{}, primitiveRoadsidePropLodFar)
 		lowRail := base.Add(voplay.Vec3{Y: 0.82})
 		highRail := base.Add(voplay.Vec3{Y: 1.26})
-		primitive.PlaceDetail(primitive.RoundedBox, primitive.WoodMat, lowRail, pose.Rotation, voplay.Vec3{X: 0.18, Y: 0.16, Z: step * 1.16}, voplay.Color{}, primitiveRoadsidePropLodFar)
-		primitive.PlaceDetail(primitive.RoundedBox, primitive.WoodMat, highRail, pose.Rotation, voplay.Vec3{X: 0.20, Y: 0.17, Z: step * 1.16}, voplay.Color{}, primitiveRoadsidePropLodFar)
+		scene3d.ProductBlockKartDetail(primitive, primitive.RoundedBox, primitive.WoodMat, lowRail, pose.Rotation, voplay.Vec3{X: 0.18, Y: 0.16, Z: step * 1.16}, voplay.Color{}, primitiveRoadsidePropLodFar)
+		scene3d.ProductBlockKartDetail(primitive, primitive.RoundedBox, primitive.WoodMat, highRail, pose.Rotation, voplay.Vec3{X: 0.20, Y: 0.17, Z: step * 1.16}, voplay.Color{}, primitiveRoadsidePropLodFar)
 	}
 }
 
-func (t *TrackRuntime) addPrimitiveTreeAtPose(w *BlockKartRuntimeContext, pose scene3d.TrackPose, lateral, scale float64) {
+func (t *TrackRuntime) addPrimitiveTreeAtPose(w *BlockKartRuntimePorts, pose scene3d.TrackPose, lateral, scale float64) {
 	base := pose.Position.Add(pose.Right.Scale(lateral))
-	base = w.trackRuntime.primitiveTerrainSurfacePosition(w, base, 0)
-	w.trackRuntime.addPrimitiveTreeAtWorld(w, base, scale)
+	base = w.core.trackRuntime.terrainSurfacePose(w, base, 0)
+	w.core.trackRuntime.addPrimitiveTreeAtWorld(w, base, scale)
 }
 
-func (t *TrackRuntime) primitiveTerrainSurfacePosition(w *BlockKartRuntimeContext, pos voplay.Vec3, lift float64) voplay.Vec3 {
-	if w.trackResult != nil {
-		probe := w.trackResult.HeightProbe()
+func (t *TrackRuntime) terrainSurfacePose(w *BlockKartRuntimePorts, pos voplay.Vec3, lift float64) voplay.Vec3 {
+	if w.core.trackResult != nil {
+		probe := w.core.trackResult.HeightProbe()
 		if probe != nil {
 			if h, ok := probe(pos); ok {
 				pos.Y = h + lift
@@ -355,20 +355,20 @@ func (t *TrackRuntime) primitiveTerrainSurfacePosition(w *BlockKartRuntimeContex
 	return pos
 }
 
-func (t *TrackRuntime) addPrimitiveTreeAtWorld(w *BlockKartRuntimeContext, base voplay.Vec3, scale float64) {
-	primitive := w.trackRuntime.ensurePrimitiveScene(w)
+func (t *TrackRuntime) addPrimitiveTreeAtWorld(w *BlockKartRuntimePorts, base voplay.Vec3, scale float64) {
+	primitive := w.core.trackRuntime.ensurePrimitiveScene(w)
 	scale *= 2.06
-	primitive.PlaceDetail(primitive.RoundedBox, primitive.ContactShadowMat, base.Add(voplay.Vec3{Y: 0.035}), voplay.QuatIdentity(), voplay.Vec3{X: 3.10 * scale, Y: 0.028, Z: 2.35 * scale}, voplay.Color{}, primitiveTreeLodFar)
-	primitive.PlaceDetail(primitive.Cylinder, primitive.WoodMat, base.Add(voplay.Vec3{Y: 1.08 * scale}), voplay.QuatIdentity(), voplay.Vec3{X: 0.52 * scale, Y: 2.16 * scale, Z: 0.52 * scale}, voplay.Color{}, primitiveTreeLodFar)
-	primitive.PlaceDetail(primitive.Cylinder, primitive.LeafMat, base.Add(voplay.Vec3{Y: 1.50 * scale}), voplay.QuatIdentity(), voplay.Vec3{X: 2.72 * scale, Y: 0.068 * scale, Z: 2.72 * scale}, voplay.Color{R: 0.22, G: 0.36, B: 0.21, A: 1}, primitiveTreeLodFar)
-	primitive.PlaceDetail(primitive.NeedleLeaf, primitive.BushMat, base.Add(voplay.Vec3{Y: 2.08 * scale}), voplay.QuatFromAxisAngle(voplay.Vec3{Y: 1}, 0.10), voplay.Vec3{X: 4.28 * scale, Y: 2.64 * scale, Z: 4.28 * scale}, voplay.Color{R: 0.30, G: 0.50, B: 0.27, A: 1}, primitiveTreeLodFar)
-	primitive.PlaceDetail(primitive.Cylinder, primitive.LeafMat, base.Add(voplay.Vec3{Y: 2.40 * scale}), voplay.QuatIdentity(), voplay.Vec3{X: 2.22 * scale, Y: 0.062 * scale, Z: 2.22 * scale}, voplay.Color{R: 0.22, G: 0.36, B: 0.21, A: 1}, primitiveTreeLodFar)
-	primitive.PlaceDetail(primitive.NeedleLeaf, primitive.LeafMat, base.Add(voplay.Vec3{Y: 2.70 * scale}), voplay.QuatFromAxisAngle(voplay.Vec3{Y: 1}, 0.38), voplay.Vec3{X: 3.56 * scale, Y: 2.92 * scale, Z: 3.56 * scale}, voplay.Color{R: 0.36, G: 0.58, B: 0.31, A: 1}, primitiveTreeLodFar)
-	primitive.PlaceDetail(primitive.Cylinder, primitive.LeafMat, base.Add(voplay.Vec3{Y: 3.68 * scale}), voplay.QuatIdentity(), voplay.Vec3{X: 1.58 * scale, Y: 0.055 * scale, Z: 1.58 * scale}, voplay.Color{R: 0.22, G: 0.36, B: 0.21, A: 1}, primitiveTreeLodFar)
-	primitive.PlaceDetail(primitive.NeedleLeaf, primitive.LeafMat, base.Add(voplay.Vec3{Y: 4.08 * scale}), voplay.QuatFromAxisAngle(voplay.Vec3{Y: 1}, 0.72), voplay.Vec3{X: 2.66 * scale, Y: 2.58 * scale, Z: 2.66 * scale}, voplay.Color{R: 0.44, G: 0.66, B: 0.36, A: 1}, primitiveTreeLodFar)
+	scene3d.ProductBlockKartDetail(primitive, primitive.RoundedBox, primitive.ContactShadowMat, base.Add(voplay.Vec3{Y: 0.035}), voplay.QuatIdentity(), voplay.Vec3{X: 3.10 * scale, Y: 0.028, Z: 2.35 * scale}, voplay.Color{}, primitiveTreeLodFar)
+	scene3d.ProductBlockKartDetail(primitive, primitive.Cylinder, primitive.WoodMat, base.Add(voplay.Vec3{Y: 1.08 * scale}), voplay.QuatIdentity(), voplay.Vec3{X: 0.52 * scale, Y: 2.16 * scale, Z: 0.52 * scale}, voplay.Color{}, primitiveTreeLodFar)
+	scene3d.ProductBlockKartDetail(primitive, primitive.Cylinder, primitive.LeafMat, base.Add(voplay.Vec3{Y: 1.50 * scale}), voplay.QuatIdentity(), voplay.Vec3{X: 2.72 * scale, Y: 0.068 * scale, Z: 2.72 * scale}, voplay.Color{R: 0.22, G: 0.36, B: 0.21, A: 1}, primitiveTreeLodFar)
+	scene3d.ProductBlockKartDetail(primitive, primitive.NeedleLeaf, primitive.BushMat, base.Add(voplay.Vec3{Y: 2.08 * scale}), voplay.QuatFromAxisAngle(voplay.Vec3{Y: 1}, 0.10), voplay.Vec3{X: 4.28 * scale, Y: 2.64 * scale, Z: 4.28 * scale}, voplay.Color{R: 0.30, G: 0.50, B: 0.27, A: 1}, primitiveTreeLodFar)
+	scene3d.ProductBlockKartDetail(primitive, primitive.Cylinder, primitive.LeafMat, base.Add(voplay.Vec3{Y: 2.40 * scale}), voplay.QuatIdentity(), voplay.Vec3{X: 2.22 * scale, Y: 0.062 * scale, Z: 2.22 * scale}, voplay.Color{R: 0.22, G: 0.36, B: 0.21, A: 1}, primitiveTreeLodFar)
+	scene3d.ProductBlockKartDetail(primitive, primitive.NeedleLeaf, primitive.LeafMat, base.Add(voplay.Vec3{Y: 2.70 * scale}), voplay.QuatFromAxisAngle(voplay.Vec3{Y: 1}, 0.38), voplay.Vec3{X: 3.56 * scale, Y: 2.92 * scale, Z: 3.56 * scale}, voplay.Color{R: 0.36, G: 0.58, B: 0.31, A: 1}, primitiveTreeLodFar)
+	scene3d.ProductBlockKartDetail(primitive, primitive.Cylinder, primitive.LeafMat, base.Add(voplay.Vec3{Y: 3.68 * scale}), voplay.QuatIdentity(), voplay.Vec3{X: 1.58 * scale, Y: 0.055 * scale, Z: 1.58 * scale}, voplay.Color{R: 0.22, G: 0.36, B: 0.21, A: 1}, primitiveTreeLodFar)
+	scene3d.ProductBlockKartDetail(primitive, primitive.NeedleLeaf, primitive.LeafMat, base.Add(voplay.Vec3{Y: 4.08 * scale}), voplay.QuatFromAxisAngle(voplay.Vec3{Y: 1}, 0.72), voplay.Vec3{X: 2.66 * scale, Y: 2.58 * scale, Z: 2.66 * scale}, voplay.Color{R: 0.44, G: 0.66, B: 0.36, A: 1}, primitiveTreeLodFar)
 }
 
-func (t *TrackRuntime) addPrimitiveTerrainGroves(w *BlockKartRuntimeContext) {
+func (t *TrackRuntime) addPrimitiveTerrainGroves(w *BlockKartRuntimePorts) {
 	centers := []voplay.Vec3{primitiveSceneryVec3(-170, 0, 122), primitiveSceneryVec3(-118, 0, 44), primitiveSceneryVec3(130, 0, 112), primitiveSceneryVec3(176, 0, 26), primitiveSceneryVec3(-112, 0, -118), primitiveSceneryVec3(92, 0, -126), primitiveSceneryVec3(206, 0, -88)}
 	for c, center := range centers {
 		count := 5 + (c % 3)
@@ -376,8 +376,8 @@ func (t *TrackRuntime) addPrimitiveTerrainGroves(w *BlockKartRuntimeContext) {
 			a := float64((i * 137 + c * 43) % 360) / 360.0 * math.Pi * 2
 			radius := primitiveMapPlanarScale * (12.0 + float64((i * 17 + c * 11) % 26))
 			pos := voplay.Vec3{X: center.X + math.Cos(a) * radius, Z: center.Z + math.Sin(a) * radius}
-			if w.track != nil {
-				cp := w.track.ClosestPoint(pos)
+			if w.core.track != nil {
+				cp := w.core.track.ClosestPoint(pos)
 				if math.Abs(cp.LateralDistance) < cp.HalfWidth + 15.0 {
 					continue
 				}
@@ -386,25 +386,25 @@ func (t *TrackRuntime) addPrimitiveTerrainGroves(w *BlockKartRuntimeContext) {
 			if c == 0 || c == 3 {
 				scale += 0.18
 			}
-			pos = w.trackRuntime.primitiveTerrainSurfacePosition(w, pos, 0)
-			w.trackRuntime.addPrimitiveTreeAtWorld(w, pos, scale)
+			pos = w.core.trackRuntime.terrainSurfacePose(w, pos, 0)
+			w.core.trackRuntime.addPrimitiveTreeAtWorld(w, pos, scale)
 			if i % 3 == 1 {
-				w.trackRuntime.addPrimitiveRockClusterAtWorld(w, pos.Add(voplay.Vec3{X: math.Sin(a) * 5.8, Z: math.Cos(a) * 4.8}), 0.82 + float64(c % 3) * 0.10)
+				w.core.trackRuntime.addPrimitiveRockClusterAtWorld(w, pos.Add(voplay.Vec3{X: math.Sin(a) * 5.8, Z: math.Cos(a) * 4.8}), 0.82 + float64(c % 3) * 0.10)
 			}
 		}
 	}
 }
 
-func (t *TrackRuntime) addPrimitiveRockClusterAtWorld(w *BlockKartRuntimeContext, pos voplay.Vec3, scale float64) {
-	primitive := w.trackRuntime.ensurePrimitiveScene(w)
-	base := w.trackRuntime.primitiveTerrainSurfacePosition(w, pos, 0)
-	primitive.PlaceDetail(primitive.RoundedBox, primitive.ContactShadowMat, base.Add(voplay.Vec3{Y: 0.04}), voplay.QuatIdentity(), voplay.Vec3{X: 4.2 * scale, Y: 0.03, Z: 2.8 * scale}, voplay.Color{}, primitiveSmallPropLodFar)
-	primitive.PlaceDetail(primitive.RoundedBox, primitive.StoneMat, base.Add(voplay.Vec3{Y: 0.38 * scale}), voplay.QuatFromAxisAngle(voplay.Vec3{Y: 1}, scale), voplay.Vec3{X: 1.8 * scale, Y: 0.72 * scale, Z: 1.15 * scale}, voplay.Color{}, primitiveSmallPropLodFar)
-	primitive.PlaceDetail(primitive.RoundedBox, primitive.PaleStoneMat, base.Add(voplay.Vec3{X: 1.25 * scale, Y: 0.22 * scale, Z: 0.65 * scale}), voplay.QuatFromAxisAngle(voplay.Vec3{Y: 1}, 0.7 + scale), voplay.Vec3{X: 0.92 * scale, Y: 0.42 * scale, Z: 0.72 * scale}, voplay.Color{}, primitiveSmallPropLodFar)
-	primitive.PlaceDetail(primitive.Sphere, primitive.BushMat, base.Add(voplay.Vec3{X: -1.35 * scale, Y: 0.34 * scale, Z: -0.82 * scale}), voplay.QuatIdentity(), voplay.Vec3{X: 1.25 * scale, Y: 0.74 * scale, Z: 1.25 * scale}, voplay.Color{}, primitiveSmallPropLodFar)
+func (t *TrackRuntime) addPrimitiveRockClusterAtWorld(w *BlockKartRuntimePorts, pos voplay.Vec3, scale float64) {
+	primitive := w.core.trackRuntime.ensurePrimitiveScene(w)
+	base := w.core.trackRuntime.terrainSurfacePose(w, pos, 0)
+	scene3d.ProductBlockKartDetail(primitive, primitive.RoundedBox, primitive.ContactShadowMat, base.Add(voplay.Vec3{Y: 0.04}), voplay.QuatIdentity(), voplay.Vec3{X: 4.2 * scale, Y: 0.03, Z: 2.8 * scale}, voplay.Color{}, primitiveSmallPropLodFar)
+	scene3d.ProductBlockKartDetail(primitive, primitive.RoundedBox, primitive.StoneMat, base.Add(voplay.Vec3{Y: 0.38 * scale}), voplay.QuatFromAxisAngle(voplay.Vec3{Y: 1}, scale), voplay.Vec3{X: 1.8 * scale, Y: 0.72 * scale, Z: 1.15 * scale}, voplay.Color{}, primitiveSmallPropLodFar)
+	scene3d.ProductBlockKartDetail(primitive, primitive.RoundedBox, primitive.PaleStoneMat, base.Add(voplay.Vec3{X: 1.25 * scale, Y: 0.22 * scale, Z: 0.65 * scale}), voplay.QuatFromAxisAngle(voplay.Vec3{Y: 1}, 0.7 + scale), voplay.Vec3{X: 0.92 * scale, Y: 0.42 * scale, Z: 0.72 * scale}, voplay.Color{}, primitiveSmallPropLodFar)
+	scene3d.ProductBlockKartDetail(primitive, primitive.Sphere, primitive.BushMat, base.Add(voplay.Vec3{X: -1.35 * scale, Y: 0.34 * scale, Z: -0.82 * scale}), voplay.QuatIdentity(), voplay.Vec3{X: 1.25 * scale, Y: 0.74 * scale, Z: 1.25 * scale}, voplay.Color{}, primitiveSmallPropLodFar)
 }
 
-func (t *TrackRuntime) addPrimitiveHeroRoadsideClusters(w *BlockKartRuntimeContext, track *scene3d.Track) {
+func (t *TrackRuntime) addPrimitiveHeroRoadsideClusters(w *BlockKartRuntimePorts, track *scene3d.Track) {
 	if track == nil {
 		return
 	}
@@ -417,23 +417,23 @@ func (t *TrackRuntime) addPrimitiveHeroRoadsideClusters(w *BlockKartRuntimeConte
 			n := primitiveScatterNoise2D(float64(i * 37 + sideIndex * 13) * 0.23, float64(i * 19 - sideIndex * 7) * 0.31)
 			lateral := side * (pose.HalfWidth + 5.8 + n * 12.5)
 			base := pose.Position.Add(pose.Right.Scale(lateral)).Add(pose.Forward.Scale((n - 0.5) * 4.2))
-			base = w.trackRuntime.primitiveTerrainSurfacePosition(w, base, 0)
+			base = w.core.trackRuntime.terrainSurfacePose(w, base, 0)
 			if (i + sideIndex) % 3 != 1 {
-				w.trackRuntime.addPrimitiveRockClusterAtWorld(w, base, 1.05 + float64((i + sideIndex) % 4) * 0.18)
+				w.core.trackRuntime.addPrimitiveRockClusterAtWorld(w, base, 1.05 + float64((i + sideIndex) % 4) * 0.18)
 			}
 			if i % 2 == 0 || sideIndex == 1 {
-				w.trackRuntime.addPrimitiveFlowerClumpAtWorld(w, base.Add(pose.Right.Scale(side * 2.4)).Add(pose.Forward.Scale(1.2)), 1.05 + float64((i + sideIndex) % 3) * 0.16, i * 29 + sideIndex * 113)
+				w.core.trackRuntime.addPrimitiveFlowerClumpAtWorld(w, base.Add(pose.Right.Scale(side * 2.4)).Add(pose.Forward.Scale(1.2)), 1.05 + float64((i + sideIndex) % 3) * 0.16, i * 29 + sideIndex * 113)
 			}
 			if (i + sideIndex) % 5 == 2 {
-				w.trackRuntime.addPrimitiveHeroShrubAtWorld(w, base.Add(pose.Forward.Scale(-2.4)), 1.0 + float64((i + sideIndex) % 3) * 0.18)
+				w.core.trackRuntime.addPrimitiveHeroShrubAtWorld(w, base.Add(pose.Forward.Scale(-2.4)), 1.0 + float64((i + sideIndex) % 3) * 0.18)
 			}
 		}
 	}
 }
 
-func (t *TrackRuntime) addPrimitiveFlowerClumpAtWorld(w *BlockKartRuntimeContext, pos voplay.Vec3, scale float64, seed int) {
-	primitive := w.trackRuntime.ensurePrimitiveScene(w)
-	base := w.trackRuntime.primitiveTerrainSurfacePosition(w, pos, 0.06)
+func (t *TrackRuntime) addPrimitiveFlowerClumpAtWorld(w *BlockKartRuntimePorts, pos voplay.Vec3, scale float64, seed int) {
+	primitive := w.core.trackRuntime.ensurePrimitiveScene(w)
+	base := w.core.trackRuntime.terrainSurfacePose(w, pos, 0.06)
 	count := 5 + seed % 5
 	for i := 0; i < count; i++ {
 		n := primitiveScatterNoise2D(float64(seed + i * 13) * 0.41, float64(seed - i * 17) * 0.29)
@@ -441,117 +441,117 @@ func (t *TrackRuntime) addPrimitiveFlowerClumpAtWorld(w *BlockKartRuntimeContext
 		radius := (0.24 + n * 1.15) * scale
 		stemHeight := (0.42 + n * 0.34) * scale
 		stem := base.Add(voplay.Vec3{X: math.Cos(angle) * radius, Z: math.Sin(angle) * radius})
-		stem = w.trackRuntime.primitiveTerrainSurfacePosition(w, stem, 0.08)
-		primitive.PlaceDetail(primitive.Cylinder, primitive.LeafMat, stem.Add(voplay.Vec3{Y: stemHeight * 0.5}), voplay.QuatIdentity(), voplay.Vec3{X: 0.045 * scale, Y: stemHeight, Z: 0.045 * scale}, voplay.Color{R: 0.70, G: 0.92, B: 0.58, A: 1}, primitiveFlowerClumpLodFar)
+		stem = w.core.trackRuntime.terrainSurfacePose(w, stem, 0.08)
+		scene3d.ProductBlockKartDetail(primitive, primitive.Cylinder, primitive.LeafMat, stem.Add(voplay.Vec3{Y: stemHeight * 0.5}), voplay.QuatIdentity(), voplay.Vec3{X: 0.045 * scale, Y: stemHeight, Z: 0.045 * scale}, voplay.Color{R: 0.70, G: 0.92, B: 0.58, A: 1}, primitiveFlowerClumpLodFar)
 		mat := primitive.FlowerYellowMat
 		if i % 3 == 0 {
 			mat = primitive.FlowerWhiteMat
 		}
 		headScale := 0.19 + n * 0.13
-		primitive.PlaceDetail(primitive.Sphere, mat, stem.Add(voplay.Vec3{Y: stemHeight + 0.10 * scale}), voplay.QuatIdentity(), voplay.Vec3{X: headScale * scale, Y: headScale * 0.58 * scale, Z: headScale * scale}, voplay.Color{}, primitiveFlowerClumpLodFar)
+		scene3d.ProductBlockKartDetail(primitive, primitive.Sphere, mat, stem.Add(voplay.Vec3{Y: stemHeight + 0.10 * scale}), voplay.QuatIdentity(), voplay.Vec3{X: headScale * scale, Y: headScale * 0.58 * scale, Z: headScale * scale}, voplay.Color{}, primitiveFlowerClumpLodFar)
 	}
 }
 
-func (t *TrackRuntime) addPrimitiveHeroShrubAtWorld(w *BlockKartRuntimeContext, pos voplay.Vec3, scale float64) {
-	primitive := w.trackRuntime.ensurePrimitiveScene(w)
-	base := w.trackRuntime.primitiveTerrainSurfacePosition(w, pos, 0.18)
-	primitive.PlaceDetail(primitive.RoundedBox, primitive.ContactShadowMat, base.Add(voplay.Vec3{Y: -0.12}), voplay.QuatIdentity(), voplay.Vec3{X: 4.4 * scale, Y: 0.026, Z: 2.8 * scale}, voplay.Color{}, primitiveSmallPropLodFar)
+func (t *TrackRuntime) addPrimitiveHeroShrubAtWorld(w *BlockKartRuntimePorts, pos voplay.Vec3, scale float64) {
+	primitive := w.core.trackRuntime.ensurePrimitiveScene(w)
+	base := w.core.trackRuntime.terrainSurfacePose(w, pos, 0.18)
+	scene3d.ProductBlockKartDetail(primitive, primitive.RoundedBox, primitive.ContactShadowMat, base.Add(voplay.Vec3{Y: -0.12}), voplay.QuatIdentity(), voplay.Vec3{X: 4.4 * scale, Y: 0.026, Z: 2.8 * scale}, voplay.Color{}, primitiveSmallPropLodFar)
 	for i := 0; i < 4; i++ {
 		n := primitiveScatterNoise2D(float64(i) * 0.31 + scale, float64(i) * 0.47 - scale)
 		offset := voplay.Vec3{X: (float64(i) - 1.5) * 0.92 * scale, Y: n * 0.14, Z: (n - 0.5) * 1.25 * scale}
-		primitive.PlaceDetail(primitive.Sphere, primitive.BushMat, base.Add(offset), voplay.QuatIdentity(), voplay.Vec3{X: (1.12 + n * 0.34) * scale, Y: (0.62 + n * 0.22) * scale, Z: (1.12 + n * 0.34) * scale}, voplay.Color{R: 0.74, G: 0.92, B: 0.58, A: 1}, primitiveSmallPropLodFar)
+		scene3d.ProductBlockKartDetail(primitive, primitive.Sphere, primitive.BushMat, base.Add(offset), voplay.QuatIdentity(), voplay.Vec3{X: (1.12 + n * 0.34) * scale, Y: (0.62 + n * 0.22) * scale, Z: (1.12 + n * 0.34) * scale}, voplay.Color{R: 0.74, G: 0.92, B: 0.58, A: 1}, primitiveSmallPropLodFar)
 	}
 }
 
-func (t *TrackRuntime) addPrimitiveBushClusterAtPose(w *BlockKartRuntimeContext, pose scene3d.TrackPose, lateral float64) {
-	primitive := w.trackRuntime.ensurePrimitiveScene(w)
-	base := w.trackRuntime.primitiveTerrainSurfacePosition(w, pose.Position.Add(pose.Right.Scale(lateral)), 0.32)
-	primitive.PlaceDetail(primitive.RoundedBox, primitive.ContactShadowMat, base.Add(voplay.Vec3{Y: -0.28}), pose.Rotation, voplay.Vec3{X: 3.8, Y: 0.026, Z: 2.2}, voplay.Color{}, primitiveSmallPropLodFar)
+func (t *TrackRuntime) addPrimitiveBushClusterAtPose(w *BlockKartRuntimePorts, pose scene3d.TrackPose, lateral float64) {
+	primitive := w.core.trackRuntime.ensurePrimitiveScene(w)
+	base := w.core.trackRuntime.terrainSurfacePose(w, pose.Position.Add(pose.Right.Scale(lateral)), 0.32)
+	scene3d.ProductBlockKartDetail(primitive, primitive.RoundedBox, primitive.ContactShadowMat, base.Add(voplay.Vec3{Y: -0.28}), pose.Rotation, voplay.Vec3{X: 3.8, Y: 0.026, Z: 2.2}, voplay.Color{}, primitiveSmallPropLodFar)
 	for i := 0; i < 3; i++ {
 		offset := pose.Right.Scale(float64(i - 1) * 1.15).Add(pose.Forward.Scale(float64((i * 7) % 5 - 2) * 0.48))
 		scale := 0.78 + float64(i) * 0.12
-		primitive.PlaceDetail(primitive.Sphere, primitive.BushMat, base.Add(offset), voplay.QuatIdentity(), voplay.Vec3{X: 1.4 * scale, Y: 0.86 * scale, Z: 1.4 * scale}, voplay.Color{}, primitiveSmallPropLodFar)
+		scene3d.ProductBlockKartDetail(primitive, primitive.Sphere, primitive.BushMat, base.Add(offset), voplay.QuatIdentity(), voplay.Vec3{X: 1.4 * scale, Y: 0.86 * scale, Z: 1.4 * scale}, voplay.Color{}, primitiveSmallPropLodFar)
 	}
 }
 
-func (t *TrackRuntime) addPrimitiveSignAtPose(w *BlockKartRuntimeContext, pose scene3d.TrackPose, lateral float64) {
-	primitive := w.trackRuntime.ensurePrimitiveScene(w)
+func (t *TrackRuntime) addPrimitiveSignAtPose(w *BlockKartRuntimePorts, pose scene3d.TrackPose, lateral float64) {
+	primitive := w.core.trackRuntime.ensurePrimitiveScene(w)
 	base := pose.Position.Add(pose.Right.Scale(lateral))
 	rot := pose.Rotation
-	primitive.PlaceDetail(primitive.Cylinder, primitive.WoodMat, base.Add(voplay.Vec3{Y: 1.0}), voplay.QuatIdentity(), voplay.Vec3{X: 0.18, Y: 2.0, Z: 0.18}, voplay.Color{}, primitiveRoadsidePropLodFar)
+	scene3d.ProductBlockKartDetail(primitive, primitive.Cylinder, primitive.WoodMat, base.Add(voplay.Vec3{Y: 1.0}), voplay.QuatIdentity(), voplay.Vec3{X: 0.18, Y: 2.0, Z: 0.18}, voplay.Color{}, primitiveRoadsidePropLodFar)
 	board := base.Add(voplay.Vec3{Y: 2.35})
-	primitive.PlaceDetail(primitive.RoundedBox, primitive.SignMat, board, rot, voplay.Vec3{X: 3.2, Y: 1.15, Z: 0.22}, voplay.Color{}, primitiveRoadsidePropLodFar)
+	scene3d.ProductBlockKartDetail(primitive, primitive.RoundedBox, primitive.SignMat, board, rot, voplay.Vec3{X: 3.2, Y: 1.15, Z: 0.22}, voplay.Color{}, primitiveRoadsidePropLodFar)
 	barRot := rot.Mul(voplay.QuatFromAxisAngle(voplay.Vec3{Z: 1}, 0.55))
 	for _, face := range []float64{-1, 1} {
 		faceOffset := pose.Forward.Scale(face * 0.34)
-		primitive.PlaceDetail(primitive.RoundedBox, primitive.SignArrowMat, board.Add(faceOffset).Add(pose.Right.Scale(-0.72)).Add(voplay.Vec3{Y: 0.06}), barRot, voplay.Vec3{X: 1.08, Y: 0.28, Z: 0.16}, voplay.Color{}, primitiveRoadsidePropLodFar)
-		primitive.PlaceDetail(primitive.RoundedBox, primitive.SignArrowMat, board.Add(faceOffset).Add(voplay.Vec3{Y: 0.06}), barRot, voplay.Vec3{X: 1.08, Y: 0.28, Z: 0.16}, voplay.Color{}, primitiveRoadsidePropLodFar)
-		primitive.PlaceDetail(primitive.RoundedBox, primitive.SignArrowMat, board.Add(faceOffset).Add(pose.Right.Scale(0.72)).Add(voplay.Vec3{Y: 0.06}), barRot, voplay.Vec3{X: 1.08, Y: 0.28, Z: 0.16}, voplay.Color{}, primitiveRoadsidePropLodFar)
+		scene3d.ProductBlockKartDetail(primitive, primitive.RoundedBox, primitive.SignArrowMat, board.Add(faceOffset).Add(pose.Right.Scale(-0.72)).Add(voplay.Vec3{Y: 0.06}), barRot, voplay.Vec3{X: 1.08, Y: 0.28, Z: 0.16}, voplay.Color{}, primitiveRoadsidePropLodFar)
+		scene3d.ProductBlockKartDetail(primitive, primitive.RoundedBox, primitive.SignArrowMat, board.Add(faceOffset).Add(voplay.Vec3{Y: 0.06}), barRot, voplay.Vec3{X: 1.08, Y: 0.28, Z: 0.16}, voplay.Color{}, primitiveRoadsidePropLodFar)
+		scene3d.ProductBlockKartDetail(primitive, primitive.RoundedBox, primitive.SignArrowMat, board.Add(faceOffset).Add(pose.Right.Scale(0.72)).Add(voplay.Vec3{Y: 0.06}), barRot, voplay.Vec3{X: 1.08, Y: 0.28, Z: 0.16}, voplay.Color{}, primitiveRoadsidePropLodFar)
 	}
 }
 
-func (t *TrackRuntime) addPrimitiveRocksAtPose(w *BlockKartRuntimeContext, pose scene3d.TrackPose, lateral float64) {
-	primitive := w.trackRuntime.ensurePrimitiveScene(w)
-	base := w.trackRuntime.primitiveTerrainSurfacePosition(w, pose.Position.Add(pose.Right.Scale(lateral)), 0)
-	primitive.PlaceDetail(primitive.RoundedBox, primitive.ContactShadowMat, base.Add(voplay.Vec3{Y: 0.045}), pose.Rotation, voplay.Vec3{X: 3.8, Y: 0.03, Z: 2.4}, voplay.Color{}, primitiveSmallPropLodFar)
-	primitive.PlaceDetail(primitive.RoundedBox, primitive.StoneMat, base.Add(voplay.Vec3{Y: 0.35}), voplay.QuatFromAxisAngle(voplay.Vec3{Y: 1}, 0.4), voplay.Vec3{X: 1.8, Y: 0.72, Z: 1.2}, voplay.Color{}, primitiveSmallPropLodFar)
-	primitive.PlaceDetail(primitive.Sphere, primitive.BushMat, base.Add(voplay.Vec3{X: 1.4, Y: 0.38, Z: 0.7}), voplay.QuatIdentity(), voplay.Vec3{X: 1.4, Y: 0.8, Z: 1.4}, voplay.Color{}, primitiveSmallPropLodFar)
+func (t *TrackRuntime) addPrimitiveRocksAtPose(w *BlockKartRuntimePorts, pose scene3d.TrackPose, lateral float64) {
+	primitive := w.core.trackRuntime.ensurePrimitiveScene(w)
+	base := w.core.trackRuntime.terrainSurfacePose(w, pose.Position.Add(pose.Right.Scale(lateral)), 0)
+	scene3d.ProductBlockKartDetail(primitive, primitive.RoundedBox, primitive.ContactShadowMat, base.Add(voplay.Vec3{Y: 0.045}), pose.Rotation, voplay.Vec3{X: 3.8, Y: 0.03, Z: 2.4}, voplay.Color{}, primitiveSmallPropLodFar)
+	scene3d.ProductBlockKartDetail(primitive, primitive.RoundedBox, primitive.StoneMat, base.Add(voplay.Vec3{Y: 0.35}), voplay.QuatFromAxisAngle(voplay.Vec3{Y: 1}, 0.4), voplay.Vec3{X: 1.8, Y: 0.72, Z: 1.2}, voplay.Color{}, primitiveSmallPropLodFar)
+	scene3d.ProductBlockKartDetail(primitive, primitive.Sphere, primitive.BushMat, base.Add(voplay.Vec3{X: 1.4, Y: 0.38, Z: 0.7}), voplay.QuatIdentity(), voplay.Vec3{X: 1.4, Y: 0.8, Z: 1.4}, voplay.Color{}, primitiveSmallPropLodFar)
 }
 
-func (t *TrackRuntime) addPrimitiveStartGantry(w *BlockKartRuntimeContext, pose scene3d.TrackPose) {
-	primitive := w.trackRuntime.ensurePrimitiveScene(w)
+func (t *TrackRuntime) addPrimitiveStartGantry(w *BlockKartRuntimePorts, pose scene3d.TrackPose) {
+	primitive := w.core.trackRuntime.ensurePrimitiveScene(w)
 	for _, side := range []float64{-1, 1} {
 		base := pose.Position.Add(pose.Right.Scale(side * (pose.HalfWidth + 2.8))).Sub(pose.Forward.Scale(2.5))
-		primitive.PlaceStatic(primitive.Cylinder, primitive.WoodMat, base.Add(voplay.Vec3{Y: 0.70}), voplay.QuatIdentity(), voplay.Vec3{X: 0.22, Y: 1.4, Z: 0.22}, voplay.Color{})
+		scene3d.ProductBlockKartStatic(primitive, primitive.Cylinder, primitive.WoodMat, base.Add(voplay.Vec3{Y: 0.70}), voplay.QuatIdentity(), voplay.Vec3{X: 0.22, Y: 1.4, Z: 0.22}, voplay.Color{})
 	}
 }
 
-func (t *TrackRuntime) addPrimitiveClouds(w *BlockKartRuntimeContext) {
-	primitive := w.trackRuntime.ensurePrimitiveScene(w)
+func (t *TrackRuntime) addPrimitiveClouds(w *BlockKartRuntimePorts) {
+	primitive := w.core.trackRuntime.ensurePrimitiveScene(w)
 	for i := 0; i < 12; i++ {
 		x := -72.0 + float64(i % 6) * 54.0 + float64((i * 11) % 23 - 11)
 		z := 108.0 + float64(i / 6) * 72.0 + float64((i * 13) % 27 - 13)
 		y := 58.0 + float64((i * 7) % 17)
 		scale := 0.82 + float64((i * 5) % 9) * 0.045
 		base := primitiveSceneryVec3(x, y, z)
-		primitive.PlaceStatic(primitive.Sphere, primitive.CloudMat, base, voplay.QuatIdentity(), primitiveLandmarkVec3(12.0 * scale, 7.2 * scale, 8.8 * scale), voplay.Color{})
-		primitive.PlaceStatic(primitive.Sphere, primitive.CloudShadowMat, base.Add(primitiveLandmarkVec3(-7.2 * scale, -1.45 * scale, 2.0 * scale)), voplay.QuatIdentity(), primitiveLandmarkVec3(7.2 * scale, 4.4 * scale, 5.6 * scale), voplay.Color{})
-		primitive.PlaceStatic(primitive.Sphere, primitive.CloudMat, base.Add(primitiveLandmarkVec3(7.4 * scale, -0.45 * scale, -2.2 * scale)), voplay.QuatIdentity(), primitiveLandmarkVec3(6.8 * scale, 4.2 * scale, 5.4 * scale), voplay.Color{})
-		primitive.PlaceStatic(primitive.Sphere, primitive.CloudMat, base.Add(primitiveLandmarkVec3(1.4 * scale, 1.1 * scale, 3.1 * scale)), voplay.QuatIdentity(), primitiveLandmarkVec3(5.8 * scale, 3.8 * scale, 4.6 * scale), voplay.Color{})
+		scene3d.ProductBlockKartStatic(primitive, primitive.Sphere, primitive.CloudMat, base, voplay.QuatIdentity(), primitiveLandmarkVec3(12.0 * scale, 7.2 * scale, 8.8 * scale), voplay.Color{})
+		scene3d.ProductBlockKartStatic(primitive, primitive.Sphere, primitive.CloudShadowMat, base.Add(primitiveLandmarkVec3(-7.2 * scale, -1.45 * scale, 2.0 * scale)), voplay.QuatIdentity(), primitiveLandmarkVec3(7.2 * scale, 4.4 * scale, 5.6 * scale), voplay.Color{})
+		scene3d.ProductBlockKartStatic(primitive, primitive.Sphere, primitive.CloudMat, base.Add(primitiveLandmarkVec3(7.4 * scale, -0.45 * scale, -2.2 * scale)), voplay.QuatIdentity(), primitiveLandmarkVec3(6.8 * scale, 4.2 * scale, 5.4 * scale), voplay.Color{})
+		scene3d.ProductBlockKartStatic(primitive, primitive.Sphere, primitive.CloudMat, base.Add(primitiveLandmarkVec3(1.4 * scale, 1.1 * scale, 3.1 * scale)), voplay.QuatIdentity(), primitiveLandmarkVec3(5.8 * scale, 3.8 * scale, 4.6 * scale), voplay.Color{})
 	}
 }
 
-func (t *TrackRuntime) attachPrimitiveTrackColliderEntities(w *BlockKartRuntimeContext, track *scene3d.Track) error {
-	result, err := scene3d.SpawnBlockKartTrackColliderStrip(w.scene, track, defaultBlockKartTrackSpec().Collider)
+func (t *TrackRuntime) bindTrackColliders(w *BlockKartRuntimePorts, track *scene3d.Track) error {
+	result, err := scene3d.ProductBlockKartTrackCollider(w.core.scene, track, defaultBlockKartTrackSpec().Collider)
 	if err != nil {
 		return err
 	}
-	w.trackResult.Entities = append(w.trackResult.Entities, result.Entities...)
+	w.core.trackResult.Entities = append(w.core.trackResult.Entities, result.Entities...)
 	return nil
 }
 
-func (t *TrackRuntime) spawnPrimitiveGameplay(w *BlockKartRuntimeContext, track *scene3d.Track, includeStaticVisuals bool) {
+func (t *TrackRuntime) spawnPrimitiveGameplay(w *BlockKartRuntimePorts, track *scene3d.Track, includeStaticVisuals bool) {
 	length := track.Length()
 	startDistance := primitiveTrackStartDistance(track)
 	for i := 0; i < 8; i++ {
 		d := startDistance + length * (0.10 + float64(i) * 0.095)
 		pose := track.PoseAt(d)
-		w.raceSession.addCollectible(w, pose.Position.Add(voplay.Vec3{Y: 2.1}), "primitive_collectible_" + itoa(i))
+		w.race.raceSession.addCollectible(w, pose.Position.Add(voplay.Vec3{Y: 2.1}), "primitive_collectible_" + itoa(i))
 	}
 	for _, d := range []float64{length * 0.13, length * 0.59} {
 		pose := track.PoseAt(d)
-		w.raceSession.addBoostPad(w, pose.Position, 7.0)
+		w.race.raceSession.addBoostPad(w, pose.Position, 7.0)
 		if includeStaticVisuals {
-			w.trackRuntime.addPrimitiveBoostPadVisual(w, pose)
+			w.core.trackRuntime.addPrimitiveBoostPadVisual(w, pose)
 		}
 	}
 }
 
-func (t *TrackRuntime) addPrimitiveBoostPadVisual(w *BlockKartRuntimeContext, pose scene3d.TrackPose) {
-	primitive := w.trackRuntime.ensurePrimitiveScene(w)
-	primitive.PlaceStatic(primitive.RoundedBox, primitive.BoostMat, pose.Position.Add(voplay.Vec3{Y: 0.22}), pose.Rotation, voplay.Vec3{X: 6.2, Y: 0.12, Z: 3.2}, voplay.Color{})
-	primitive.PlaceStatic(primitive.RoundedBox, primitive.GlowMat, pose.Position.Add(voplay.Vec3{Y: 0.32}).Add(pose.Right.Scale(-2.2)), pose.Rotation, voplay.Vec3{X: 0.38, Y: 0.08, Z: 2.65}, voplay.Color{})
-	primitive.PlaceStatic(primitive.RoundedBox, primitive.GlowMat, pose.Position.Add(voplay.Vec3{Y: 0.32}).Add(pose.Right.Scale(2.2)), pose.Rotation, voplay.Vec3{X: 0.38, Y: 0.08, Z: 2.65}, voplay.Color{})
+func (t *TrackRuntime) addPrimitiveBoostPadVisual(w *BlockKartRuntimePorts, pose scene3d.TrackPose) {
+	primitive := w.core.trackRuntime.ensurePrimitiveScene(w)
+	scene3d.ProductBlockKartStatic(primitive, primitive.RoundedBox, primitive.BoostMat, pose.Position.Add(voplay.Vec3{Y: 0.22}), pose.Rotation, voplay.Vec3{X: 6.2, Y: 0.12, Z: 3.2}, voplay.Color{})
+	scene3d.ProductBlockKartStatic(primitive, primitive.RoundedBox, primitive.GlowMat, pose.Position.Add(voplay.Vec3{Y: 0.32}).Add(pose.Right.Scale(-2.2)), pose.Rotation, voplay.Vec3{X: 0.38, Y: 0.08, Z: 2.65}, voplay.Color{})
+	scene3d.ProductBlockKartStatic(primitive, primitive.RoundedBox, primitive.GlowMat, pose.Position.Add(voplay.Vec3{Y: 0.32}).Add(pose.Right.Scale(2.2)), pose.Rotation, voplay.Vec3{X: 0.38, Y: 0.08, Z: 2.65}, voplay.Color{})
 }
 
 func primitiveTrackSampleCount(track *scene3d.Track) int {

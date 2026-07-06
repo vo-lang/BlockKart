@@ -13,14 +13,14 @@ func blockKartReportWorldDiagnostics(g *voplay.GameCtx, lifecycleState, startupP
 	blockKartReportRuntimeDiagnostics(g, lifecycleState, startupPhase, phase, ctx)
 }
 
-func blockKartReportRuntimeDiagnostics(g *voplay.GameCtx, lifecycleState, startupPhase, phase string, w *BlockKartRuntimeContext) {
+func blockKartReportRuntimeDiagnostics(g *voplay.GameCtx, lifecycleState, startupPhase, phase string, w *BlockKartRuntimePorts) {
 	blockKartReportAssetDiagnostics(g, lifecycleState, startupPhase, phase, w)
 	blockKartReportSceneDiagnostics(g, lifecycleState, startupPhase, phase, w)
 	blockKartReportVehicleDiagnostics(g, lifecycleState, startupPhase, phase, w)
 	blockKartReportRaceDiagnostics(g, lifecycleState, startupPhase, phase, w)
 }
 
-func blockKartReportAssetDiagnostics(g *voplay.GameCtx, lifecycleState, startupPhase, phase string, w *BlockKartRuntimeContext) {
+func blockKartReportAssetDiagnostics(g *voplay.GameCtx, lifecycleState, startupPhase, phase string, w *BlockKartRuntimePorts) {
 	assetReport := voplay.AssetReport{}
 	assetGroup := ""
 	skyboxLoaded := false
@@ -33,22 +33,22 @@ func blockKartReportAssetDiagnostics(g *voplay.GameCtx, lifecycleState, startupP
 	primitiveTemplateBuilds := 0
 	primitiveTemplateReuses := 0
 	if w != nil {
-		assetGroup = w.assetGroup
-		cubeModelLoaded = w.cubeModel != 0
-		if w.assets != nil {
-			assetReport = w.assets.Report()
+		assetGroup = w.core.assetGroup
+		cubeModelLoaded = w.kart.cubeModel != 0
+		if w.core.assets != nil {
+			assetReport = w.core.assets.Report()
 		}
-		if w.scene != nil {
-			skyboxLoaded = w.scene.Skybox != 0
+		if w.core.scene != nil {
+			skyboxLoaded = w.core.scene.Skybox != 0
 		}
-		if w.runtimeCache != nil {
-			runtimeCacheReady = w.runtimeCache.assetGroupActive
-			preparedMapCached = w.runtimeCache.primitiveMap != nil
-			primitiveTemplateCached = w.runtimeCache.primitiveTemplate != nil
-			preparedMapBuilds = w.runtimeCache.preparedMapBuilds
-			preparedMapReuses = w.runtimeCache.preparedMapReuses
-			primitiveTemplateBuilds = w.runtimeCache.primitiveTemplateBuilds
-			primitiveTemplateReuses = w.runtimeCache.primitiveTemplateReuses
+		if w.core.runtimeCache != nil {
+			runtimeCacheReady = w.core.runtimeCache.assetGroupActive
+			preparedMapCached = w.core.runtimeCache.primitiveMap != nil
+			primitiveTemplateCached = w.core.runtimeCache.primitiveTemplate != nil
+			preparedMapBuilds = w.core.runtimeCache.preparedMapBuilds
+			preparedMapReuses = w.core.runtimeCache.preparedMapReuses
+			primitiveTemplateBuilds = w.core.runtimeCache.primitiveTemplateBuilds
+			primitiveTemplateReuses = w.core.runtimeCache.primitiveTemplateReuses
 		}
 	}
 	blockKartEmitAssetReport([]blockKartJSONField{
@@ -81,7 +81,7 @@ func blockKartReportAssetDiagnostics(g *voplay.GameCtx, lifecycleState, startupP
 	})
 }
 
-func blockKartReportSceneDiagnostics(g *voplay.GameCtx, lifecycleState, startupPhase, phase string, w *BlockKartRuntimeContext) {
+func blockKartReportSceneDiagnostics(g *voplay.GameCtx, lifecycleState, startupPhase, phase string, w *BlockKartRuntimePorts) {
 	activeEntities := 0
 	modelEntities := 0
 	staticRenderableEntities := 0
@@ -118,27 +118,27 @@ func blockKartReportSceneDiagnostics(g *voplay.GameCtx, lifecycleState, startupP
 	hasVehicle := false
 	hasVehicleAudio := false
 	if w != nil {
-		collectibles = len(w.collectibles)
-		checkpoints = len(w.checkpoints)
-		boostPads = len(w.boostPads)
-		obstacles = len(w.obstacles)
-		kartWheelPrimitives = len(w.kartWheelPrimitives)
-		hasTrack = w.track != nil
-		hasTrackResult = w.trackResult != nil
-		hasMap = w.primitiveMap != nil
-		preparedMapReused = w.preparedMapReused
-		primitiveTemplateReused = w.primitiveTemplateReused
-		renderStressProfile = w.renderStressProfile
-		renderStressApplied = w.renderStressApplied
-		hasPlayer = w.player != nil
-		hasVehicle = w.vehicle != nil
-		hasVehicleAudio = w.vehicleAudio != nil
-		if w.trackResult != nil {
-			trackEntities = len(w.trackResult.Entities)
+		collectibles = len(w.race.collectibles)
+		checkpoints = len(w.race.checkpoints)
+		boostPads = len(w.race.boostPads)
+		obstacles = len(w.race.obstacles)
+		kartWheelPrimitives = len(w.kart.kartWheelPrimitives)
+		hasTrack = w.core.track != nil
+		hasTrackResult = w.core.trackResult != nil
+		hasMap = w.core.primitiveMap != nil
+		preparedMapReused = w.core.preparedMapReused
+		primitiveTemplateReused = w.core.primitiveTemplateReused
+		renderStressProfile = w.hud.renderStressProfile
+		renderStressApplied = w.hud.renderStressApplied
+		hasPlayer = w.core.player != nil
+		hasVehicle = w.core.vehicle != nil
+		hasVehicleAudio = w.core.vehicleAudio != nil
+		if w.core.trackResult != nil {
+			trackEntities = len(w.core.trackResult.Entities)
 		}
-		if w.scene != nil {
+		if w.core.scene != nil {
 			hasScene = true
-			diag := scene3d.ProductSceneDiagnostics(w.scene)
+			diag := scene3d.ProductSceneDiagnostics(w.core.scene)
 			content := diag.PrimitiveContent
 			if content.TotalInstances == 0 && diag.Primitive.TotalInstances > 0 {
 				content = diag.Primitive
