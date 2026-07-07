@@ -112,7 +112,7 @@ func (r *RaceSession) updateMovingObstacles(w *BlockKartRuntimePorts) {
 		}
 		offset := math.Sin(w.race.courseTime * obstacle.Speed + obstacle.Phase) * obstacle.Amplitude
 		position := obstacle.Origin.Add(obstacle.Axis.Scale(offset))
-		scene3d.ProductMoveEntityPhysicsTarget(obstacle.Entity, position, "blockkart_moving_obstacle_position")
+		scene3d.MoveEntityPhysicsTarget(obstacle.Entity, position, "blockkart_moving_obstacle_position")
 		if obstacle.Visual != nil {
 			obstacle.Visual.SetPose(position, voplay.QuatIdentity())
 		}
