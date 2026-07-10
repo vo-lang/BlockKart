@@ -760,8 +760,8 @@
     },
     {
       "path": "workspace:github.com/vo-lang/voplay/scene3d/scene.vo",
-      "sha256": "2c2124001ff705aa750ce6097a2434e523c63b7486077e84b5a9de140b0cabc1",
-      "size": 28130
+      "sha256": "02470ce83b1db9105ca46d552242f62ca1086adea9fb90d48e2ef2b48366844d",
+      "size": 28484
     },
     {
       "path": "workspace:github.com/vo-lang/voplay/scene3d/surface_material.vo",
@@ -1668,5 +1668,5 @@
       ]
     }
   ],
-  "producerDigest": "0172d727e795ffcaf9553ef7679befed37e22bfb0f1a276308e010d09d26572c"
+  "producerDigest": "4206c5aa9f39875d50bf10324ccfa54514924246a92ce7a1918fcad50d6d22da"
 }
