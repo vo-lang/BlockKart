@@ -760,8 +760,8 @@
     },
     {
       "path": "workspace:github.com/vo-lang/voplay/scene3d/scene.vo",
-      "sha256": "02470ce83b1db9105ca46d552242f62ca1086adea9fb90d48e2ef2b48366844d",
-      "size": 28484
+      "sha256": "947a988f7786ce7baf6407e6f38ddfb21d762dfa35157c8a153882c882ffc632",
+      "size": 28994
     },
     {
       "path": "workspace:github.com/vo-lang/voplay/scene3d/surface_material.vo",
@@ -830,8 +830,8 @@
     },
     {
       "path": "workspace:github.com/vo-lang/voplay/scene3d/vehicle_physics_session.vo",
-      "sha256": "ceb49a28ce6ea438b9dbcbf320813bbbe1ea3ca981625be123a396249aacf1b8",
-      "size": 5211
+      "sha256": "abd6fa68cdc816cdc8a3d072295a8713189d2e6c3b153a740e1027ce5d01d9db",
+      "size": 5297
     },
     {
       "path": "workspace:github.com/vo-lang/voplay/scene3d/vehicle_recovery.vo",
@@ -1668,5 +1668,5 @@
       ]
     }
   ],
-  "producerDigest": "4206c5aa9f39875d50bf10324ccfa54514924246a92ce7a1918fcad50d6d22da"
+  "producerDigest": "fd8f0e8fa1fc7aa38fa8ed47bc29ee8e879722b58a395777369a8669feda4497"
 }
