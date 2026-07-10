@@ -22,36 +22,36 @@ func (w *World) ActivateRenderStressProfile(g *voplay.GameCtx, profile string) {
 	if w == nil || profile == "" {
 		return
 	}
-	if w.hud.renderStressProfile == profile && w.hud.renderStressApplied {
+	if w.hud.renderStress.profile == profile && w.hud.renderStress.applied {
 		blockKartReportWorldDiagnostics(g, BlockKartLifecycleRunning, "renderStress", profile, w)
 		return
 	}
-	w.hud.renderStressProfile = profile
-	w.hud.renderStressApplied = false
+	w.hud.renderStress.profile = profile
+	w.hud.renderStress.applied = false
 	if profile == blockKartRenderStressPrimitive10k {
-		w.core.trackRuntime.beginRenderStressPrimitive10k(w.BlockKartRuntimeContext)
+		w.core.trackRuntime.beginRenderStressPrimitive10k(&w.core, &w.race)
 	} else if profile == blockKartRenderStressWater {
-		w.core.trackRuntime.addRenderStressWater(w.BlockKartRuntimeContext)
-		w.hud.renderStressApplied = true
+		w.core.trackRuntime.addRenderStressWater(&w.core, &w.race)
+		w.hud.renderStress.applied = true
 	} else if profile == blockKartRenderStressResourceChurn {
-		w.core.trackRuntime.addRenderStressResourceChurn(w.BlockKartRuntimeContext)
-		w.hud.renderStressApplied = true
+		w.core.trackRuntime.addRenderStressResourceChurn(&w.core, &w.race)
+		w.hud.renderStress.applied = true
 	} else if profile == blockKartRenderStressChunkedWorldDrive {
-		w.core.trackRuntime.addRenderStressChunkedWorldDrive(w.BlockKartRuntimeContext)
-		w.hud.renderStressApplied = true
+		w.core.trackRuntime.addRenderStressChunkedWorldDrive(&w.core, &w.race)
+		w.hud.renderStress.applied = true
 	} else if profile == blockKartRenderStressShadowPostMatrix {
-		w.core.trackRuntime.addRenderStressShadowPostMatrix(w.BlockKartRuntimeContext)
-		w.hud.renderStressApplied = true
+		w.core.trackRuntime.addRenderStressShadowPostMatrix(&w.core, &w.race)
+		w.hud.renderStress.applied = true
 	}
-	if w.hud.renderStressApplied {
-		blockKartResetRenderStressPerfWindow(w.BlockKartRuntimeContext, g)
-		w.hud.message = "Render stress: " + profile
-		w.hud.messageTimer = 1.5
+	if w.hud.renderStress.applied {
+		blockKartResetRenderStressPerfWindow(diagnosticsPortsFromStates(&w.core, &w.input, &w.race, &w.kart, &w.hud), g)
+		w.hud.presentation.message = "Render stress: " + profile
+		w.hud.presentation.messageTimer = 1.5
 	}
 	blockKartReportWorldDiagnostics(g, BlockKartLifecycleRunning, "renderStress", profile, w)
 }
 
-func blockKartResetRenderStressPerfWindow(w *BlockKartRuntimePorts, g *voplay.GameCtx) {
+func blockKartResetRenderStressPerfWindow(w *DiagnosticsPorts, g *voplay.GameCtx) {
 	if w == nil || g == nil || !blockKartPerfStatsEnabled {
 		return
 	}
@@ -66,19 +66,19 @@ func blockKartResetRenderStressPerfWindow(w *BlockKartRuntimePorts, g *voplay.Ga
 	w.hud.perfSnapshotFastPolls = blockKartPerfPostResetFastPolls
 }
 
-func blockKartRenderStressPerfReportBlocked(w *BlockKartRuntimePorts) bool {
+func blockKartRenderStressPerfReportBlocked(w *DiagnosticsPorts) bool {
 	if w == nil {
 		return false
 	}
 	return w.core.trackRuntime.renderStressPrimitive10kBatch != nil
 }
 
-func (t *TrackRuntime) beginRenderStressPrimitive10k(w *BlockKartRuntimePorts) {
-	primitive := w.core.trackRuntime.ensurePrimitiveScene(w)
+func (t *TrackRuntime) beginRenderStressPrimitive10k(core *BlockKartRuntimeCore, race *BlockKartRuntimeRaceState) {
+	primitive := core.trackRuntime.ensurePrimitiveScene(core)
 	t.renderStressPrimitive10kBatch = primitive.BeginStressBatch()
 	t.renderStressPrimitive10kBatch.Reserve(blockKartRenderStressPrimitive10kCount)
 	t.renderStressPrimitive10kIndex = 0
-	t.renderStressPrimitive10kCenter = w.race.startPosition
+	t.renderStressPrimitive10kCenter = race.startPosition
 	t.renderStressPrimitive10kRotations = make([]voplay.Quat, 0, 31)
 	for i := 0; i < 31; i++ {
 		t.renderStressPrimitive10kRotations = append(t.renderStressPrimitive10kRotations, voplay.QuatFromAxisAngle(voplay.Vec3{Y: 1}, float64(i)*0.07))
@@ -89,11 +89,11 @@ func (t *TrackRuntime) beginRenderStressPrimitive10k(w *BlockKartRuntimePorts) {
 	}
 }
 
-func (t *TrackRuntime) advanceRenderStress(w *BlockKartRuntimePorts, g *voplay.GameCtx) {
-	if w == nil || g == nil || t.renderStressPrimitive10kBatch == nil {
-		return
+func (t *TrackRuntime) advanceRenderStress(core *BlockKartRuntimeCore, stress *RenderStressState) bool {
+	if core == nil || stress == nil || t.renderStressPrimitive10kBatch == nil {
+		return false
 	}
-	primitive := w.core.trackRuntime.ensurePrimitiveScene(w)
+	primitive := core.trackRuntime.ensurePrimitiveScene(core)
 	end := t.renderStressPrimitive10kIndex + blockKartRenderStressPrimitive10kChunk
 	if end > blockKartRenderStressPrimitive10kCount {
 		end = blockKartRenderStressPrimitive10kCount
@@ -104,17 +104,14 @@ func (t *TrackRuntime) advanceRenderStress(w *BlockKartRuntimePorts, g *voplay.G
 		t.renderStressPrimitive10kIndex++
 	}
 	if t.renderStressPrimitive10kIndex < blockKartRenderStressPrimitive10kCount {
-		return
+		return false
 	}
 	t.renderStressPrimitive10kBatch.End()
 	t.renderStressPrimitive10kBatch = nil
 	t.renderStressPrimitive10kRotations = nil
 	t.renderStressPrimitive10kScales = nil
-	w.hud.renderStressApplied = true
-	blockKartResetRenderStressPerfWindow(w, g)
-	w.hud.message = "Render stress: " + blockKartRenderStressPrimitive10k
-	w.hud.messageTimer = 1.5
-	blockKartReportRuntimeDiagnostics(g, BlockKartLifecycleRunning, "renderStress", blockKartRenderStressPrimitive10k, w)
+	stress.applied = true
+	return true
 }
 
 func (t *TrackRuntime) renderStressPrimitive10kPlacement(primitive *PrimitiveVisualContent, i int) scene3d.BlockKartPrimitivePlacement {
@@ -139,12 +136,12 @@ func (t *TrackRuntime) renderStressPrimitive10kPlacement(primitive *PrimitiveVis
 	return scene3d.BlockKartPrimitivePlacement{Shape: shape, Material: material, Position: voplay.Vec3{X: x, Y: y, Z: z}, Rotation: t.renderStressPrimitive10kRotations[i%31], Scale: t.renderStressPrimitive10kScales[i%60], Flags: scene3d.BlockKartPrimitiveNoShadow, LodFar: 150}
 }
 
-func (t *TrackRuntime) addRenderStressWater(w *BlockKartRuntimePorts) {
-	primitive := w.core.trackRuntime.ensurePrimitiveScene(w)
-	if w.core.track != nil {
-		w.core.trackRuntime.addPrimitiveLakeAndBridge(w, w.core.track)
+func (t *TrackRuntime) addRenderStressWater(core *BlockKartRuntimeCore, race *BlockKartRuntimeRaceState) {
+	primitive := core.trackRuntime.ensurePrimitiveScene(core)
+	if core.track != nil {
+		core.trackRuntime.addPrimitiveLakeAndBridge(core, core.track)
 	}
-	center := w.race.startPosition.Add(voplay.Vec3{X: 24, Y: -0.95, Z: -42})
+	center := race.startPosition.Add(voplay.Vec3{X: 24, Y: -0.95, Z: -42})
 	batch := primitive.BeginStaticBatch()
 	for i := 0; i < 12; i++ {
 		x := center.X + float64(i%4)*8.5
@@ -154,15 +151,15 @@ func (t *TrackRuntime) addRenderStressWater(w *BlockKartRuntimePorts) {
 	batch.End()
 }
 
-func (t *TrackRuntime) addRenderStressResourceChurn(w *BlockKartRuntimePorts) {
-	primitive := w.core.trackRuntime.ensurePrimitiveScene(w)
+func (t *TrackRuntime) addRenderStressResourceChurn(core *BlockKartRuntimeCore, race *BlockKartRuntimeRaceState) {
+	primitive := core.trackRuntime.ensurePrimitiveScene(core)
 	batch := primitive.BeginSmallDetailBatch()
 	count := 1536
 	columns := 64
 	for i := 0; i < count; i++ {
 		col := i % columns
 		row := i / columns
-		position := w.race.startPosition.Add(voplay.Vec3{X: (float64(col) - 31.5) * 1.85, Y: -0.42 + math.Sin(float64(i)*0.23)*0.10, Z: -18.0 - float64(row)*1.95})
+		position := race.startPosition.Add(voplay.Vec3{X: (float64(col) - 31.5) * 1.85, Y: -0.42 + math.Sin(float64(i)*0.23)*0.10, Z: -18.0 - float64(row)*1.95})
 		material := primitive.FlowerYellowMat
 		if i % 2 == 0 {
 			material = primitive.FlowerWhiteMat
@@ -172,13 +169,13 @@ func (t *TrackRuntime) addRenderStressResourceChurn(w *BlockKartRuntimePorts) {
 	batch.End()
 }
 
-func (t *TrackRuntime) addRenderStressChunkedWorldDrive(w *BlockKartRuntimePorts) {
-	primitive := w.core.trackRuntime.ensurePrimitiveScene(w)
+func (t *TrackRuntime) addRenderStressChunkedWorldDrive(core *BlockKartRuntimeCore, race *BlockKartRuntimeRaceState) {
+	primitive := core.trackRuntime.ensurePrimitiveScene(core)
 	batch := primitive.BeginScatterBatch()
 	count := 4096
 	columns := 64
 	spacing := 6.75
-	center := w.race.startPosition.Add(voplay.Vec3{Z: -72})
+	center := race.startPosition.Add(voplay.Vec3{Z: -72})
 	for i := 0; i < count; i++ {
 		col := i % columns
 		row := i / columns
@@ -203,9 +200,9 @@ func (t *TrackRuntime) addRenderStressChunkedWorldDrive(w *BlockKartRuntimePorts
 	batch.End()
 }
 
-func (t *TrackRuntime) addRenderStressShadowPostMatrix(w *BlockKartRuntimePorts) {
-	primitive := w.core.trackRuntime.ensurePrimitiveScene(w)
-	center := w.race.startPosition.Add(voplay.Vec3{X: -18, Z: -34})
+func (t *TrackRuntime) addRenderStressShadowPostMatrix(core *BlockKartRuntimeCore, race *BlockKartRuntimeRaceState) {
+	primitive := core.trackRuntime.ensurePrimitiveScene(core)
+	center := race.startPosition.Add(voplay.Vec3{X: -18, Z: -34})
 	for row := 0; row < 8; row++ {
 		for col := 0; col < 12; col++ {
 			x := center.X + float64(col) * 4.2

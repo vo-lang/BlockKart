@@ -1,0 +1,10 @@
+version = 1
+
+[[use]]
+path = "../voplay"
+
+[[use]]
+path = "../vogui"
+
+[[use]]
+path = "../vopack"

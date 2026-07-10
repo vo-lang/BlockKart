@@ -6,21 +6,21 @@ import (
 )
 
 func blockKartReportWorldDiagnostics(g *voplay.GameCtx, lifecycleState, startupPhase, phase string, w *World) {
-	var ctx *BlockKartRuntimeContext
+	var ports *DiagnosticsPorts
 	if w != nil {
-		ctx = w.BlockKartRuntimeContext
+		ports = diagnosticsPortsFromStates(&w.core, &w.input, &w.race, &w.kart, &w.hud)
 	}
-	blockKartReportRuntimeDiagnostics(g, lifecycleState, startupPhase, phase, ctx)
+	blockKartReportRuntimeDiagnostics(g, lifecycleState, startupPhase, phase, ports)
 }
 
-func blockKartReportRuntimeDiagnostics(g *voplay.GameCtx, lifecycleState, startupPhase, phase string, w *BlockKartRuntimePorts) {
+func blockKartReportRuntimeDiagnostics(g *voplay.GameCtx, lifecycleState, startupPhase, phase string, w *DiagnosticsPorts) {
 	blockKartReportAssetDiagnostics(g, lifecycleState, startupPhase, phase, w)
 	blockKartReportSceneDiagnostics(g, lifecycleState, startupPhase, phase, w)
 	blockKartReportVehicleDiagnostics(g, lifecycleState, startupPhase, phase, w)
 	blockKartReportRaceDiagnostics(g, lifecycleState, startupPhase, phase, w)
 }
 
-func blockKartReportAssetDiagnostics(g *voplay.GameCtx, lifecycleState, startupPhase, phase string, w *BlockKartRuntimePorts) {
+func blockKartReportAssetDiagnostics(g *voplay.GameCtx, lifecycleState, startupPhase, phase string, w *DiagnosticsPorts) {
 	assetReport := voplay.AssetReport{}
 	assetGroup := ""
 	skyboxLoaded := false
@@ -81,7 +81,7 @@ func blockKartReportAssetDiagnostics(g *voplay.GameCtx, lifecycleState, startupP
 	})
 }
 
-func blockKartReportSceneDiagnostics(g *voplay.GameCtx, lifecycleState, startupPhase, phase string, w *BlockKartRuntimePorts) {
+func blockKartReportSceneDiagnostics(g *voplay.GameCtx, lifecycleState, startupPhase, phase string, w *DiagnosticsPorts) {
 	activeEntities := 0
 	modelEntities := 0
 	staticRenderableEntities := 0
@@ -128,8 +128,8 @@ func blockKartReportSceneDiagnostics(g *voplay.GameCtx, lifecycleState, startupP
 		hasMap = w.core.primitiveMap != nil
 		preparedMapReused = w.core.preparedMapReused
 		primitiveTemplateReused = w.core.primitiveTemplateReused
-		renderStressProfile = w.hud.renderStressProfile
-		renderStressApplied = w.hud.renderStressApplied
+		renderStressProfile = w.hud.renderStress.profile
+		renderStressApplied = w.hud.renderStress.applied
 		hasPlayer = w.core.player != nil
 		hasVehicle = w.core.vehicle != nil
 		hasVehicleAudio = w.core.vehicleAudio != nil

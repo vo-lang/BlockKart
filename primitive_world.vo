@@ -72,28 +72,28 @@ type primitiveTrackPointDef struct {
 	Width float64
 }
 
-func (t *TrackRuntime) ensurePrimitiveScene(w *BlockKartRuntimePorts) *PrimitiveVisualContent {
-	if w.core.primitive != nil {
-		return w.core.primitive
+func (t *TrackRuntime) ensurePrimitiveScene(core *BlockKartRuntimeCore) *PrimitiveVisualContent {
+	if core.primitive != nil {
+		return core.primitive
 	}
-	if w.core.assets == nil {
+	if core.assets == nil {
 		panic("BlockKart primitive scene requires loaded assets")
 	}
-	if w.core.runtimeCache != nil && w.core.runtimeCache.primitiveTemplate != nil {
-		primitive := w.core.runtimeCache.primitiveTemplate.Instantiate(w.core.scene)
-		w.core.primitive = primitive
-		w.core.primitiveTemplateReused = true
-		w.core.runtimeCache.primitiveTemplateReuses++
-		return w.core.primitive
+	if core.runtimeCache != nil && core.runtimeCache.primitiveTemplate != nil {
+		primitive := core.runtimeCache.primitiveTemplate.Instantiate(core.scene)
+		core.primitive = primitive
+		core.primitiveTemplateReused = true
+		core.runtimeCache.primitiveTemplateReuses++
+		return core.primitive
 	}
-	w.core.assets.BeginGroup(worldAssetGroup)
-	primitive, err := newPrimitiveVisualContent(w.core.scene, w.core.assets)
-	w.core.assets.EndGroup()
+	core.assets.BeginGroup(worldAssetGroup)
+	primitive, err := newPrimitiveVisualContent(core.scene, core.assets)
+	core.assets.EndGroup()
 	if err != nil {
 		panic("BlockKart primitive scene asset load failed: " + err.Error())
 	}
-	w.core.primitive = primitive
-	return w.core.primitive
+	core.primitive = primitive
+	return core.primitive
 }
 
 
@@ -131,58 +131,58 @@ func showPrimitivePart(part *PrimitivePart) {
 	}
 }
 
-func (t *TrackRuntime) buildPrimitiveLevel(w *BlockKartRuntimePorts) error {
+func (t *TrackRuntime) buildPrimitiveLevel(core *BlockKartRuntimeCore, race *BlockKartRuntimeRaceState, kart *BlockKartRuntimeKartState, presentation *RacePresentationState, theme WorldTheme) error {
 	prof := newBlockKartStartupProfiler("BlockKart primitive")
-	primitive := w.core.trackRuntime.ensurePrimitiveScene(w)
-	templateReused := w.core.primitiveTemplateReused
+	primitive := core.trackRuntime.ensurePrimitiveScene(core)
+	templateReused := core.primitiveTemplateReused
 	prof.Mark("ensurePrimitiveScene")
-	mapErr := w.core.trackRuntime.preparePrimitiveMapAsset(w)
+	mapErr := core.trackRuntime.preparePrimitiveMapAsset(core)
 	if mapErr != nil {
-		w.hud.message = "Primitive map failed: " + mapErr.Error()
-		w.hud.messageTimer = 4
-		fmt.Println(w.hud.message)
-		return errors.New(w.hud.message)
+		presentation.message = "Primitive map failed: " + mapErr.Error()
+		presentation.messageTimer = 4
+		fmt.Println(presentation.message)
+		return errors.New(presentation.message)
 	}
 	prof.Mark("preparePrimitiveMapAsset")
 	asset := newPrimitiveTrackAsset()
 	prof.Mark("newPrimitiveTrackAsset")
 	track, err := scene3d.NewTrack(asset)
 	if err != nil {
-		w.hud.message = "Primitive track failed: " + err.Error()
-		w.hud.messageTimer = 4
-		fmt.Println(w.hud.message)
-		return errors.New(w.hud.message)
+		presentation.message = "Primitive track failed: " + err.Error()
+		presentation.messageTimer = 4
+		fmt.Println(presentation.message)
+		return errors.New(presentation.message)
 	}
-	w.core.track = track
+	core.track = track
 	prof.Mark("NewTrack")
-	result, terrainErr := w.core.trackRuntime.spawnPrimitiveTrackTerrain(w, track)
+	result, terrainErr := core.trackRuntime.spawnPrimitiveTrackTerrain(core, track)
 	if terrainErr != nil {
-		w.hud.message = "Terrain failed: " + terrainErr.Error()
-		w.hud.messageTimer = 4
-		fmt.Println(w.hud.message)
-		return errors.New(w.hud.message)
+		presentation.message = "Terrain failed: " + terrainErr.Error()
+		presentation.messageTimer = 4
+		fmt.Println(presentation.message)
+		return errors.New(presentation.message)
 	}
-	w.core.trackResult = result
+	core.trackResult = result
 	prof.Mark("spawnPrimitiveTrackTerrain")
-	w.core.trackRuntime.applyPrimitiveTrackSpawn(w, track)
-	w.core.trackRuntime.populatePrimitiveTrackCheckpoints(w, track)
+	core.trackRuntime.applyPrimitiveTrackSpawn(race, kart, track)
+	core.trackRuntime.populatePrimitiveTrackCheckpoints(race, track)
 	prof.Mark("trackSpawnAndCheckpoints")
 	if templateReused {
-		w.core.trackRuntime.spawnPrimitiveCachedMapMeshes(w, track)
+		core.trackRuntime.spawnPrimitiveCachedMapMeshes(core, presentation, track)
 		prof.Mark("reusePrimitiveStaticTemplate")
 	} else {
-		w.core.trackRuntime.buildPrimitiveTrackVisuals(w, track)
+		core.trackRuntime.buildPrimitiveTrackVisuals(core, presentation, track)
 		prof.Mark("buildPrimitiveTrackVisuals")
 	}
-	colliderErr := w.core.trackRuntime.bindTrackColliders(w, track)
+	colliderErr := core.trackRuntime.bindTrackColliders(core, track)
 	if colliderErr != nil {
-		w.hud.message = "Track collider failed: " + colliderErr.Error()
-		w.hud.messageTimer = 4
-		fmt.Println(w.hud.message)
-		return errors.New(w.hud.message)
+		presentation.message = "Track collider failed: " + colliderErr.Error()
+		presentation.messageTimer = 4
+		fmt.Println(presentation.message)
+		return errors.New(presentation.message)
 	}
 	prof.Mark("primitiveTrackColliders")
-	w.core.trackRuntime.spawnPrimitiveGameplay(w, track, !templateReused)
+	core.trackRuntime.spawnPrimitiveGameplay(core, race, theme, track, !templateReused)
 	prof.Mark("spawnPrimitiveGameplay")
 	if templateReused {
 		prof.Mark("reuseStaticLayerChunks")
@@ -190,38 +190,38 @@ func (t *TrackRuntime) buildPrimitiveLevel(w *BlockKartRuntimePorts) error {
 	}
 	primitive.BuildStaticLayers()
 	prof.Mark("buildStaticPrimitiveLayers")
-	if w.core.runtimeCache != nil && w.core.runtimeCache.primitiveTemplate == nil {
-		w.core.runtimeCache.primitiveTemplate = newBlockKartPrimitiveTemplate(primitive)
-		if w.core.runtimeCache.primitiveTemplate != nil {
-			w.core.runtimeCache.primitiveTemplateBuilds++
+	if core.runtimeCache != nil && core.runtimeCache.primitiveTemplate == nil {
+		core.runtimeCache.primitiveTemplate = newBlockKartPrimitiveTemplate(primitive)
+		if core.runtimeCache.primitiveTemplate != nil {
+			core.runtimeCache.primitiveTemplateBuilds++
 		}
 	}
 	return nil
 }
 
-func (t *TrackRuntime) preparePrimitiveMapAsset(w *BlockKartRuntimePorts) error {
-	if w.core.primitiveMap != nil {
+func (t *TrackRuntime) preparePrimitiveMapAsset(core *BlockKartRuntimeCore) error {
+	if core.primitiveMap != nil {
 		return nil
 	}
-	if w.core.runtimeCache != nil && w.core.runtimeCache.primitiveMap != nil {
-		w.core.primitiveMap = w.core.runtimeCache.primitiveMap
-		w.core.preparedMapReused = true
-		w.core.runtimeCache.preparedMapReuses++
+	if core.runtimeCache != nil && core.runtimeCache.primitiveMap != nil {
+		core.primitiveMap = core.runtimeCache.primitiveMap
+		core.preparedMapReused = true
+		core.runtimeCache.preparedMapReuses++
 		return nil
 	}
-	if w.core.assets == nil {
+	if core.assets == nil {
 		return errors.New("BlockKart assets unavailable")
 	}
-	w.core.assets.BeginGroup(worldAssetGroup)
-	prepared, err := scene3d.ProductBlockKartMapAsset(w.core.assets, blockKartAssetPath("maps/primitive_track/blockkart.map.json"))
-	w.core.assets.EndGroup()
+	core.assets.BeginGroup(worldAssetGroup)
+	prepared, err := scene3d.ProductBlockKartMapAsset(core.assets, blockKartAssetPath("maps/primitive_track/blockkart.map.json"))
+	core.assets.EndGroup()
 	if err != nil {
 		return err
 	}
-	w.core.primitiveMap = prepared
-	if w.core.runtimeCache != nil {
-		w.core.runtimeCache.primitiveMap = prepared
-		w.core.runtimeCache.preparedMapBuilds++
+	core.primitiveMap = prepared
+	if core.runtimeCache != nil {
+		core.runtimeCache.primitiveMap = prepared
+		core.runtimeCache.preparedMapBuilds++
 	}
 	return nil
 }
@@ -230,20 +230,20 @@ func newPrimitiveTrackAsset() *scene3d.TrackAsset {
 	return defaultBlockKartTrackSpec().TrackAsset()
 }
 
-func (t *TrackRuntime) spawnPrimitiveTrackTerrain(w *BlockKartRuntimePorts, track *scene3d.Track) (*scene3d.TrackSpawnResult, error) {
+func (t *TrackRuntime) spawnPrimitiveTrackTerrain(core *BlockKartRuntimeCore, track *scene3d.Track) (*scene3d.TrackSpawnResult, error) {
 	if track == nil {
 		return nil, errors.New("BlockKart primitive track unavailable")
 	}
-	if w.core.assets == nil {
+	if core.assets == nil {
 		return nil, errors.New("BlockKart assets unavailable")
 	}
-	if w.core.primitiveMap == nil {
-		err := w.core.trackRuntime.preparePrimitiveMapAsset(w)
+	if core.primitiveMap == nil {
+		err := core.trackRuntime.preparePrimitiveMapAsset(core)
 		if err != nil {
 			return nil, err
 		}
 	}
-	return scene3d.ProductBlockKartTrackTerrain(w.core.scene, track, w.core.primitiveMap, defaultBlockKartTrackSpec().TerrainMesh)
+	return scene3d.ProductBlockKartTrackTerrain(core.scene, track, core.primitiveMap, defaultBlockKartTrackSpec().TerrainMesh)
 }
 
 func primitiveTrackControlPoints() []scene3d.TrackControlPoint {
@@ -310,90 +310,90 @@ func primitiveTrackSegmentCount(track *scene3d.Track) int {
 	return count
 }
 
-func (t *TrackRuntime) spawnPrimitiveKartVisuals(w *BlockKartRuntimePorts) {
-	primitive := w.core.trackRuntime.ensurePrimitiveScene(w)
-	pos := w.race.startPosition
-	rot := w.kart.kartRig.kartRotation(w)
-	w.kart.kartBodyPrimitiveParts = nil
-	w.kart.kartWheelVisuals = nil
-	w.kart.kartWheelPrimitives = nil
-	w.kart.kartPrimitiveVisualStateValid = false
+func (t *TrackRuntime) spawnPrimitiveKartVisuals(core *BlockKartRuntimeCore, kart *BlockKartRuntimeKartState, position voplay.Vec3) {
+	primitive := core.trackRuntime.ensurePrimitiveScene(core)
+	pos := position
+	rot := kart.kartRig.kartRotation(core, kart)
+	kart.kartBodyPrimitiveParts = nil
+	kart.kartWheelVisuals = nil
+	kart.kartWheelPrimitives = nil
+	kart.kartPrimitiveVisualStateValid = false
 	identity := voplay.QuatIdentity()
-	w.core.trackRuntime.addPrimitiveKartBodyPart(w, primitive, pos, rot, primitive.RoundedBox, primitive.WheelMat, voplay.Vec3{Y: 0.00, Z: 0.08}, identity, voplay.Vec3{X: 1.58, Y: 0.18, Z: 2.36}, voplay.Color{})
-	w.kart.kartChassisPrimitive = w.core.trackRuntime.addPrimitiveKartBodyPart(w, primitive, pos, rot, primitive.RoundedBox, primitive.PlayerMat, voplay.Vec3{Y: 0.28, Z: 0.02}, identity, voplay.Vec3{X: 1.42, Y: 0.46, Z: 2.05}, voplay.Color{})
-	w.kart.kartNosePrimitive = w.core.trackRuntime.addPrimitiveKartBodyPart(w, primitive, pos, rot, primitive.RoundedBox, primitive.TopBlueMat, voplay.Vec3{Y: 0.35, Z: -1.08}, identity, voplay.Vec3{X: 1.06, Y: 0.34, Z: 0.78}, voplay.Color{})
-	w.kart.kartBumperPrimitive = w.core.trackRuntime.addPrimitiveKartBodyPart(w, primitive, pos, rot, primitive.RoundedBox, primitive.OrangeTrimMat, voplay.Vec3{Y: 0.21, Z: -1.58}, identity, voplay.Vec3{X: 1.20, Y: 0.18, Z: 0.22}, voplay.Color{})
-	w.core.trackRuntime.addPrimitiveKartBodyPart(w, primitive, pos, rot, primitive.RoundedBox, primitive.PlayerMat, voplay.Vec3{X: -0.72, Y: 0.28, Z: 0.08}, identity, voplay.Vec3{X: 0.30, Y: 0.38, Z: 1.58}, voplay.Color{})
-	w.core.trackRuntime.addPrimitiveKartBodyPart(w, primitive, pos, rot, primitive.RoundedBox, primitive.PlayerMat, voplay.Vec3{X: 0.72, Y: 0.28, Z: 0.08}, identity, voplay.Vec3{X: 0.30, Y: 0.38, Z: 1.58}, voplay.Color{})
-	w.core.trackRuntime.addPrimitiveKartBodyPart(w, primitive, pos, rot, primitive.RoundedBox, primitive.WhiteMat, voplay.Vec3{Y: 0.56, Z: -0.34}, identity, voplay.Vec3{X: 0.24, Y: 0.06, Z: 1.72}, voplay.Color{})
-	w.kart.kartCabinPrimitive = w.core.trackRuntime.addPrimitiveKartBodyPart(w, primitive, pos, rot, primitive.RoundedBox, primitive.VisorMat, voplay.Vec3{Y: 0.64, Z: 0.28}, identity, voplay.Vec3{X: 0.58, Y: 0.18, Z: 0.46}, voplay.Color{})
-	w.kart.kartDriverPrimitive = w.core.trackRuntime.addPrimitiveKartBodyPart(w, primitive, pos, rot, primitive.Sphere, primitive.DriverMat, voplay.Vec3{Y: 0.88, Z: 0.10}, identity, voplay.Vec3{X: 0.38, Y: 0.36, Z: 0.34}, voplay.Color{})
-	w.core.trackRuntime.addPrimitiveKartBodyPart(w, primitive, pos, rot, primitive.Sphere, primitive.WhiteMat, voplay.Vec3{Y: 1.14, Z: -0.06}, identity, voplay.Vec3{X: 0.42, Y: 0.43, Z: 0.42}, voplay.Color{})
-	w.core.trackRuntime.addPrimitiveKartBodyPart(w, primitive, pos, rot, primitive.RoundedBox, primitive.VisorMat, voplay.Vec3{Y: 1.15, Z: -0.39}, identity, voplay.Vec3{X: 0.32, Y: 0.075, Z: 0.055}, voplay.Color{})
-	w.core.trackRuntime.addPrimitiveKartBodyPart(w, primitive, pos, rot, primitive.RoundedBox, primitive.OrangeTrimMat, voplay.Vec3{Y: 1.25, Z: 0.16}, identity, voplay.Vec3{X: 0.44, Y: 0.09, Z: 0.32}, voplay.Color{})
-	w.core.trackRuntime.addPrimitiveKartBodyPart(w, primitive, pos, rot, primitive.RoundedBox, primitive.OrangeTrimMat, voplay.Vec3{X: -0.48, Y: 0.62, Z: 1.14}, identity, voplay.Vec3{X: 0.12, Y: 0.38, Z: 0.12}, voplay.Color{})
-	w.core.trackRuntime.addPrimitiveKartBodyPart(w, primitive, pos, rot, primitive.RoundedBox, primitive.OrangeTrimMat, voplay.Vec3{X: 0.48, Y: 0.62, Z: 1.14}, identity, voplay.Vec3{X: 0.12, Y: 0.38, Z: 0.12}, voplay.Color{})
-	w.kart.kartSpoilerPrimitive = w.core.trackRuntime.addPrimitiveKartBodyPart(w, primitive, pos, rot, primitive.RoundedBox, primitive.WhiteMat, voplay.Vec3{Y: 0.84, Z: 1.28}, identity, voplay.Vec3{X: 1.08, Y: 0.12, Z: 0.24}, voplay.Color{})
+	core.trackRuntime.addPrimitiveKartBodyPart(core, kart, primitive, pos, rot, primitive.RoundedBox, primitive.WheelMat, voplay.Vec3{Y: 0.00, Z: 0.08}, identity, voplay.Vec3{X: 1.58, Y: 0.18, Z: 2.36}, voplay.Color{})
+	kart.kartChassisPrimitive = core.trackRuntime.addPrimitiveKartBodyPart(core, kart, primitive, pos, rot, primitive.RoundedBox, primitive.PlayerMat, voplay.Vec3{Y: 0.28, Z: 0.02}, identity, voplay.Vec3{X: 1.42, Y: 0.46, Z: 2.05}, voplay.Color{})
+	kart.kartNosePrimitive = core.trackRuntime.addPrimitiveKartBodyPart(core, kart, primitive, pos, rot, primitive.RoundedBox, primitive.TopBlueMat, voplay.Vec3{Y: 0.35, Z: -1.08}, identity, voplay.Vec3{X: 1.06, Y: 0.34, Z: 0.78}, voplay.Color{})
+	kart.kartBumperPrimitive = core.trackRuntime.addPrimitiveKartBodyPart(core, kart, primitive, pos, rot, primitive.RoundedBox, primitive.OrangeTrimMat, voplay.Vec3{Y: 0.21, Z: -1.58}, identity, voplay.Vec3{X: 1.20, Y: 0.18, Z: 0.22}, voplay.Color{})
+	core.trackRuntime.addPrimitiveKartBodyPart(core, kart, primitive, pos, rot, primitive.RoundedBox, primitive.PlayerMat, voplay.Vec3{X: -0.72, Y: 0.28, Z: 0.08}, identity, voplay.Vec3{X: 0.30, Y: 0.38, Z: 1.58}, voplay.Color{})
+	core.trackRuntime.addPrimitiveKartBodyPart(core, kart, primitive, pos, rot, primitive.RoundedBox, primitive.PlayerMat, voplay.Vec3{X: 0.72, Y: 0.28, Z: 0.08}, identity, voplay.Vec3{X: 0.30, Y: 0.38, Z: 1.58}, voplay.Color{})
+	core.trackRuntime.addPrimitiveKartBodyPart(core, kart, primitive, pos, rot, primitive.RoundedBox, primitive.WhiteMat, voplay.Vec3{Y: 0.56, Z: -0.34}, identity, voplay.Vec3{X: 0.24, Y: 0.06, Z: 1.72}, voplay.Color{})
+	kart.kartCabinPrimitive = core.trackRuntime.addPrimitiveKartBodyPart(core, kart, primitive, pos, rot, primitive.RoundedBox, primitive.VisorMat, voplay.Vec3{Y: 0.64, Z: 0.28}, identity, voplay.Vec3{X: 0.58, Y: 0.18, Z: 0.46}, voplay.Color{})
+	kart.kartDriverPrimitive = core.trackRuntime.addPrimitiveKartBodyPart(core, kart, primitive, pos, rot, primitive.Sphere, primitive.DriverMat, voplay.Vec3{Y: 0.88, Z: 0.10}, identity, voplay.Vec3{X: 0.38, Y: 0.36, Z: 0.34}, voplay.Color{})
+	core.trackRuntime.addPrimitiveKartBodyPart(core, kart, primitive, pos, rot, primitive.Sphere, primitive.WhiteMat, voplay.Vec3{Y: 1.14, Z: -0.06}, identity, voplay.Vec3{X: 0.42, Y: 0.43, Z: 0.42}, voplay.Color{})
+	core.trackRuntime.addPrimitiveKartBodyPart(core, kart, primitive, pos, rot, primitive.RoundedBox, primitive.VisorMat, voplay.Vec3{Y: 1.15, Z: -0.39}, identity, voplay.Vec3{X: 0.32, Y: 0.075, Z: 0.055}, voplay.Color{})
+	core.trackRuntime.addPrimitiveKartBodyPart(core, kart, primitive, pos, rot, primitive.RoundedBox, primitive.OrangeTrimMat, voplay.Vec3{Y: 1.25, Z: 0.16}, identity, voplay.Vec3{X: 0.44, Y: 0.09, Z: 0.32}, voplay.Color{})
+	core.trackRuntime.addPrimitiveKartBodyPart(core, kart, primitive, pos, rot, primitive.RoundedBox, primitive.OrangeTrimMat, voplay.Vec3{X: -0.48, Y: 0.62, Z: 1.14}, identity, voplay.Vec3{X: 0.12, Y: 0.38, Z: 0.12}, voplay.Color{})
+	core.trackRuntime.addPrimitiveKartBodyPart(core, kart, primitive, pos, rot, primitive.RoundedBox, primitive.OrangeTrimMat, voplay.Vec3{X: 0.48, Y: 0.62, Z: 1.14}, identity, voplay.Vec3{X: 0.12, Y: 0.38, Z: 0.12}, voplay.Color{})
+	kart.kartSpoilerPrimitive = core.trackRuntime.addPrimitiveKartBodyPart(core, kart, primitive, pos, rot, primitive.RoundedBox, primitive.WhiteMat, voplay.Vec3{Y: 0.84, Z: 1.28}, identity, voplay.Vec3{X: 1.08, Y: 0.12, Z: 0.24}, voplay.Color{})
 	fastFlags := blockKartHighFrequencyPrimitiveFlags()
-	w.kart.kartFlameLeftPrimitive = w.core.trackRuntime.addPrimitiveKartBodyPartWithFlags(w, primitive, pos, rot, primitive.Sphere, primitive.BoostMat, voplay.Vec3{X: -0.36, Y: 0.14, Z: 1.52}, identity, voplay.Vec3{X: 0.20, Y: 0.16, Z: 0.32}, voplay.Color{}, fastFlags)
-	w.kart.kartFlameRightPrimitive = w.core.trackRuntime.addPrimitiveKartBodyPartWithFlags(w, primitive, pos, rot, primitive.Sphere, primitive.BoostMat, voplay.Vec3{X: 0.36, Y: 0.14, Z: 1.52}, identity, voplay.Vec3{X: 0.20, Y: 0.16, Z: 0.32}, voplay.Color{}, fastFlags)
-	w.core.trackRuntime.addPrimitiveKartWheelVisual(w, primitive, pos, rot, voplay.Vec3{X: -0.96, Y: 0.12, Z: -0.76}, true, 0, -1)
-	w.core.trackRuntime.addPrimitiveKartWheelVisual(w, primitive, pos, rot, voplay.Vec3{X: 0.96, Y: 0.12, Z: -0.76}, true, 1, 1)
-	w.core.trackRuntime.addPrimitiveKartWheelVisual(w, primitive, pos, rot, voplay.Vec3{X: -0.96, Y: 0.12, Z: 0.78}, false, 2, -1)
-	w.core.trackRuntime.addPrimitiveKartWheelVisual(w, primitive, pos, rot, voplay.Vec3{X: 0.96, Y: 0.12, Z: 0.78}, false, 3, 1)
-	w.kart.kartFlameLeftPrimitive.SetVisible(false)
-	w.kart.kartFlameRightPrimitive.SetVisible(false)
+	kart.kartFlameLeftPrimitive = core.trackRuntime.addPrimitiveKartBodyPartWithFlags(kart, primitive, pos, rot, primitive.Sphere, primitive.BoostMat, voplay.Vec3{X: -0.36, Y: 0.14, Z: 1.52}, identity, voplay.Vec3{X: 0.20, Y: 0.16, Z: 0.32}, voplay.Color{}, fastFlags)
+	kart.kartFlameRightPrimitive = core.trackRuntime.addPrimitiveKartBodyPartWithFlags(kart, primitive, pos, rot, primitive.Sphere, primitive.BoostMat, voplay.Vec3{X: 0.36, Y: 0.14, Z: 1.52}, identity, voplay.Vec3{X: 0.20, Y: 0.16, Z: 0.32}, voplay.Color{}, fastFlags)
+	core.trackRuntime.addPrimitiveKartWheelVisual(kart, primitive, pos, rot, voplay.Vec3{X: -0.96, Y: 0.12, Z: -0.76}, true, 0, -1)
+	core.trackRuntime.addPrimitiveKartWheelVisual(kart, primitive, pos, rot, voplay.Vec3{X: 0.96, Y: 0.12, Z: -0.76}, true, 1, 1)
+	core.trackRuntime.addPrimitiveKartWheelVisual(kart, primitive, pos, rot, voplay.Vec3{X: -0.96, Y: 0.12, Z: 0.78}, false, 2, -1)
+	core.trackRuntime.addPrimitiveKartWheelVisual(kart, primitive, pos, rot, voplay.Vec3{X: 0.96, Y: 0.12, Z: 0.78}, false, 3, 1)
+	kart.kartFlameLeftPrimitive.SetVisible(false)
+	kart.kartFlameRightPrimitive.SetVisible(false)
 }
 
-func (t *TrackRuntime) syncPrimitiveKartVisuals(w *BlockKartRuntimePorts, pos voplay.Vec3, rot voplay.Quat) {
-	boostVisible := w.hud.hudPresenter.isBoosting(w)
-	state := w.core.trackRuntime.currentPrimitiveKartVisualState(w, pos, rot, boostVisible)
-	if w.kart.kartPrimitiveVisualStateValid && w.kart.kartPrimitiveVisualState == state {
+func (t *TrackRuntime) syncPrimitiveKartVisuals(core *BlockKartRuntimeCore, kart *BlockKartRuntimeKartState, pos voplay.Vec3, rot voplay.Quat) {
+	boostVisible := blockKartIsBoosting(core, kart)
+	state := core.trackRuntime.currentPrimitiveKartVisualState(core, kart, pos, rot, boostVisible)
+	if kart.kartPrimitiveVisualStateValid && kart.kartPrimitiveVisualState == state {
 		return
 	}
-	w.kart.kartPrimitiveVisualState = state
-	w.kart.kartPrimitiveVisualStateValid = true
-	if w.kart.kartFlameLeftPrimitive != nil {
-		w.kart.kartFlameLeftPrimitive.SetVisible(boostVisible)
+	kart.kartPrimitiveVisualState = state
+	kart.kartPrimitiveVisualStateValid = true
+	if kart.kartFlameLeftPrimitive != nil {
+		kart.kartFlameLeftPrimitive.SetVisible(boostVisible)
 	}
-	if w.kart.kartFlameRightPrimitive != nil {
-		w.kart.kartFlameRightPrimitive.SetVisible(boostVisible)
+	if kart.kartFlameRightPrimitive != nil {
+		kart.kartFlameRightPrimitive.SetVisible(boostVisible)
 	}
-	for _, part := range w.kart.kartBodyPrimitiveParts {
-		w.core.trackRuntime.syncPrimitiveKartBodyPart(w, part, pos, rot)
+	for _, part := range kart.kartBodyPrimitiveParts {
+		core.trackRuntime.syncPrimitiveKartBodyPart(part, pos, rot)
 	}
-	if len(w.kart.kartWheelVisuals) > 0 {
+	if len(kart.kartWheelVisuals) > 0 {
 		axisRot := voplay.QuatFromAxisAngle(voplay.Vec3{Z: 1}, math.Pi * 0.5)
-		for _, wheel := range w.kart.kartWheelVisuals {
-			w.core.trackRuntime.syncPrimitiveKartWheelVisual(w, wheel, pos, rot, axisRot, state)
+		for _, wheel := range kart.kartWheelVisuals {
+			core.trackRuntime.syncPrimitiveKartWheelVisual(core, wheel, pos, rot, axisRot, state)
 		}
 		return
 	}
 	axisRot := voplay.QuatFromAxisAngle(voplay.Vec3{Z: 1}, math.Pi * 0.5)
-	if len(w.kart.kartWheelPrimitives) >= 4 {
-		w.core.trackRuntime.syncPrimitiveKartWheel(w, w.kart.kartWheelPrimitives[0], pos, rot, voplay.Vec3{X: -1.04, Y: 0.12, Z: -0.80}, true, 0, axisRot)
-		w.core.trackRuntime.syncPrimitiveKartWheel(w, w.kart.kartWheelPrimitives[1], pos, rot, voplay.Vec3{X: 1.04, Y: 0.12, Z: -0.80}, true, 1, axisRot)
-		w.core.trackRuntime.syncPrimitiveKartWheel(w, w.kart.kartWheelPrimitives[2], pos, rot, voplay.Vec3{X: -1.04, Y: 0.12, Z: 0.84}, false, 2, axisRot)
-		w.core.trackRuntime.syncPrimitiveKartWheel(w, w.kart.kartWheelPrimitives[3], pos, rot, voplay.Vec3{X: 1.04, Y: 0.12, Z: 0.84}, false, 3, axisRot)
+	if len(kart.kartWheelPrimitives) >= 4 {
+		core.trackRuntime.syncPrimitiveKartWheel(core, kart.kartWheelPrimitives[0], pos, rot, voplay.Vec3{X: -1.04, Y: 0.12, Z: -0.80}, true, 0, axisRot)
+		core.trackRuntime.syncPrimitiveKartWheel(core, kart.kartWheelPrimitives[1], pos, rot, voplay.Vec3{X: 1.04, Y: 0.12, Z: -0.80}, true, 1, axisRot)
+		core.trackRuntime.syncPrimitiveKartWheel(core, kart.kartWheelPrimitives[2], pos, rot, voplay.Vec3{X: -1.04, Y: 0.12, Z: 0.84}, false, 2, axisRot)
+		core.trackRuntime.syncPrimitiveKartWheel(core, kart.kartWheelPrimitives[3], pos, rot, voplay.Vec3{X: 1.04, Y: 0.12, Z: 0.84}, false, 3, axisRot)
 	}
 }
 
-func (t *TrackRuntime) currentPrimitiveKartVisualState(w *BlockKartRuntimePorts, pos voplay.Vec3, rot voplay.Quat, boostVisible bool) PrimitiveKartVisualState {
+func (t *TrackRuntime) currentPrimitiveKartVisualState(core *BlockKartRuntimeCore, kart *BlockKartRuntimeKartState, pos voplay.Vec3, rot voplay.Quat, boostVisible bool) PrimitiveKartVisualState {
 	state := PrimitiveKartVisualState{Position: pos, Rotation: rot.Normalize(), BoostVisible: boostVisible}
-	if w.core.vehicle == nil {
+	if core.vehicle == nil {
 		return state
 	}
-	for _, wheel := range w.kart.kartWheelVisuals {
-		wheelState, ok := w.core.vehicle.VisualWheelSample(wheel.WheelIndex)
+	for _, wheel := range kart.kartWheelVisuals {
+		wheelState, ok := core.vehicle.VisualWheelSample(wheel.WheelIndex)
 		if !ok {
 			continue
 		}
-		w.core.trackRuntime.assignPrimitiveKartWheelState(w, &state, wheel.WheelIndex, wheelState.Steering, wheelState.Rotation)
+		core.trackRuntime.assignPrimitiveKartWheelState(&state, wheel.WheelIndex, wheelState.Steering, wheelState.Rotation)
 	}
 	return state
 }
 
-func (t *TrackRuntime) assignPrimitiveKartWheelState(w *BlockKartRuntimePorts, state *PrimitiveKartVisualState, index int, steer, spin float64) {
+func (t *TrackRuntime) assignPrimitiveKartWheelState( state *PrimitiveKartVisualState, index int, steer, spin float64) {
 	if state == nil {
 		return
 	}
@@ -416,19 +416,19 @@ func (t *TrackRuntime) assignPrimitiveKartWheelState(w *BlockKartRuntimePorts, s
 	}
 }
 
-func (t *TrackRuntime) addPrimitiveKartBodyPart(w *BlockKartRuntimePorts, primitive *PrimitiveVisualContent, pos voplay.Vec3, rot voplay.Quat, shape scene3d.BlockKartPrimitiveShape, material scene3d.BlockKartPrimitiveMaterial, local voplay.Vec3, localRot voplay.Quat, scale voplay.Vec3, tint voplay.Color) *PrimitivePart {
-	return w.core.trackRuntime.addPrimitiveKartBodyPartWithFlags(w, primitive, pos, rot, shape, material, local, localRot, scale, tint, scene3d.BlockKartPrimitiveFlags(0))
+func (t *TrackRuntime) addPrimitiveKartBodyPart(core *BlockKartRuntimeCore, kart *BlockKartRuntimeKartState, primitive *PrimitiveVisualContent, pos voplay.Vec3, rot voplay.Quat, shape scene3d.BlockKartPrimitiveShape, material scene3d.BlockKartPrimitiveMaterial, local voplay.Vec3, localRot voplay.Quat, scale voplay.Vec3, tint voplay.Color) *PrimitivePart {
+	return core.trackRuntime.addPrimitiveKartBodyPartWithFlags(kart, primitive, pos, rot, shape, material, local, localRot, scale, tint, scene3d.BlockKartPrimitiveFlags(0))
 }
 
-func (t *TrackRuntime) addPrimitiveKartBodyPartWithFlags(w *BlockKartRuntimePorts, primitive *PrimitiveVisualContent, pos voplay.Vec3, rot voplay.Quat, shape scene3d.BlockKartPrimitiveShape, material scene3d.BlockKartPrimitiveMaterial, local voplay.Vec3, localRot voplay.Quat, scale voplay.Vec3, tint voplay.Color, flags scene3d.BlockKartPrimitiveFlags) *PrimitivePart {
+func (t *TrackRuntime) addPrimitiveKartBodyPartWithFlags(kart *BlockKartRuntimeKartState, primitive *PrimitiveVisualContent, pos voplay.Vec3, rot voplay.Quat, shape scene3d.BlockKartPrimitiveShape, material scene3d.BlockKartPrimitiveMaterial, local voplay.Vec3, localRot voplay.Quat, scale voplay.Vec3, tint voplay.Color, flags scene3d.BlockKartPrimitiveFlags) *PrimitivePart {
 	local = primitiveKartScaleVec(local)
 	scale = primitiveKartScaleVec(scale)
 	part := scene3d.ProductBlockKartDynamicWithFlags(primitive, shape, material, pos.Add(rot.RotateVec3(local)), rot.Mul(localRot), scale, tint, flags)
-	w.kart.kartBodyPrimitiveParts = append(w.kart.kartBodyPrimitiveParts, PrimitiveKartBodyPart{Part: part, Local: local, LocalRotation: localRot})
+	kart.kartBodyPrimitiveParts = append(kart.kartBodyPrimitiveParts, PrimitiveKartBodyPart{Part: part, Local: local, LocalRotation: localRot})
 	return part
 }
 
-func (t *TrackRuntime) addPrimitiveKartWheelVisual(w *BlockKartRuntimePorts, primitive *PrimitiveVisualContent, pos voplay.Vec3, rot voplay.Quat, local voplay.Vec3, steer bool, wheelIndex int, sideSign float64) {
+func (t *TrackRuntime) addPrimitiveKartWheelVisual(kart *BlockKartRuntimeKartState, primitive *PrimitiveVisualContent, pos voplay.Vec3, rot voplay.Quat, local voplay.Vec3, steer bool, wheelIndex int, sideSign float64) {
 	if sideSign == 0 {
 		sideSign = 1
 		if local.X < 0 {
@@ -444,32 +444,32 @@ func (t *TrackRuntime) addPrimitiveKartWheelVisual(w *BlockKartRuntimePorts, pri
 	rim := scene3d.ProductBlockKartDynamicWithFlags(primitive, primitive.Cylinder, primitive.MetalMat, wheelPos, wheelRot, primitiveKartScaleVec(voplay.Vec3{X: 0.34, Y: 0.055, Z: 0.34}), voplay.Color{}, flags)
 	hub := scene3d.ProductBlockKartDynamicWithFlags(primitive, primitive.Cylinder, primitive.WhiteMat, wheelPos, wheelRot, primitiveKartScaleVec(voplay.Vec3{X: 0.18, Y: 0.07, Z: 0.18}), voplay.Color{}, flags)
 	stripe := scene3d.ProductBlockKartDynamicWithFlags(primitive, primitive.RoundedBox, primitive.OrangeTrimMat, wheelPos, wheelRot, primitiveKartScaleVec(voplay.Vec3{X: 0.032, Y: 0.06, Z: 0.20}), voplay.Color{}, flags)
-	w.kart.kartWheelPrimitives = append(w.kart.kartWheelPrimitives, tire)
-	w.kart.kartWheelVisuals = append(w.kart.kartWheelVisuals, PrimitiveKartWheelVisual{Tire: tire, Rim: rim, Hub: hub, Stripe: stripe, Local: local, Steer: steer, WheelIndex: wheelIndex, SideSign: sideSign})
+	kart.kartWheelPrimitives = append(kart.kartWheelPrimitives, tire)
+	kart.kartWheelVisuals = append(kart.kartWheelVisuals, PrimitiveKartWheelVisual{Tire: tire, Rim: rim, Hub: hub, Stripe: stripe, Local: local, Steer: steer, WheelIndex: wheelIndex, SideSign: sideSign})
 }
 
-func (t *TrackRuntime) syncPrimitiveKartBodyPart(w *BlockKartRuntimePorts, body PrimitiveKartBodyPart, pos voplay.Vec3, rot voplay.Quat) {
+func (t *TrackRuntime) syncPrimitiveKartBodyPart( body PrimitiveKartBodyPart, pos voplay.Vec3, rot voplay.Quat) {
 	if body.Part == nil || !body.Part.Visible {
 		return
 	}
 	scene3d.ProductBlockKartPose(body.Part, pos.Add(rot.RotateVec3(body.Local)), rot.Mul(body.LocalRotation))
 }
 
-func (t *TrackRuntime) syncPrimitiveKartPart(w *BlockKartRuntimePorts, part *PrimitivePart, pos voplay.Vec3, rot voplay.Quat, local voplay.Vec3, partRot voplay.Quat) {
+func (t *TrackRuntime) syncPrimitiveKartPart( part *PrimitivePart, pos voplay.Vec3, rot voplay.Quat, local voplay.Vec3, partRot voplay.Quat) {
 	if part == nil {
 		return
 	}
 	scene3d.ProductBlockKartPose(part, pos.Add(rot.RotateVec3(local)), partRot)
 }
 
-func (t *TrackRuntime) syncPrimitiveKartWheelVisual(w *BlockKartRuntimePorts, wheel PrimitiveKartWheelVisual, pos voplay.Vec3, rot voplay.Quat, axisRot voplay.Quat, visualState PrimitiveKartVisualState) {
+func (t *TrackRuntime) syncPrimitiveKartWheelVisual(core *BlockKartRuntimeCore, wheel PrimitiveKartWheelVisual, pos voplay.Vec3, rot voplay.Quat, axisRot voplay.Quat, visualState PrimitiveKartVisualState) {
 	if wheel.Tire == nil {
 		return
 	}
 	wheelRot := rot
 	spinRot := rot
 	wheelPos := pos.Add(rot.RotateVec3(wheel.Local))
-	if w.core.vehicle != nil {
+	if core.vehicle != nil {
 		steerAngle, spin := primitiveKartWheelVisualMotion(visualState, wheel.WheelIndex, 0, 0)
 		if wheel.Steer {
 			wheelRot = wheelRot.Mul(voplay.QuatFromAxisAngle(voplay.Vec3{Y: 1}, -steerAngle))
@@ -512,16 +512,16 @@ func primitiveKartScaleVec(v voplay.Vec3) voplay.Vec3 {
 	return voplay.Vec3{X: v.X * primitiveKartVisualScale, Y: v.Y * primitiveKartVisualScale, Z: v.Z * primitiveKartVisualScale}
 }
 
-func (t *TrackRuntime) syncPrimitiveKartWheel(w *BlockKartRuntimePorts, part *PrimitivePart, pos voplay.Vec3, rot voplay.Quat, local voplay.Vec3, steer bool, wheelIndex int, axisRot voplay.Quat) {
+func (t *TrackRuntime) syncPrimitiveKartWheel(core *BlockKartRuntimeCore, part *PrimitivePart, pos voplay.Vec3, rot voplay.Quat, local voplay.Vec3, steer bool, wheelIndex int, axisRot voplay.Quat) {
 	if part == nil {
 		return
 	}
 	wheelRot := rot
 	wheelPos := pos.Add(rot.RotateVec3(local))
-	if w.core.vehicle != nil {
+	if core.vehicle != nil {
 		steerAngle := 0.0
 		spin := 0.0
-		if state, ok := w.core.vehicle.VisualWheelSample(wheelIndex); ok {
+		if state, ok := core.vehicle.VisualWheelSample(wheelIndex); ok {
 			wheelPos = state.Center
 			steerAngle = state.Steering
 			spin = state.Rotation

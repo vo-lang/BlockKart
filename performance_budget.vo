@@ -191,6 +191,7 @@ func (a *BlockKartPerfAnalyzer) Report(snapshot voplay.PerfSnapshot, fixed Block
 	status := blockKartPerfStatus(snapshot)
 	screenMPixels := float64(screen.PixelWidth * screen.PixelHeight) / 1000000.0
 	blockKartEmitPerfReport(voplay.EncodePerfSummaryReport("blockkart", frame, snapshot, window, status, gate, voplay.PerfSummaryFixedStats{TotalMs: fixed.TotalMs, PeakTotalMs: fixed.PeakTotalMs, SlowFrames: fixed.WindowSlowFrames, Frames: fixed.WindowFrames, SlowestPhase: fixed.SlowestPhase, SlowestPhaseMs: fixed.SlowestPhaseMs, MaxSlowFrames: blockKartPerfGateMaxSlowFrames}, screen))
+	blockKartEmitPerfReport(voplay.EncodePerfSkipSummaryReport("blockkart", frame, snapshot.Current.RendererWorkload))
 	if !blockKartPerfVerboseConsoleReports {
 		return
 	}

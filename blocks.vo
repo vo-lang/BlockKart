@@ -5,8 +5,8 @@ import (
 	"github.com/vo-lang/voplay/scene3d"
 )
 
-func (t *TrackRuntime) buildLevel(w *BlockKartRuntimePorts) error {
-	return w.core.trackRuntime.buildPrimitiveLevel(w)
+func (t *TrackRuntime) buildLevel(core *BlockKartRuntimeCore, race *BlockKartRuntimeRaceState, kart *BlockKartRuntimeKartState, presentation *RacePresentationState, theme WorldTheme) error {
+	return core.trackRuntime.buildPrimitiveLevel(core, race, kart, presentation, theme)
 }
 
 func boxPhysics(scale voplay.Vec3) *scene3d.Physics {

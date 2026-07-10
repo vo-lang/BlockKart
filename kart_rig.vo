@@ -6,47 +6,47 @@ import (
 	"github.com/vo-lang/voplay/scene3d"
 )
 
-func (k *KartRig) applyKartRoadEdgeAssist(w *BlockKartRuntimePorts, dt float64) {
-	if dt <= 0 || w.core.track == nil || w.core.vehicle == nil {
-		w.kart.roadEdgeAssistActive = false
+func (k *KartRig) applyKartRoadEdgeAssist(core *BlockKartRuntimeCore, kart *BlockKartRuntimeKartState, dt float64) {
+	if dt <= 0 || core.track == nil || core.vehicle == nil {
+		kart.roadEdgeAssistActive = false
 		return
 	}
-	pos := w.core.vehicle.Position()
-	sample, ok := w.kart.kartRig.sampleRoadEdgeAssist(w, pos)
+	pos := core.vehicle.Position()
+	sample, ok := kart.kartRig.sampleRoadEdgeAssist(core, pos)
 	if !ok {
-		w.kart.roadEdgeAssistActive = false
+		kart.roadEdgeAssistActive = false
 		return
 	}
 	if sample.LateralAbs <= sample.AssistStart {
-		w.kart.roadEdgeAssistActive = false
+		kart.roadEdgeAssistActive = false
 		return
 	}
-	enteringAssist := !w.kart.roadEdgeAssistActive
-	result := scene3d.ApplyVehicleRoadEdgeAssist(w.core.vehicle, w.kart.kartRig.roadEdgeAssistCommand(w, sample, enteringAssist), dt)
-	w.kart.roadEdgeAssistActive = result.Active
+	enteringAssist := !kart.roadEdgeAssistActive
+	result := scene3d.ApplyVehicleRoadEdgeAssist(core.vehicle, kart.kartRig.roadEdgeAssistCommand(sample, enteringAssist), dt)
+	kart.roadEdgeAssistActive = result.Active
 }
 
-func (k *KartRig) resolveKartRoadEdgeAssistPose(w *BlockKartRuntimePorts) {
-	if w.core.track == nil || w.core.vehicle == nil {
+func (k *KartRig) resolveKartRoadEdgeAssistPose(core *BlockKartRuntimeCore, kart *BlockKartRuntimeKartState) {
+	if core.track == nil || core.vehicle == nil {
 		return
 	}
-	pos := w.core.vehicle.Position()
-	sample, ok := w.kart.kartRig.sampleRoadEdgeAssist(w, pos)
+	pos := core.vehicle.Position()
+	sample, ok := kart.kartRig.sampleRoadEdgeAssist(core, pos)
 	if !ok || sample.LateralAbs <= sample.AssistStart {
 		return
 	}
-	scene3d.ResolveVehicleRoadEdgeAssistPose(w.core.vehicle, w.kart.kartRig.roadEdgeAssistCommand(w, sample, false))
+	scene3d.ResolveVehicleRoadEdgeAssistPose(core.vehicle, kart.kartRig.roadEdgeAssistCommand(sample, false))
 }
 
-func (k *KartRig) roadEdgeAssistCommand(w *BlockKartRuntimePorts, sample roadEdgeAssistSample, entering bool) scene3d.VehicleRoadEdgeAssistCommand {
+func (k *KartRig) roadEdgeAssistCommand( sample roadEdgeAssistSample, entering bool) scene3d.VehicleRoadEdgeAssistCommand {
 	return scene3d.VehicleRoadEdgeAssistCommand{RoadPosition: sample.Point.Position, Right: sample.Right, Inward: sample.Inward, EdgeHalfWidth: sample.EdgeHalfWidth, AssistStart: sample.AssistStart, LateralAbs: sample.LateralAbs, Side: sample.Side, SoftZone: kartRoadEdgeAssistSoftZone, MaxPushSpeed: kartRoadEdgeAssistMaxPushSpeed, VelocityBlend: kartRoadEdgeAssistVelocityBlend, OutwardDamping: kartRoadEdgeAssistOutwardDamping, ImpactSpeed: kartRoadEdgeAssistImpactSpeed, PositionBlend: kartRoadEdgeAssistPositionBlend, MaxCorrection: kartRoadEdgeAssistMaxCorrection, PostMaxCorrection: kartRoadEdgeAssistPostMaxCorrection, SnapOverflow: kartRoadEdgeAssistSnapOverflow, RideHeight: kartSpawnRideHeight, Lift: kartRoadEdgeAssistLift, Entering: entering}
 }
 
-func (k *KartRig) sampleRoadEdgeAssist(w *BlockKartRuntimePorts, pos voplay.Vec3) (roadEdgeAssistSample, bool) {
-	if w.core.track == nil {
+func (k *KartRig) sampleRoadEdgeAssist(core *BlockKartRuntimeCore, pos voplay.Vec3) (roadEdgeAssistSample, bool) {
+	if core.track == nil {
 		return roadEdgeAssistSample{}, false
 	}
-	cp := w.core.track.ClosestPoint(pos)
+	cp := core.track.ClosestPoint(pos)
 	if cp.HalfWidth <= kartRoadEdgeAssistCenterInset || cp.Right.LengthSq() == 0 {
 		return roadEdgeAssistSample{}, false
 	}
@@ -64,114 +64,114 @@ func (k *KartRig) sampleRoadEdgeAssist(w *BlockKartRuntimePorts, pos voplay.Vec3
 	return roadEdgeAssistSample{Point: cp, Right: right, Inward: right.Scale(-side), EdgeHalfWidth: edgeHalfWidth, AssistStart: edgeHalfWidth - kartRoadEdgeAssistSoftZone, LateralAbs: math.Abs(cp.LateralDistance), Side: side}, true
 }
 
-func (k *KartRig) kartRotation(w *BlockKartRuntimePorts) voplay.Quat {
-	if w.core.vehicle != nil {
-		return w.core.vehicle.Rotation()
+func (k *KartRig) kartRotation(core *BlockKartRuntimeCore, kart *BlockKartRuntimeKartState) voplay.Quat {
+	if core.vehicle != nil {
+		return core.vehicle.Rotation()
 	}
-	return voplay.QuatFromAxisAngle(voplay.Vec3{Y: 1}, w.kart.kartYaw)
+	return voplay.QuatFromAxisAngle(voplay.Vec3{Y: 1}, kart.kartYaw)
 }
 
-func (k *KartRig) setKartPose(w *BlockKartRuntimePorts, position voplay.Vec3, yaw float64) {
-	w.kart.kartYaw = yaw
-	w.kart.kartSpeed = 0
-	w.kart.roadEdgeAssistActive = false
-	w.kart.physicsIdleFrames = 0
-	if w.core.kartController != nil {
-		w.core.kartController.Respawn(scene3d.TrackPose{Position: position, Yaw: yaw})
-		w.kart.kartRig.primeIdleStartPhysicsSleep(w)
-		w.race.raceSession.resetKartRenderPose(w, position, w.kart.kartRig.kartRotation(w))
-		w.kart.drifting = false
-		w.kart.kartRig.syncKartVisuals(w)
+func (k *KartRig) setKartPose(core *BlockKartRuntimeCore, race *BlockKartRuntimeRaceState, kart *BlockKartRuntimeKartState, presentation *RacePresentationState, position voplay.Vec3, yaw float64) {
+	kart.kartYaw = yaw
+	kart.kartSpeed = 0
+	kart.roadEdgeAssistActive = false
+	kart.physicsIdleFrames = 0
+	if core.kartController != nil {
+		core.kartController.Respawn(scene3d.TrackPose{Position: position, Yaw: yaw})
+		kart.kartRig.primeIdleStartPhysicsSleep(core, kart)
+		race.raceSession.resetKartRenderPose(core, kart, presentation, position, kart.kartRig.kartRotation(core, kart))
+		kart.drifting = false
+		kart.kartRig.syncKartVisuals(core, kart)
 		return
 	}
-	if w.core.vehicle != nil {
-		scene3d.ResetVehiclePose(w.core.vehicle, position, yaw)
-		w.kart.kartRig.primeIdleStartPhysicsSleep(w)
-		w.race.raceSession.resetKartRenderPose(w, position, w.kart.kartRig.kartRotation(w))
-		w.kart.drifting = false
-		w.kart.kartRig.syncKartVisuals(w)
+	if core.vehicle != nil {
+		scene3d.ResetVehiclePose(core.vehicle, position, yaw)
+		kart.kartRig.primeIdleStartPhysicsSleep(core, kart)
+		race.raceSession.resetKartRenderPose(core, kart, presentation, position, kart.kartRig.kartRotation(core, kart))
+		kart.drifting = false
+		kart.kartRig.syncKartVisuals(core, kart)
 		return
 	}
-	w.race.raceSession.resetKartRenderPose(w, position, w.kart.kartRig.kartRotation(w))
-	w.kart.kartRig.syncKartVisuals(w)
+	race.raceSession.resetKartRenderPose(core, kart, presentation, position, kart.kartRig.kartRotation(core, kart))
+	kart.kartRig.syncKartVisuals(core, kart)
 }
 
-func (k *KartRig) stopKartForFinish(w *BlockKartRuntimePorts) {
-	w.kart.boostTimer = 0
-	w.kart.driftCharge = 0
-	w.kart.drifting = false
-	w.kart.kartSpeed = 0
-	w.kart.roadEdgeAssistActive = false
-	if w.core.vehicle != nil {
-		scene3d.ResetVehicleMotionState(w.core.vehicle)
+func (k *KartRig) stopKartForFinish(core *BlockKartRuntimeCore, race *BlockKartRuntimeRaceState, kart *BlockKartRuntimeKartState) {
+	kart.boostTimer = 0
+	kart.driftCharge = 0
+	kart.drifting = false
+	kart.kartSpeed = 0
+	kart.roadEdgeAssistActive = false
+	if core.vehicle != nil {
+		scene3d.ResetVehicleMotionState(core.vehicle)
 	}
-	if w.core.kartController != nil {
-		position := w.race.checkpointPosition
-		if w.core.vehicle != nil {
-			position = w.core.vehicle.Position()
-		} else if w.core.player != nil {
-			position = w.core.player.Position()
+	if core.kartController != nil {
+		position := race.checkpointPosition
+		if core.vehicle != nil {
+			position = core.vehicle.Position()
+		} else if core.player != nil {
+			position = core.player.Position()
 		}
-		w.core.kartController.Respawn(scene3d.TrackPose{Position: position, Yaw: w.kart.kartYaw})
+		core.kartController.Respawn(scene3d.TrackPose{Position: position, Yaw: kart.kartYaw})
 	}
 }
 
-func (k *KartRig) activateBoost(w *BlockKartRuntimePorts, duration float64) {
-	if duration > w.kart.boostTimer {
-		w.kart.boostTimer = duration
+func (k *KartRig) activateBoost(core *BlockKartRuntimeCore, kart *BlockKartRuntimeKartState, duration float64) {
+	if duration > kart.boostTimer {
+		kart.boostTimer = duration
 	}
-	if w.core.kartController != nil {
-		w.core.kartController.ActivateBoost(duration)
+	if core.kartController != nil {
+		core.kartController.ActivateBoost(duration)
 	}
 }
 
-func (k *KartRig) syncKartVisuals(w *BlockKartRuntimePorts) {
-	if w.core.player == nil {
+func (k *KartRig) syncKartVisuals(core *BlockKartRuntimeCore, kart *BlockKartRuntimeKartState) {
+	if core.player == nil {
 		return
 	}
-	pos := w.core.player.Position()
-	rot := w.kart.kartRig.kartVisualRotation(w)
-	w.kart.kartRig.syncKartVisualsAt(w, pos, rot)
+	pos := core.player.Position()
+	rot := kart.kartRig.kartVisualRotation(core, kart)
+	kart.kartRig.syncKartVisualsAt(core, kart, pos, rot)
 }
 
-func (k *KartRig) syncKartVisualsAt(w *BlockKartRuntimePorts, pos voplay.Vec3, rot voplay.Quat) {
-	if w.kart.kartChassisPrimitive != nil {
-		w.core.trackRuntime.syncPrimitiveKartVisuals(w, pos, rot)
+func (k *KartRig) syncKartVisualsAt(core *BlockKartRuntimeCore, kart *BlockKartRuntimeKartState, pos voplay.Vec3, rot voplay.Quat) {
+	if kart.kartChassisPrimitive != nil {
+		core.trackRuntime.syncPrimitiveKartVisuals(core, kart, pos, rot)
 	}
 }
 
-func (k *KartRig) updateVehicleAudio(w *BlockKartRuntimePorts) {
-	if w.core.vehicleAudio == nil {
+func (k *KartRig) updateVehicleAudio(core *BlockKartRuntimeCore) {
+	if core.vehicleAudio == nil {
 		return
 	}
 	telemetry := scene3d.VehicleTelemetry{}
-	if w.core.vehicle != nil {
-		telemetry = scene3d.ProductVehicleTelemetry(w.core.vehicle)
+	if core.vehicle != nil {
+		telemetry = scene3d.ProductVehicleTelemetry(core.vehicle)
 	}
 	input := scene3d.VehicleAudioInputFromTelemetry(telemetry)
-	if w.core.kartController != nil {
-		state := w.core.kartController.State()
+	if core.kartController != nil {
+		state := core.kartController.State()
 		if state.SurfaceID != "" {
 			if !state.SurfaceOnRoad {
 				input.SurfaceAmount = 1
 			}
-			w.core.vehicleAudio.Update(input)
+			core.vehicleAudio.Update(input)
 			return
 		}
 	}
-	w.core.vehicleAudio.Update(input)
+	core.vehicleAudio.Update(input)
 }
 
-func (k *KartRig) updateIdleVehicleAudio(w *BlockKartRuntimePorts) {
-	if w.core.vehicleAudio == nil {
+func (k *KartRig) updateIdleVehicleAudio(core *BlockKartRuntimeCore) {
+	if core.vehicleAudio == nil {
 		return
 	}
-	w.core.vehicleAudio.Update(scene3d.VehicleAudioInput{})
+	core.vehicleAudio.Update(scene3d.VehicleAudioInput{})
 }
 
-func (k *KartRig) kartVisualRotation(w *BlockKartRuntimePorts) voplay.Quat {
-	if w.core.vehicle != nil {
-		return w.core.vehicle.VisualRotation()
+func (k *KartRig) kartVisualRotation(core *BlockKartRuntimeCore, kart *BlockKartRuntimeKartState) voplay.Quat {
+	if core.vehicle != nil {
+		return core.vehicle.VisualRotation()
 	}
-	return w.kart.kartRig.kartRotation(w)
+	return kart.kartRig.kartRotation(core, kart)
 }

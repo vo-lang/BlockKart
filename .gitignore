@@ -1,5 +1,5 @@
 **/.vo-cache/
-vo.work
+**/.volang/
 target/
 *.vob
 .DS_Store
