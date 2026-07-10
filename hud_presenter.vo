@@ -49,7 +49,7 @@ type BlockKartHUDReadModel struct {
 func blockKartHUDReadModel(w *World) BlockKartHUDReadModel {
 	speed := w.kart.kartSpeed
 	if w.core.vehicle != nil {
-		speed = scene3d.ProductVehicleTelemetry(w.core.vehicle).Speed
+		speed = w.core.vehicle.Telemetry().Speed
 	}
 	return BlockKartHUDReadModel{
 		core: BlockKartHUDCoreSnapshot{scene: w.core.scene, vehicle: w.core.vehicle, trackResult: w.core.trackResult},
@@ -134,11 +134,11 @@ func (h *HUDPresenter) hudState(model BlockKartHUDReadModel, debugOverlayVisible
 	primitiveVisibleChunks := 0
 	primitiveGroups := 0
 	if core.scene != nil {
-		diagnostics := scene3d.ProductSceneDiagnostics(core.scene)
+		diagnostics := core.scene.Diagnostics()
 		renderDebugMode = diagnostics.RenderDebugMode
 	}
 	if debugOverlayVisible && core.scene != nil {
-		diagnostics := scene3d.ProductSceneDiagnostics(core.scene)
+		diagnostics := core.scene.Diagnostics()
 		stats = diagnostics.Render
 		primitiveStats := diagnostics.Primitive
 		primitiveInstances = primitiveStats.TotalInstances
@@ -157,7 +157,7 @@ func (h *HUDPresenter) hudState(model BlockKartHUDReadModel, debugOverlayVisible
 	wheelMaxSlip := 0.0
 	wheelMaxCompression := 0.0
 	if debugOverlayVisible && core.vehicle != nil {
-		telemetry := scene3d.ProductVehicleTelemetry(core.vehicle)
+		telemetry := core.vehicle.Telemetry()
 		vehicleGrounded = telemetry.Grounded
 		wheelContacts = telemetry.ContactCount
 		wheelCount = telemetry.WheelCount

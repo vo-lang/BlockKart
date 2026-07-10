@@ -120,7 +120,7 @@ func (r *RaceSession) updateKartRenderPose(core *BlockKartRuntimeCore, race *Blo
 
 func (r *RaceSession) currentKartRenderSpeed(core *BlockKartRuntimeCore, kart *BlockKartRuntimeKartState) float64 {
 	if core.vehicle != nil {
-		telemetry := scene3d.ProductVehicleTelemetry(core.vehicle)
+		telemetry := core.vehicle.Telemetry()
 		return telemetry.Speed
 	}
 	return kart.kartSpeed

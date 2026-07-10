@@ -49,8 +49,8 @@ type MovingObstacle struct {
 
 func (r *RaceSession) addCollectible(core *BlockKartRuntimeCore, race *BlockKartRuntimeRaceState, theme WorldTheme, position voplay.Vec3, tag string) {
 	primitive := core.trackRuntime.ensurePrimitiveScene(core)
-	collectibleCore := scene3d.ProductBlockKartDynamic(primitive, primitive.RoundedBox, primitive.OrbMat, position, voplay.QuatFromAxisAngle(voplay.Vec3{Y: 1}, 0.78), voplay.Vec3{X: 1.15, Y: 1.15, Z: 1.15}, theme.OrbColor)
-	glow := scene3d.ProductBlockKartDynamic(primitive, primitive.Sphere, primitive.GlowMat, position.Add(voplay.Vec3{Y: -0.12}), voplay.QuatIdentity(), voplay.Vec3{X: 1.55, Y: 0.3, Z: 1.55}, theme.GoalTrimColor)
+	collectibleCore := addPrimitiveDynamic(primitive, primitive.RoundedBox, primitive.OrbMat, position, voplay.QuatFromAxisAngle(voplay.Vec3{Y: 1}, 0.78), voplay.Vec3{X: 1.15, Y: 1.15, Z: 1.15}, theme.OrbColor)
+	glow := addPrimitiveDynamic(primitive, primitive.Sphere, primitive.GlowMat, position.Add(voplay.Vec3{Y: -0.12}), voplay.QuatIdentity(), voplay.Vec3{X: 1.55, Y: 0.3, Z: 1.55}, theme.GoalTrimColor)
 	race.collectibles = append(race.collectibles, &Collectible{CorePrimitive: collectibleCore, GlowPrimitive: glow, Position: position})
 }
 
@@ -85,7 +85,7 @@ func (r *RaceSession) addMovingObstacle(core *BlockKartRuntimeCore, race *BlockK
 	entity := core.scene.Spawn(scene3d.EntityDesc{Position: position, Rotation: voplay.QuatIdentity(), Scale: voplay.Vec3{X: 1, Y: 1, Z: 1}, Tag: tag + "_physics", Physics: boxPhysics(scale), PickMode: scene3d.PickDisabled})
 	entity.Visible = false
 	primitive := core.trackRuntime.ensurePrimitiveScene(core)
-	visual := scene3d.ProductBlockKartDynamic(primitive, primitive.RoundedBox, primitive.HazardMat, position, voplay.QuatIdentity(), scale, theme.HazardColor)
+	visual := addPrimitiveDynamic(primitive, primitive.RoundedBox, primitive.HazardMat, position, voplay.QuatIdentity(), scale, theme.HazardColor)
 	race.obstacles = append(race.obstacles, &MovingObstacle{Entity: entity, Visual: visual, Origin: position, Axis: axis.Normalize(), Amplitude: amplitude, Speed: speed, Phase: phase})
 }
 

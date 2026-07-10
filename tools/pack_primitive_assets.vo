@@ -1,6 +1,6 @@
 package main
 
-import "github.com/vo-lang/voplay/scene3d"
+import "github.com/vo-lang/blockkart/runtimepack"
 
 const primitiveAssetPackPath = "assets/blockkart.vpak"
 
@@ -13,19 +13,19 @@ func mustPack(err error) {
 }
 
 func main() {
-	mustPack(scene3d.WriteBlockKartRuntimePack(primitiveAssetPackPath, primitiveMapAssetPath, "assets/maps/primitive_track", []scene3d.BlockKartRuntimePackFile{
-		scene3d.BlockKartRuntimePackFile{Path: "assets/effects/grass_card_atlas.png", Kind: "texture"},
-		scene3d.BlockKartRuntimePackFile{Path: "assets/skybox/right.png", Kind: "texture"},
-		scene3d.BlockKartRuntimePackFile{Path: "assets/skybox/left.png", Kind: "texture"},
-		scene3d.BlockKartRuntimePackFile{Path: "assets/skybox/top.png", Kind: "texture"},
-		scene3d.BlockKartRuntimePackFile{Path: "assets/skybox/bottom.png", Kind: "texture"},
-		scene3d.BlockKartRuntimePackFile{Path: "assets/skybox/front.png", Kind: "texture"},
-		scene3d.BlockKartRuntimePackFile{Path: "assets/skybox/back.png", Kind: "texture"},
-		scene3d.BlockKartRuntimePackFile{Path: "assets/audio/kart_engine.wav", Kind: "audio"},
-		scene3d.BlockKartRuntimePackFile{Path: "assets/audio/kart_skid.wav", Kind: "audio"},
-		scene3d.BlockKartRuntimePackFile{Path: "assets/audio/kart_boost.wav", Kind: "audio"},
-		scene3d.BlockKartRuntimePackFile{Path: "assets/audio/kart_grass.wav", Kind: "audio"},
-		scene3d.BlockKartRuntimePackFile{Path: "assets/audio/kart_hit.wav", Kind: "audio"},
+	mustPack(runtimepack.Write(primitiveAssetPackPath, primitiveMapAssetPath, "assets/maps/primitive_track", []runtimepack.File{
+		runtimepack.File{Path: "assets/effects/grass_card_atlas.png", Kind: "texture"},
+		runtimepack.File{Path: "assets/skybox/right.png", Kind: "texture"},
+		runtimepack.File{Path: "assets/skybox/left.png", Kind: "texture"},
+		runtimepack.File{Path: "assets/skybox/top.png", Kind: "texture"},
+		runtimepack.File{Path: "assets/skybox/bottom.png", Kind: "texture"},
+		runtimepack.File{Path: "assets/skybox/front.png", Kind: "texture"},
+		runtimepack.File{Path: "assets/skybox/back.png", Kind: "texture"},
+		runtimepack.File{Path: "assets/audio/kart_engine.wav", Kind: "audio"},
+		runtimepack.File{Path: "assets/audio/kart_skid.wav", Kind: "audio"},
+		runtimepack.File{Path: "assets/audio/kart_boost.wav", Kind: "audio"},
+		runtimepack.File{Path: "assets/audio/kart_grass.wav", Kind: "audio"},
+		runtimepack.File{Path: "assets/audio/kart_hit.wav", Kind: "audio"},
 	}))
 	println("packed", primitiveAssetPackPath)
 }

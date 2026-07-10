@@ -24,7 +24,7 @@ type TrackRuntime struct {
 	Track *scene3d.Track
 	Spawn *scene3d.TrackSpawnResult
 	Spec BlockKartTrackSpec
-	renderStressPrimitive10kBatch *scene3d.BlockKartPrimitiveBatch
+	renderStressPrimitive10kBatch *PrimitiveBatch
 	renderStressPrimitive10kIndex int
 	renderStressPrimitive10kCenter voplay.Vec3
 	renderStressPrimitive10kRotations []voplay.Quat
@@ -43,6 +43,7 @@ type PerfReporter struct {
 
 type AssetRuntimeCache struct {
 	Cache *BlockKartRuntimeCache
+	scope *voplay.AssetScope
 }
 
 type StructuredFailureReport struct {
@@ -107,4 +108,22 @@ func (a *AssetRuntimeCache) Bind(cache *BlockKartRuntimeCache) {
 		return
 	}
 	a.Cache = cache
+}
+
+func (a *AssetRuntimeCache) Scope() *voplay.AssetScope {
+	if a == nil {
+		return nil
+	}
+	if a.Cache != nil {
+		return a.Cache.scope
+	}
+	return a.scope
+}
+
+func (a *AssetRuntimeCache) Close() {
+	if a == nil || a.scope == nil {
+		return
+	}
+	a.scope.Close()
+	a.scope = nil
 }

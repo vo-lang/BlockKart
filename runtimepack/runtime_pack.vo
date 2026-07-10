@@ -1,0 +1,62 @@
+package runtimepack
+
+import (
+	"github.com/vo-lang/vopack"
+	"github.com/vo-lang/voplay/scene3d"
+	"os"
+)
+
+type File struct {
+	Path string
+	Kind string
+	Dependencies []string
+}
+
+func Write(packPath string, mapPath string, mapBaseDir string, extras []File) error {
+	if err := os.MkdirAll("assets", 0755); err != nil {
+		return err
+	}
+	mapAsset, err := scene3d.LoadMapAsset(mapPath)
+	if err != nil {
+		return err
+	}
+	mapDeps := scene3d.MapAssetDependencies(mapAsset, mapBaseDir)
+	writer, createErr := vopack.Create(packPath)
+	if createErr != nil {
+		return createErr
+	}
+	writer.SetManifestInfo("BlockKart", "primitive-track")
+	seen := map[string]bool{}
+	if err := addRuntimePackFile(writer, seen, mapPath, "map", mapDependencyPaths(mapDeps)); err != nil {
+		return err
+	}
+	for _, dep := range mapDeps {
+		if err := addRuntimePackFile(writer, seen, dep.Path, dep.Kind, nil); err != nil {
+			return err
+		}
+	}
+	for _, extra := range extras {
+		if err := addRuntimePackFile(writer, seen, extra.Path, extra.Kind, extra.Dependencies); err != nil {
+			return err
+		}
+	}
+	return writer.Close()
+}
+
+func addRuntimePackFile(writer *vopack.PackWriter, seen map[string]bool, path string, kind string, deps []string) error {
+	if path == "" || seen[path] {
+		return nil
+	}
+	seen[path] = true
+	return writer.AddFile(path, path, vopack.EntryOpts{Type: kind, Dependencies: deps})
+}
+
+func mapDependencyPaths(deps []scene3d.MapDependency) []string {
+	paths := []string{}
+	for _, dep := range deps {
+		if dep.Path != "" {
+			paths = append(paths, dep.Path)
+		}
+	}
+	return paths
+}

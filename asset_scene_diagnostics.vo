@@ -33,7 +33,10 @@ func blockKartReportAssetDiagnostics(g *voplay.GameCtx, lifecycleState, startupP
 	primitiveTemplateBuilds := 0
 	primitiveTemplateReuses := 0
 	if w != nil {
-		assetGroup = w.core.assetGroup
+		assetScope := w.core.assetRuntime.Scope()
+		if assetScope != nil {
+			assetGroup = assetScope.Name()
+		}
 		cubeModelLoaded = w.kart.cubeModel != 0
 		if w.core.assets != nil {
 			assetReport = w.core.assets.Report()
@@ -42,7 +45,7 @@ func blockKartReportAssetDiagnostics(g *voplay.GameCtx, lifecycleState, startupP
 			skyboxLoaded = w.core.scene.Skybox != 0
 		}
 		if w.core.runtimeCache != nil {
-			runtimeCacheReady = w.core.runtimeCache.assetGroupActive
+			runtimeCacheReady = w.core.runtimeCache.scope != nil
 			preparedMapCached = w.core.runtimeCache.primitiveMap != nil
 			primitiveTemplateCached = w.core.runtimeCache.primitiveTemplate != nil
 			preparedMapBuilds = w.core.runtimeCache.preparedMapBuilds
@@ -70,8 +73,7 @@ func blockKartReportAssetDiagnostics(g *voplay.GameCtx, lifecycleState, startupP
 		blockKartJSONInt("primitiveTemplateReuses", primitiveTemplateReuses),
 		blockKartJSONText("restartRootCause", blockKartRestartResourceRootCause),
 		blockKartJSONInt("mountCount", assetReport.MountCount),
-		blockKartJSONInt("groupCount", assetReport.GroupCount),
-		blockKartJSONInt("activeGroupDepth", assetReport.ActiveGroupDepth),
+		blockKartJSONInt("scopeCount", assetReport.ScopeCount),
 		blockKartJSONInt("textureCount", assetReport.TextureCount),
 		blockKartJSONInt("linearTextureCount", assetReport.LinearTextureCount),
 		blockKartJSONInt("cubemapCount", assetReport.CubemapCount),
@@ -138,7 +140,7 @@ func blockKartReportSceneDiagnostics(g *voplay.GameCtx, lifecycleState, startupP
 		}
 		if w.core.scene != nil {
 			hasScene = true
-			diag := scene3d.ProductSceneDiagnostics(w.core.scene)
+			diag := w.core.scene.Diagnostics()
 			content := diag.PrimitiveContent
 			if content.TotalInstances == 0 && diag.Primitive.TotalInstances > 0 {
 				content = diag.Primitive

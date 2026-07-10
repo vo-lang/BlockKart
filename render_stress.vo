@@ -114,7 +114,7 @@ func (t *TrackRuntime) advanceRenderStress(core *BlockKartRuntimeCore, stress *R
 	return true
 }
 
-func (t *TrackRuntime) renderStressPrimitive10kPlacement(primitive *PrimitiveVisualContent, i int) scene3d.BlockKartPrimitivePlacement {
+func (t *TrackRuntime) renderStressPrimitive10kPlacement(primitive *PrimitiveVisualContent, i int) PrimitivePlacement {
 	spacing := 2.35
 	col := i % blockKartRenderStressPrimitive10kColumns
 	row := i / blockKartRenderStressPrimitive10kColumns
@@ -133,7 +133,7 @@ func (t *TrackRuntime) renderStressPrimitive10kPlacement(primitive *PrimitiveVis
 	} else if i % 7 == 0 {
 		material = primitive.PebbleMat
 	}
-	return scene3d.BlockKartPrimitivePlacement{Shape: shape, Material: material, Position: voplay.Vec3{X: x, Y: y, Z: z}, Rotation: t.renderStressPrimitive10kRotations[i%31], Scale: t.renderStressPrimitive10kScales[i%60], Flags: scene3d.BlockKartPrimitiveNoShadow, LodFar: 150}
+	return PrimitivePlacement{Shape: shape, Material: material, Position: voplay.Vec3{X: x, Y: y, Z: z}, Rotation: t.renderStressPrimitive10kRotations[i%31], Scale: t.renderStressPrimitive10kScales[i%60], Flags: PrimitiveNoShadow, LodFar: 150}
 }
 
 func (t *TrackRuntime) addRenderStressWater(core *BlockKartRuntimeCore, race *BlockKartRuntimeRaceState) {
@@ -146,7 +146,7 @@ func (t *TrackRuntime) addRenderStressWater(core *BlockKartRuntimeCore, race *Bl
 	for i := 0; i < 12; i++ {
 		x := center.X + float64(i%4)*8.5
 		z := center.Z - float64(i/4)*9.0
-		batch.Add(scene3d.BlockKartPrimitivePlacement{Shape: primitive.RoundedBox, Material: primitive.WaterMat, Position: voplay.Vec3{X: x, Y: center.Y, Z: z}, Rotation: voplay.QuatIdentity(), Scale: voplay.Vec3{X: 7.8, Y: 0.08, Z: 7.8}, Flags: scene3d.BlockKartPrimitiveNoShadow})
+		batch.Add(PrimitivePlacement{Shape: primitive.RoundedBox, Material: primitive.WaterMat, Position: voplay.Vec3{X: x, Y: center.Y, Z: z}, Rotation: voplay.QuatIdentity(), Scale: voplay.Vec3{X: 7.8, Y: 0.08, Z: 7.8}, Flags: PrimitiveNoShadow})
 	}
 	batch.End()
 }
@@ -164,7 +164,7 @@ func (t *TrackRuntime) addRenderStressResourceChurn(core *BlockKartRuntimeCore, 
 		if i % 2 == 0 {
 			material = primitive.FlowerWhiteMat
 		}
-		batch.Add(scene3d.BlockKartPrimitivePlacement{Shape: primitive.Sphere, Material: material, Position: position, Rotation: voplay.QuatIdentity(), Scale: voplay.Vec3{X: 0.32, Y: 0.24, Z: 0.32}, Flags: scene3d.BlockKartPrimitiveNoShadow, LodFar: primitiveFlowerClumpLodFar})
+		batch.Add(PrimitivePlacement{Shape: primitive.Sphere, Material: material, Position: position, Rotation: voplay.QuatIdentity(), Scale: voplay.Vec3{X: 0.32, Y: 0.24, Z: 0.32}, Flags: PrimitiveNoShadow, LodFar: primitiveFlowerClumpLodFar})
 	}
 	batch.End()
 }
@@ -195,7 +195,7 @@ func (t *TrackRuntime) addRenderStressChunkedWorldDrive(core *BlockKartRuntimeCo
 			material = primitive.PebbleMat
 		}
 		scale := voplay.Vec3{X: 0.72 + float64(i%3)*0.12, Y: 0.38 + float64(row%4)*0.06, Z: 0.72 + float64(col%4)*0.10}
-		batch.Add(scene3d.BlockKartPrimitivePlacement{Shape: shape, Material: material, Position: voplay.Vec3{X: x, Y: y, Z: z}, Rotation: voplay.QuatFromAxisAngle(voplay.Vec3{Y: 1}, float64(i%47)*0.11), Scale: scale, Flags: scene3d.BlockKartPrimitiveNoShadow, LodFar: 780})
+		batch.Add(PrimitivePlacement{Shape: shape, Material: material, Position: voplay.Vec3{X: x, Y: y, Z: z}, Rotation: voplay.QuatFromAxisAngle(voplay.Vec3{Y: 1}, float64(i%47)*0.11), Scale: scale, Flags: PrimitiveNoShadow, LodFar: 780})
 	}
 	batch.End()
 }
@@ -212,9 +212,9 @@ func (t *TrackRuntime) addRenderStressShadowPostMatrix(core *BlockKartRuntimeCor
 			if (row + col) % 3 == 0 {
 				material = primitive.StoneMat
 			}
-			scene3d.ProductBlockKartStaticWithFlags(primitive, primitive.Cylinder, material, voplay.Vec3{X: x, Y: center.Y + height*0.5 - 0.72, Z: z}, voplay.QuatIdentity(), voplay.Vec3{X: 0.42, Y: height, Z: 0.42}, voplay.Color{}, 0)
+			placePrimitiveStaticWithFlags(primitive, primitive.Cylinder, material, voplay.Vec3{X: x, Y: center.Y + height*0.5 - 0.72, Z: z}, voplay.QuatIdentity(), voplay.Vec3{X: 0.42, Y: height, Z: 0.42}, voplay.Color{}, 0)
 			if (row + col) % 4 == 0 {
-				scene3d.ProductBlockKartStaticWithFlags(primitive, primitive.RoundedBox, primitive.PebbleMat, voplay.Vec3{X: x + 1.1, Y: center.Y - 0.46, Z: z + 1.0}, voplay.QuatFromAxisAngle(voplay.Vec3{Y: 1}, float64(row+col)*0.19), voplay.Vec3{X: 1.25, Y: 0.48, Z: 0.72}, voplay.Color{}, 0)
+				placePrimitiveStaticWithFlags(primitive, primitive.RoundedBox, primitive.PebbleMat, voplay.Vec3{X: x + 1.1, Y: center.Y - 0.46, Z: z + 1.0}, voplay.QuatFromAxisAngle(voplay.Vec3{Y: 1}, float64(row+col)*0.19), voplay.Vec3{X: 1.25, Y: 0.48, Z: 0.72}, voplay.Color{}, 0)
 			}
 		}
 	}

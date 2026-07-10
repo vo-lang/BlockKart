@@ -146,7 +146,7 @@ func (k *KartRig) updateVehicleAudio(core *BlockKartRuntimeCore) {
 	}
 	telemetry := scene3d.VehicleTelemetry{}
 	if core.vehicle != nil {
-		telemetry = scene3d.ProductVehicleTelemetry(core.vehicle)
+		telemetry = core.vehicle.Telemetry()
 	}
 	input := scene3d.VehicleAudioInputFromTelemetry(telemetry)
 	if core.kartController != nil {

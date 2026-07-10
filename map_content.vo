@@ -1,0 +1,24 @@
+package main
+
+import (
+	"github.com/vo-lang/voplay"
+	"github.com/vo-lang/voplay/scene3d"
+)
+
+type BlockKartTrackColliderSpec = scene3d.ColliderAuthoring
+
+func prepareBlockKartMapAsset(assets voplay.AssetSource, path string) (*scene3d.MapPreparedAsset, error) {
+	return scene3d.PrepareMapWithAssets(assets, path)
+}
+
+func spawnBlockKartMapTrackTerrain(scene *scene3d.Scene, track *scene3d.Track, prepared *scene3d.MapPreparedAsset, name string) (*scene3d.TrackSpawnResult, error) {
+	return scene3d.SpawnPreparedMapTrackMeshTerrain(scene, track, prepared, name)
+}
+
+func spawnBlockKartMapMesh(scene *scene3d.Scene, prepared *scene3d.MapPreparedAsset, name string) (*scene3d.Entity, error) {
+	return scene3d.SpawnPreparedMapMesh(scene, prepared, name)
+}
+
+func spawnBlockKartTrackCollider(scene *scene3d.Scene, track *scene3d.Track, spec BlockKartTrackColliderSpec) (scene3d.TrackColliderStripResult, error) {
+	return scene3d.SpawnTrackColliderStrip(scene, track, spec)
+}

@@ -40,11 +40,10 @@ const blockKartRestartResourceRootCause = "Phase 2A root cause: restart was rebu
 
 type BlockKartRuntimeCache struct {
 	assets *voplay.Assets
-	assetGroup string
-	assetGroupActive bool
+	scope *voplay.AssetScope
 	skybox voplay.CubemapID
 	primitiveMap *scene3d.MapPreparedAsset
-	primitiveTemplate *BlockKartPrimitiveTemplate
+	primitiveTemplate *PrimitiveContentTemplate
 	preparedMapBuilds int
 	preparedMapReuses int
 	primitiveTemplateBuilds int
@@ -62,8 +61,6 @@ type BlockKartRuntimeCore struct {
 	assetRuntime AssetRuntimeCache
 	trackRuntime TrackRuntime
 	assets *voplay.Assets
-	assetGroup string
-	assetGroupOwnedByRuntime bool
 	primitiveMap *scene3d.MapPreparedAsset
 	preparedMapReused bool
 	primitiveTemplateReused bool
@@ -222,22 +219,14 @@ func (c *BlockKartRuntimeCache) EnsureLoaded(assets *voplay.Assets) (voplay.Cube
 	if c.skybox != 0 {
 		return c.skybox, nil
 	}
-	assets.BeginGroup(worldAssetGroup)
-	skybox, err := loadSkybox(assets)
-	assets.EndGroup()
+	c.scope = assets.OpenScope(worldAssetGroup)
+	skybox, err := loadSkybox(c.scope)
 	if err != nil {
-		if c.assetGroupActive {
-			assets.ReleaseGroup(worldAssetGroup)
-		} else {
-			assets.ReleaseGroup(worldAssetGroup)
-		}
+		c.scope.Close()
+		c.scope = nil
 		c.assets = nil
-		c.assetGroup = ""
-		c.assetGroupActive = false
 		return 0, errors.New("BlockKart skybox load failed: " + err.Error())
 	}
-	c.assetGroup = worldAssetGroup
-	c.assetGroupActive = true
 	c.skybox = skybox
 	return c.skybox, nil
 }
@@ -246,12 +235,11 @@ func (c *BlockKartRuntimeCache) Close() {
 	if c == nil {
 		return
 	}
-	if c.assets != nil && c.assetGroupActive && c.assetGroup != "" {
-		c.assets.ReleaseGroup(c.assetGroup)
+	if c.scope != nil {
+		c.scope.Close()
 	}
 	c.assets = nil
-	c.assetGroup = ""
-	c.assetGroupActive = false
+	c.scope = nil
 	c.skybox = 0
 	c.primitiveMap = nil
 	c.primitiveTemplate = nil
@@ -324,11 +312,7 @@ func (k *KartRig) loadModels(kart *BlockKartRuntimeKartState) {
 	kart.cubeModel = scene3d.CubeMesh()
 }
 
-func loadTextureAsset(assets *voplay.Assets, rel string) (voplay.TextureID, error) {
-	return assets.Texture(blockKartAssetPath(rel))
-}
-
-func loadAudioAsset(assets *voplay.Assets, rel string) (voplay.AudioClipID, error) {
+func loadAudioAsset(assets *voplay.AssetScope, rel string) (voplay.AudioClipID, error) {
 	return assets.Audio(blockKartAssetPath(rel))
 }
 
@@ -343,29 +327,26 @@ func (a *AssetRuntimeCache) loadAssets(core *BlockKartRuntimeCore, assets *vopla
 			return err
 		}
 		core.scene.Skybox = skybox
-		core.assetGroup = worldAssetGroup
-		core.assetGroupOwnedByRuntime = true
 		return nil
 	}
 	packErr := assets.Mount(blockKartAssetPath("blockkart.vpak"), 100)
 	if packErr != nil {
 		return errors.New("BlockKart asset pack mount failed: " + packErr.Error())
 	}
-	assets.BeginGroup(worldAssetGroup)
-	skybox, err := loadSkybox(assets)
+	a.scope = assets.OpenScope(worldAssetGroup)
+	skybox, err := loadSkybox(a.scope)
 	if err == nil {
 		core.scene.Skybox = skybox
 	}
-	assets.EndGroup()
 	if err != nil {
-		assets.ReleaseGroup(worldAssetGroup)
+		a.scope.Close()
+		a.scope = nil
 		return errors.New("BlockKart skybox load failed: " + err.Error())
 	}
-	core.assetGroup = worldAssetGroup
 	return nil
 }
 
-func loadSkybox(assets *voplay.Assets) (voplay.CubemapID, error) {
+func loadSkybox(assets *voplay.AssetScope) (voplay.CubemapID, error) {
 	return assets.Cubemap(blockKartAssetPath("skybox/right.png"), blockKartAssetPath("skybox/left.png"), blockKartAssetPath("skybox/top.png"), blockKartAssetPath("skybox/bottom.png"), blockKartAssetPath("skybox/front.png"), blockKartAssetPath("skybox/back.png"))
 }
 
@@ -392,7 +373,7 @@ func (k *KartRig) primeIdleStartPhysicsSleep(core *BlockKartRuntimeCore, kart *B
 	if core.vehicle == nil {
 		return
 	}
-	scene3d.ProductPrimeVehicleIdleSleep(core.vehicle)
+	scene3d.PrimeVehicleIdleSleep(core.vehicle)
 	kart.physicsIdleFrames = scene3d.DefaultVehicleIdleSleepConfig().WarmupFrames
 }
 
@@ -424,13 +405,15 @@ func (k *KartRig) setupVehicleAudio(core *BlockKartRuntimeCore) {
 	if core.assets == nil || core.player == nil {
 		return
 	}
-	core.assets.BeginGroup(worldAssetGroup)
-	engine, engineErr := loadAudioAsset(core.assets, "audio/kart_engine.wav")
-	skid, skidErr := loadAudioAsset(core.assets, "audio/kart_skid.wav")
-	boost, boostErr := loadAudioAsset(core.assets, "audio/kart_boost.wav")
-	surface, surfaceErr := loadAudioAsset(core.assets, "audio/kart_grass.wav")
-	collision, collisionErr := loadAudioAsset(core.assets, "audio/kart_hit.wav")
-	core.assets.EndGroup()
+	assetScope := core.assetRuntime.Scope()
+	if assetScope == nil {
+		return
+	}
+	engine, engineErr := loadAudioAsset(assetScope, "audio/kart_engine.wav")
+	skid, skidErr := loadAudioAsset(assetScope, "audio/kart_skid.wav")
+	boost, boostErr := loadAudioAsset(assetScope, "audio/kart_boost.wav")
+	surface, surfaceErr := loadAudioAsset(assetScope, "audio/kart_grass.wav")
+	collision, collisionErr := loadAudioAsset(assetScope, "audio/kart_hit.wav")
 	if engineErr != nil || skidErr != nil || boostErr != nil || surfaceErr != nil || collisionErr != nil {
 		return
 	}
@@ -648,7 +631,7 @@ func (k *KartRig) applyKartDriveResult(core *BlockKartRuntimeCore, race *BlockKa
 		race.raceSession.respawnAtCheckpoint(core, race, kart, presentation)
 	}
 	if telemetry.WheelCount == 0 {
-		telemetry = scene3d.ProductVehicleTelemetry(core.vehicle)
+		telemetry = core.vehicle.Telemetry()
 	}
 	kart.drifting = state.Drifting || telemetry.Drifting
 	kart.driftCharge = state.DriftCharge
@@ -660,7 +643,7 @@ func (k *KartRig) shouldSleepKartPhysics(core *BlockKartRuntimeCore, kart *Block
 	if core.vehicle == nil {
 		return false
 	}
-	sample := scene3d.ProductVehicleIdleSleepSample(core.vehicle, kart.lastVehicleIntent, kart.kartSpeed, kart.physicsIdleFrames, kart.boostTimer > 0, kart.drifting, kart.roadEdgeAssistActive)
+	sample := scene3d.VehicleIdleSleepSampleFromVehicle(core.vehicle, kart.lastVehicleIntent, kart.kartSpeed, kart.physicsIdleFrames, kart.boostTimer > 0, kart.drifting, kart.roadEdgeAssistActive)
 	return scene3d.VehicleShouldSleepIdlePhysics(sample, scene3d.DefaultVehicleIdleSleepConfig())
 }
 
@@ -736,7 +719,7 @@ func (w *World) SetRacingDebugOverlayVisible(visible bool) {
 
 func (w *World) SetRenderDebugMode(mode int) {
 	if w.core.scene != nil {
-		scene3d.ProductSetRenderDebugMode(w.core.scene, mode)
+		w.core.scene.SetRenderDebugMode(mode)
 	}
 }
 
@@ -768,13 +751,8 @@ func (w *World) Close() {
 	w.core.primitive = nil
 	w.core.track = nil
 	w.core.kartController = nil
-	if w.core.assets != nil {
-		if w.core.assetGroup != "" && !w.core.assetGroupOwnedByRuntime {
-			w.core.assets.ReleaseGroup(w.core.assetGroup)
-			w.core.assetGroup = ""
-		}
-		w.core.assets = nil
-	}
+	w.core.assetRuntime.Close()
+	w.core.assets = nil
 	if w.kart.cubeModel != 0 {
 		w.kart.cubeModel.Free()
 		w.kart.cubeModel = 0
