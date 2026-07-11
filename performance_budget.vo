@@ -170,9 +170,6 @@ func (a *BlockKartPerfAnalyzer) ShouldReport(snapshot voplay.PerfSnapshot) bool 
 		return false
 	}
 	frame := blockKartPerfFrameIndex(snapshot)
-	if frame < blockKartPerfWarmupFrames + blockKartPerfWindowFrames {
-		return false
-	}
 	window := blockKartPerfReportingWindow(snapshot)
 	if window.Frames < blockKartPerfWindowFrames {
 		return false

@@ -141,10 +141,10 @@ func (t *TrackRuntime) addRenderStressWater(core *BlockKartRuntimeCore, race *Bl
 	if core.track != nil {
 		core.trackRuntime.addPrimitiveLakeAndBridge(core, core.track)
 	}
-	center := race.startPosition.Add(voplay.Vec3{X: 24, Y: -0.95, Z: -42})
+	center := race.startPosition.Add(voplay.Vec3{Y: -0.95, Z: -28})
 	batch := primitive.BeginStaticBatch()
 	for i := 0; i < 12; i++ {
-		x := center.X + float64(i%4)*8.5
+		x := center.X + (float64(i%4)-1.5)*8.5
 		z := center.Z - float64(i/4)*9.0
 		batch.Add(PrimitivePlacement{Shape: primitive.RoundedBox, Material: primitive.WaterMat, Position: voplay.Vec3{X: x, Y: center.Y, Z: z}, Rotation: voplay.QuatIdentity(), Scale: voplay.Vec3{X: 7.8, Y: 0.08, Z: 7.8}, Flags: PrimitiveNoShadow})
 	}

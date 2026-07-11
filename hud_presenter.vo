@@ -92,6 +92,9 @@ func (h *HUDPresenter) shouldPollPerfSnapshotForConsoleReport(hud *BlockKartRunt
 	}
 	hud.perfSnapshotPollFrame++
 	firstReportFrame := blockKartPerfWarmupFrames + blockKartPerfWindowFrames
+	if hud.perfSnapshotFastPolls > 0 {
+		firstReportFrame = blockKartPerfWindowFrames
+	}
 	if hud.perfSnapshotPollFrame < firstReportFrame {
 		return false
 	}
