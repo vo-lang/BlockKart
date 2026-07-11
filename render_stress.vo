@@ -161,11 +161,11 @@ func (t *TrackRuntime) addRenderStressResourceChurn(core *BlockKartRuntimeCore, 
 		col := i % columns
 		row := i / columns
 		position := race.startPosition.Add(voplay.Vec3{X: (float64(col) - 31.5) * 1.85, Y: -0.42 + math.Sin(float64(i)*0.23)*0.10, Z: -18.0 - float64(row)*1.95})
-		material := primitive.FlowerYellowMat
+		material := primitive.MeadowMat
 		if i % 2 == 0 {
-			material = primitive.FlowerWhiteMat
+			material = primitive.StoneMat
 		}
-		batch.Add(PrimitivePlacement{Shape: primitive.Sphere, Material: material, Position: position, Rotation: voplay.QuatIdentity(), Scale: voplay.Vec3{X: 0.32, Y: 0.24, Z: 0.32}, Flags: PrimitiveNoShadow, LodFar: primitiveFlowerClumpLodFar})
+		batch.Add(PrimitivePlacement{Shape: primitive.Sphere, Material: material, Position: position, Rotation: voplay.QuatIdentity(), Scale: voplay.Vec3{X: 0.32, Y: 0.24, Z: 0.32}, Flags: PrimitiveNoShadow, LodFar: 150})
 	}
 	batch.End()
 }
