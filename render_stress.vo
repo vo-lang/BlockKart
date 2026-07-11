@@ -156,11 +156,12 @@ func (t *TrackRuntime) addRenderStressResourceChurn(core *BlockKartRuntimeCore, 
 	primitive := core.trackRuntime.ensurePrimitiveScene(core)
 	batch := primitive.BeginStressBatch()
 	count := blockKartRenderStressResourceChurnCount
-	columns := 32
+	columns := 16
+	center := race.startPosition.Add(voplay.Vec3{X: -18, Z: -34})
 	for i := 0; i < count; i++ {
 		col := i % columns
 		row := i / columns
-		position := race.startPosition.Add(voplay.Vec3{X: (float64(col) - 31.5) * 1.85, Y: -0.42 + math.Sin(float64(i)*0.23)*0.10, Z: -18.0 - float64(row)*1.95})
+		position := voplay.Vec3{X: center.X + float64(col)*3.0, Y: center.Y - 0.46, Z: center.Z - float64(row)*3.2}
 		material := primitive.MeadowMat
 		if i % 2 == 0 {
 			material = primitive.StoneMat
