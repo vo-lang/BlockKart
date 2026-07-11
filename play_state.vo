@@ -222,6 +222,7 @@ func (s *PlayState) restartRun(g *voplay.GameCtx) {
 	s.elapsed = 0
 	s.setLifecycle(g, BlockKartLifecycleRunning, "raceRestart")
 	blockKartReportWorldDiagnostics(g, s.lifecycle, s.startupPhase, "raceRestart", s.world)
+	blockKartBeginSteadyStatePerfWindow(diagnosticsPortsFromStates(&s.world.core, &s.world.input, &s.world.race, &s.world.kart, &s.world.hud), g)
 }
 
 func (s *PlayState) captureRacePersistence() {

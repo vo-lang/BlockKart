@@ -92,6 +92,22 @@ type BlockKartFixedStepProfiler struct {
 	slowLogCooldown int
 }
 
+func blockKartBeginSteadyStatePerfWindow(w *DiagnosticsPorts, g *voplay.GameCtx) {
+	if w == nil || g == nil || !blockKartPerfStatsEnabled {
+		return
+	}
+	mode := voplay.PerfModeStats
+	snapshot := g.GetPerfSnapshot()
+	if snapshot.Enabled && snapshot.Mode != "" {
+		mode = snapshot.Mode
+	}
+	g.ResetPerfStats(mode)
+	w.hud.perfAnalyzer = BlockKartPerfAnalyzer{}
+	w.hud.fixedProfiler = BlockKartFixedStepProfiler{}
+	w.hud.perfSnapshotPollFrame = 0
+	w.hud.perfSnapshotFastPolls = blockKartPerfPostResetFastPolls
+}
+
 func (p *BlockKartFixedStepProfiler) Record(stats BlockKartFixedPhaseStats) BlockKartFixedPhaseStats {
 	p.frame++
 	stats.Frame = p.frame

@@ -3,7 +3,6 @@ package main
 import (
 	"math"
 	"github.com/vo-lang/voplay"
-	"github.com/vo-lang/voplay/scene3d"
 )
 
 const (
@@ -45,26 +44,11 @@ func (w *World) ActivateRenderStressProfile(g *voplay.GameCtx, profile string) {
 		w.hud.renderStress.applied = true
 	}
 	if w.hud.renderStress.applied {
-		blockKartResetRenderStressPerfWindow(diagnosticsPortsFromStates(&w.core, &w.input, &w.race, &w.kart, &w.hud), g)
+		blockKartBeginSteadyStatePerfWindow(diagnosticsPortsFromStates(&w.core, &w.input, &w.race, &w.kart, &w.hud), g)
 		w.hud.presentation.message = "Render stress: " + profile
 		w.hud.presentation.messageTimer = 1.5
 	}
 	blockKartReportWorldDiagnostics(g, BlockKartLifecycleRunning, "renderStress", profile, w)
-}
-
-func blockKartResetRenderStressPerfWindow(w *DiagnosticsPorts, g *voplay.GameCtx) {
-	if w == nil || g == nil || !blockKartPerfStatsEnabled {
-		return
-	}
-	mode := voplay.PerfModeStats
-	snapshot := g.GetPerfSnapshot()
-	if snapshot.Enabled && snapshot.Mode != "" {
-		mode = snapshot.Mode
-	}
-	g.ResetPerfStats(mode)
-	w.hud.perfAnalyzer = BlockKartPerfAnalyzer{}
-	w.hud.perfSnapshotPollFrame = 0
-	w.hud.perfSnapshotFastPolls = blockKartPerfPostResetFastPolls
 }
 
 func blockKartRenderStressPerfReportBlocked(w *DiagnosticsPorts) bool {
