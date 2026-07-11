@@ -16,6 +16,7 @@ const (
 	blockKartRenderStressPrimitive10kChunk = 48
 	blockKartRenderStressPrimitive10kColumns = 100
 	blockKartRenderStressPrimitive10kCullOffset = 240.0
+	blockKartRenderStressResourceChurnCount = 256
 )
 
 func (w *World) ActivateRenderStressProfile(g *voplay.GameCtx, profile string) {
@@ -154,8 +155,8 @@ func (t *TrackRuntime) addRenderStressWater(core *BlockKartRuntimeCore, race *Bl
 func (t *TrackRuntime) addRenderStressResourceChurn(core *BlockKartRuntimeCore, race *BlockKartRuntimeRaceState) {
 	primitive := core.trackRuntime.ensurePrimitiveScene(core)
 	batch := primitive.BeginStressBatch()
-	count := 1536
-	columns := 64
+	count := blockKartRenderStressResourceChurnCount
+	columns := 32
 	for i := 0; i < count; i++ {
 		col := i % columns
 		row := i / columns
