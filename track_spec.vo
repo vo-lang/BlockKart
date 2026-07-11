@@ -14,7 +14,7 @@ type BlockKartTrackSpec struct {
 	Respawns []scene3d.TrackRespawn
 	TerrainMesh string
 	VisualRoadMeshes []string
-	Collider BlockKartTrackColliderSpec
+	Collider scene3d.ColliderAuthoring
 	MinimapScale float64
 }
 
@@ -45,7 +45,7 @@ func defaultBlockKartTrackSpec() BlockKartTrackSpec {
 		},
 		TerrainMesh: "lowpoly_terrain",
 		VisualRoadMeshes: []string{"road_shoulders", "road_asphalt", "road_curbs", "road_tire_grime", "road_edge_lines", "road_center_dashes"},
-		Collider: BlockKartTrackColliderSpec{Layer: voplay.CollisionLayerDefault, Mask: voplay.CollisionMaskAll, SegmentLength: primitiveTrackPhysicsSegmentLength, MinSegments: 24, GroundTag: "primitive_ground_physics", GroundY: primitiveTerrainY + 1.42, GroundHalfExtents: voplay.Vec3{X: primitiveTerrainWidth * 0.5, Y: 0.18, Z: primitiveTerrainDepth * 0.5}, GroundFriction: 0.72, GroundRestitution: 0.02, RoadTag: "primitive_road_physics", RoadYOffset: -0.08, RoadHalfHeight: 0.18, RoadOuterOffset: primitiveRoadPhysicsOuterOffset, RoadSegmentOverlap: primitiveRoadPhysicsSegmentOverlap, RoadFriction: 1.05, RoadRestitution: 0.01},
+		Collider: scene3d.ColliderAuthoring{Layer: voplay.CollisionLayerDefault, Mask: voplay.CollisionMaskAll, SegmentLength: primitiveTrackPhysicsSegmentLength, MinSegments: 24, GroundTag: "primitive_ground_physics", GroundY: primitiveTerrainY + 1.42, GroundHalfExtents: voplay.Vec3{X: primitiveTerrainWidth * 0.5, Y: 0.18, Z: primitiveTerrainDepth * 0.5}, GroundFriction: 0.72, GroundRestitution: 0.02, RoadTag: "primitive_road_physics", RoadYOffset: -0.08, RoadHalfHeight: 0.18, RoadOuterOffset: primitiveRoadPhysicsOuterOffset, RoadSegmentOverlap: primitiveRoadPhysicsSegmentOverlap, RoadFriction: 1.05, RoadRestitution: 0.01},
 		MinimapScale: 1.0,
 	}
 }

@@ -210,7 +210,7 @@ func (t *TrackRuntime) preparePrimitiveMapAsset(core *BlockKartRuntimeCore) erro
 	if assetScope == nil {
 		return errors.New("BlockKart asset scope unavailable")
 	}
-	prepared, err := prepareBlockKartMapAsset(assetScope, blockKartAssetPath("maps/primitive_track/blockkart.map.json"))
+	prepared, err := scene3d.PrepareMapWithAssets(assetScope, blockKartAssetPath("maps/primitive_track/blockkart.map.json"))
 	if err != nil {
 		return err
 	}
@@ -239,7 +239,7 @@ func (t *TrackRuntime) spawnPrimitiveTrackTerrain(core *BlockKartRuntimeCore, tr
 			return nil, err
 		}
 	}
-	return spawnBlockKartMapTrackTerrain(core.scene, track, core.primitiveMap, defaultBlockKartTrackSpec().TerrainMesh)
+	return scene3d.SpawnPreparedMapTrackMeshTerrain(core.scene, track, core.primitiveMap, defaultBlockKartTrackSpec().TerrainMesh)
 }
 
 func primitiveTrackControlPoints() []scene3d.TrackControlPoint {

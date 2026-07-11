@@ -259,13 +259,6 @@ func (c *PrimitiveVisualContent) RoadsideMeadowBakedTarget(name string) scene3d.
 	return scene3d.MapPrimitiveLayerTarget{Name: name, Layer: c.layer(blockKartPrimitiveScatterLayer), Slots: c.roadsideBakedSlots(), SlotNames: blockKartRoadsideBakedSlotNames()}
 }
 
-func SpawnBlockKartRoadsideBakedContent(scene *scene3d.Scene, assets voplay.AssetSource, prepared *scene3d.MapPreparedAsset, content *PrimitiveVisualContent, name string) (*scene3d.MapPrimitiveLayerSpawnResult, error) {
-	if content == nil {
-		return nil, errors.New("BlockKart.SpawnBlockKartRoadsideBakedContent: content is nil")
-	}
-	return scene3d.SpawnBakedMapPrimitiveContentWithAssets(scene, assets, prepared, []scene3d.MapPrimitiveLayerTarget{content.RoadsideMeadowBakedTarget(name)})
-}
-
 func setPrimitivePose(part *PrimitivePart, position voplay.Vec3, rotation voplay.Quat) {
 	if part == nil {
 		return

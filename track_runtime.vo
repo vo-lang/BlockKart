@@ -110,7 +110,7 @@ func (t *TrackRuntime) addContinuousPrimitiveRoadVisuals(core *BlockKartRuntimeC
 	}
 	names := defaultBlockKartTrackSpec().VisualRoadMeshes
 	for _, name := range names {
-		_, err := spawnBlockKartMapMesh(core.scene, core.primitiveMap, name)
+		_, err := scene3d.SpawnPreparedMapMesh(core.scene, core.primitiveMap, name)
 		if err != nil {
 			presentation.message = "Road assets failed"
 			presentation.messageTimer = 3
@@ -126,7 +126,7 @@ func (t *TrackRuntime) spawnPrimitiveCachedMapMeshes(core *BlockKartRuntimeCore,
 	if track == nil || core.primitiveMap == nil {
 		return
 	}
-	_, creekErr := spawnBlockKartMapMesh(core.scene, core.primitiveMap, "hero_creek")
+	_, creekErr := scene3d.SpawnPreparedMapMesh(core.scene, core.primitiveMap, "hero_creek")
 	if creekErr != nil {
 		presentation.message = "Creek asset failed"
 		presentation.messageTimer = 3
@@ -144,7 +144,7 @@ func (t *TrackRuntime) addPrimitiveRoadsideMicroDetails(core *BlockKartRuntimeCo
 		return
 	}
 	primitive := core.trackRuntime.ensurePrimitiveScene(core)
-	_, err := SpawnBlockKartRoadsideBakedContent(core.scene, core.assetRuntime.Scope(), core.primitiveMap, primitive, "roadside_meadow")
+	_, err := scene3d.SpawnBakedMapPrimitiveContentWithAssets(core.scene, core.assetRuntime.Scope(), core.primitiveMap, []scene3d.MapPrimitiveLayerTarget{primitive.RoadsideMeadowBakedTarget("roadside_meadow")})
 	if err != nil {
 		presentation.message = "Roadside primitive asset failed: " + err.Error()
 		presentation.messageTimer = 3
@@ -193,7 +193,7 @@ func (t *TrackRuntime) addPrimitiveHeroCreek(core *BlockKartRuntimeCore, present
 	startDistance := primitiveTrackStartDistance(track)
 	start := startDistance - length * 0.025
 	end := startDistance + length * 0.130
-	_, creekErr := spawnBlockKartMapMesh(core.scene, core.primitiveMap, "hero_creek")
+	_, creekErr := scene3d.SpawnPreparedMapMesh(core.scene, core.primitiveMap, "hero_creek")
 	if creekErr != nil {
 		presentation.message = "Creek asset failed"
 		presentation.messageTimer = 3
@@ -522,7 +522,7 @@ func (t *TrackRuntime) addPrimitiveClouds(core *BlockKartRuntimeCore) {
 }
 
 func (t *TrackRuntime) bindTrackColliders(core *BlockKartRuntimeCore, track *scene3d.Track) error {
-	result, err := spawnBlockKartTrackCollider(core.scene, track, defaultBlockKartTrackSpec().Collider)
+	result, err := scene3d.SpawnTrackColliderStrip(core.scene, track, defaultBlockKartTrackSpec().Collider)
 	if err != nil {
 		return err
 	}
