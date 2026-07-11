@@ -505,8 +505,8 @@
     },
     {
       "path": "workspace:github.com/vo-lang/voplay/assets.vo",
-      "sha256": "7b78cfdbb690c55ccb5dcb273d0c8f5631787f13328dcbba80bb48ba3c82273f",
-      "size": 17922
+      "sha256": "8555f4953c3f52ce90d544ff57ddf1a573ed2bdaa0b27655628a33180f4f3d8a",
+      "size": 18556
     },
     {
       "path": "workspace:github.com/vo-lang/voplay/audio.vo",
@@ -950,7 +950,7 @@
     },
     {
       "path": "workspace:github.com/vo-lang/voplay/vo.mod",
-      "sha256": "8b58f53ba275385d64086e31806e48e9bf478d162f92544c93c7d76bb9da2bea",
+      "sha256": "09cb7f9c035414a8aab2db1d4d88dc2cb68039e85273810ab8e67fe7891dd57e",
       "size": 788
     }
   ],
@@ -1733,5 +1733,5 @@
       ]
     }
   ],
-  "producerDigest": "09b7b33523d80357505f36148482e4063b6c3c15df1e3a148bfa5d784da38d38"
+  "producerDigest": "5b61f5e8c80b285d71c44fd5f324b635f3261d639295fe47fffcc80b9eb8aaf4"
 }
