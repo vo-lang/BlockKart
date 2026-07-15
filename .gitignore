@@ -1,4 +1,5 @@
 **/.vo-cache/
+**/.vo-project.lock
 **/.volang/
 target/
 *.vob
