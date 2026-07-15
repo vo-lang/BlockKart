@@ -4,6 +4,7 @@ import (
 	"github.com/vo-lang/vopack"
 	"github.com/vo-lang/voplay/scene3d"
 	"os"
+	"path/filepath"
 )
 
 type File struct {
@@ -44,11 +45,22 @@ func Write(packPath string, mapPath string, mapBaseDir string, extras []File) er
 }
 
 func addRuntimePackFile(writer *vopack.PackWriter, seen map[string]bool, path string, kind string, deps []string) error {
-	if path == "" || seen[path] {
+	archivePath := filepath.ToSlash(path)
+	if archivePath == "" || seen[archivePath] {
 		return nil
 	}
-	seen[path] = true
-	return writer.AddFile(path, path, vopack.EntryOpts{Type: kind, Dependencies: deps})
+	var portableDeps []string
+	if deps != nil {
+		portableDeps = []string{}
+		for _, dep := range deps {
+			portable := filepath.ToSlash(dep)
+			if portable != "" {
+				portableDeps = append(portableDeps, portable)
+			}
+		}
+	}
+	seen[archivePath] = true
+	return writer.AddFile(archivePath, archivePath, vopack.EntryOpts{Type: kind, Dependencies: portableDeps})
 }
 
 func mapDependencyPaths(deps []scene3d.MapDependency) []string {

@@ -14,6 +14,11 @@
   },
   "inputs": [
     {
+      "path": ".gitattributes",
+      "sha256": "d60f352d0db1404c70afb4bb8b2ca3fd1c610572aa40720e8a0b7baa7885418c",
+      "size": 19
+    },
+    {
       "path": "assets/audio/kart_boost.wav",
       "sha256": "258b6be7c01a4ed9703f5a0d387c0102d4fa39c7fa016c88850e52eeba8268d3",
       "size": 30912
@@ -84,6 +89,11 @@
       "size": 13060
     },
     {
+      "path": "assets/maps/primitive_track/lowpoly_terrain.glb",
+      "sha256": "754ab5322cba262444be5599ffec77d8d47d5cadb23aa0c8211b17d964d91ad4",
+      "size": 6212080
+    },
+    {
       "path": "assets/maps/primitive_track/lowpoly_terrain_height_grid.bin",
       "sha256": "749b1ae0bdd1dd3135aa40bd640f39bae48d47cd8d400467d3624f1113ce4dfc",
       "size": 264236
@@ -92,11 +102,6 @@
       "path": "assets/maps/primitive_track/lowpoly_terrain_lod.glb",
       "sha256": "ef5a2168f8172f508292284c5ff299e58ca09b5fe7349e9461267ec633ae8a67",
       "size": 1682608
-    },
-    {
-      "path": "assets/maps/primitive_track/lowpoly_terrain.glb",
-      "sha256": "754ab5322cba262444be5599ffec77d8d47d5cadb23aa0c8211b17d964d91ad4",
-      "size": 6212080
     },
     {
       "path": "assets/maps/primitive_track/meadow_mr.png",
@@ -199,6 +204,11 @@
       "size": 180758
     },
     {
+      "path": "assets/source/terrain_painted/README.md",
+      "sha256": "2941ede04af1a532aaeec77307d40e1bba0bb8975278444a2314947679917e5e",
+      "size": 561
+    },
+    {
       "path": "assets/source/terrain_painted/dirt_painted_v1.png",
       "sha256": "3975893766908782dbd6913f9160966e33ac842960600584d3115b5969e07232",
       "size": 455176
@@ -212,11 +222,6 @@
       "path": "assets/source/terrain_painted/meadow_painted_v1.png",
       "sha256": "0f5c31282d9c855492914214f15d2bf6e9051f352ee07b6dc9a8af8538a2f331",
       "size": 435283
-    },
-    {
-      "path": "assets/source/terrain_painted/README.md",
-      "sha256": "2941ede04af1a532aaeec77307d40e1bba0bb8975278444a2314947679917e5e",
-      "size": 561
     },
     {
       "path": "assets/source/terrain_painted/rock_painted_v1.png",
@@ -260,8 +265,8 @@
     },
     {
       "path": "tools/vpak_provenance.mjs",
-      "sha256": "c8141671410e2e99c0ca98c6e688beedeae4e3841f72467866c02e757abdc8be",
-      "size": 11261
+      "sha256": "40105674c0d73ec5d9e1d0466735f3a6d46ca8088d37aa94c6ea722ec05d9057",
+      "size": 49707
     },
     {
       "path": "vo.lock",
@@ -280,8 +285,8 @@
     },
     {
       "path": "workspace:github.com/vo-lang/blockkart/runtimepack/runtime_pack.vo",
-      "sha256": "c27c3d691ab08c50b0ade548a429476b8cab2cb9afeceb15c6a40a1cc304911f",
-      "size": 1556
+      "sha256": "6ce0ba8d6a2943f4ad3a9de49c1e2309f56c2e7327db02d507a09f77ce05672d",
+      "size": 1879
     },
     {
       "path": "workspace:github.com/vo-lang/blockkart/vo.mod",
@@ -475,8 +480,8 @@
     },
     {
       "path": "workspace:github.com/vo-lang/vopack/manifest.vo",
-      "sha256": "fe5a159bcd53510ae3c334c64d0735ee9cc01d540cee74b2c932804aad9d96eb",
-      "size": 4064
+      "sha256": "2f089ca578550cb6a9cc97f2ee33ac8cdfbda141b510426af6bf5712990d1d94",
+      "size": 3975
     },
     {
       "path": "workspace:github.com/vo-lang/vopack/mount.vo",
@@ -534,14 +539,14 @@
       "size": 27741
     },
     {
-      "path": "workspace:github.com/vo-lang/voplay/draw_protocol.vo",
-      "sha256": "c29796505927a8814fa71df467526bd43cc118971a701625ddc766f6c318e75f",
-      "size": 1712
-    },
-    {
       "path": "workspace:github.com/vo-lang/voplay/draw.vo",
       "sha256": "75790800a4c01d9f4f09d4f5c95f1c22dd08406839a24d74ab830b236e311b9a",
       "size": 35681
+    },
+    {
+      "path": "workspace:github.com/vo-lang/voplay/draw_protocol.vo",
+      "sha256": "c29796505927a8814fa71df467526bd43cc118971a701625ddc766f6c318e75f",
+      "size": 1712
     },
     {
       "path": "workspace:github.com/vo-lang/voplay/framewire/framewire.vo",
@@ -585,8 +590,8 @@
     },
     {
       "path": "workspace:github.com/vo-lang/voplay/perf_report.vo",
-      "sha256": "a8a8f05f921758b8f4d294aca5843796592587d2c5fdb3e7148b0dfa32e94544",
-      "size": 15393
+      "sha256": "fb06ba151155051dfd95a8a31800cbd3a291f06931e0c5967d2a0e79ba3840ca",
+      "size": 16215
     },
     {
       "path": "workspace:github.com/vo-lang/voplay/perf_runtime.vo",
@@ -714,6 +719,11 @@
       "size": 8401
     },
     {
+      "path": "workspace:github.com/vo-lang/voplay/scene3d/map.vo",
+      "sha256": "79f9828da4739c290745dd2ed927b9b14f567fdff7c419b7b9b65d85a5082c0c",
+      "size": 15781
+    },
+    {
       "path": "workspace:github.com/vo-lang/voplay/scene3d/map_runtime.vo",
       "sha256": "b22c86767f340958bd8189f660afd92eaf111bdcfd7676bf2d7670ab3642be3e",
       "size": 27916
@@ -722,11 +732,6 @@
       "path": "workspace:github.com/vo-lang/voplay/scene3d/map_validation.vo",
       "sha256": "655a2fc1a237b9b182fe9e5575b0f37c3e9c53fcc0ee4223bbc504240b8a6dcb",
       "size": 9357
-    },
-    {
-      "path": "workspace:github.com/vo-lang/voplay/scene3d/map.vo",
-      "sha256": "79f9828da4739c290745dd2ed927b9b14f567fdff7c419b7b9b65d85a5082c0c",
-      "size": 15781
     },
     {
       "path": "workspace:github.com/vo-lang/voplay/scene3d/mesh_terrain.vo",
@@ -834,6 +839,11 @@
       "size": 4055
     },
     {
+      "path": "workspace:github.com/vo-lang/voplay/scene3d/track.vo",
+      "sha256": "7979bebd6e780880d1070656268f854fc1b09e90f4a39660c4853a03dad5a9b6",
+      "size": 24826
+    },
+    {
       "path": "workspace:github.com/vo-lang/voplay/scene3d/track_bake.vo",
       "sha256": "46b97b95b151c5a941897aaa9b5b33b788fbcd88535b0ced4ffd0c70e2b886e2",
       "size": 6941
@@ -869,9 +879,9 @@
       "size": 30476
     },
     {
-      "path": "workspace:github.com/vo-lang/voplay/scene3d/track.vo",
-      "sha256": "7979bebd6e780880d1070656268f854fc1b09e90f4a39660c4853a03dad5a9b6",
-      "size": 24826
+      "path": "workspace:github.com/vo-lang/voplay/scene3d/vehicle.vo",
+      "sha256": "0912a0a5f21ed1cd3fa69e0d747b4dade0a4747f45ab40b2ae2802475d5a0b5f",
+      "size": 29800
     },
     {
       "path": "workspace:github.com/vo-lang/voplay/scene3d/vehicle_audio.vo",
@@ -912,11 +922,6 @@
       "path": "workspace:github.com/vo-lang/voplay/scene3d/vehicle_telemetry.vo",
       "sha256": "67944aebe25bad273511d41db70504c65ef4f1915a997f484f2c3e6551d88e7f",
       "size": 8068
-    },
-    {
-      "path": "workspace:github.com/vo-lang/voplay/scene3d/vehicle.vo",
-      "sha256": "0912a0a5f21ed1cd3fa69e0d747b4dade0a4747f45ab40b2ae2802475d5a0b5f",
-      "size": 29800
     },
     {
       "path": "workspace:github.com/vo-lang/voplay/scene3d/visual_tools.vo",
@@ -1166,6 +1171,19 @@
       "storedChecksum": 3335590144
     },
     {
+      "path": "assets/maps/primitive_track/lowpoly_terrain.glb",
+      "kind": "mesh-terrain-model",
+      "sourcePath": "assets/maps/primitive_track/lowpoly_terrain.glb",
+      "sourceSha256": "754ab5322cba262444be5599ffec77d8d47d5cadb23aa0c8211b17d964d91ad4",
+      "sourceSize": 6212080,
+      "contentHash": "crc32:1d666f1c",
+      "dependencies": [],
+      "compression": 0,
+      "rawSize": 6212080,
+      "storedSize": 6212080,
+      "storedChecksum": 493252380
+    },
+    {
       "path": "assets/maps/primitive_track/lowpoly_terrain_height_grid.bin",
       "kind": "mesh-terrain-height-grid",
       "sourcePath": "assets/maps/primitive_track/lowpoly_terrain_height_grid.bin",
@@ -1190,19 +1208,6 @@
       "rawSize": 1682608,
       "storedSize": 1682608,
       "storedChecksum": 2234533011
-    },
-    {
-      "path": "assets/maps/primitive_track/lowpoly_terrain.glb",
-      "kind": "mesh-terrain-model",
-      "sourcePath": "assets/maps/primitive_track/lowpoly_terrain.glb",
-      "sourceSha256": "754ab5322cba262444be5599ffec77d8d47d5cadb23aa0c8211b17d964d91ad4",
-      "sourceSize": 6212080,
-      "contentHash": "crc32:1d666f1c",
-      "dependencies": [],
-      "compression": 0,
-      "rawSize": 6212080,
-      "storedSize": 6212080,
-      "storedChecksum": 493252380
     },
     {
       "path": "assets/maps/primitive_track/meadow_mr.png",
@@ -1466,8 +1471,12 @@
     }
   ],
   "internalManifest": {
+    "pack": "BlockKart",
+    "version": "primitive-track",
     "assetCount": 37,
-    "sha256": "de11c44bb3d31f5f2d76be243bea35a39b6c9f9386f5dfa2c48cba8dd853a920"
+    "sha256": "de11c44bb3d31f5f2d76be243bea35a39b6c9f9386f5dfa2c48cba8dd853a920",
+    "storedSha256": "fc158ba4b80ab0cb7234407f8db8b7d1f446c063c940a5c8c0c123eda2b68fad",
+    "storedSize": 10068
   },
   "upstream": [
     {
@@ -1733,5 +1742,5 @@
       ]
     }
   ],
-  "producerDigest": "5b61f5e8c80b285d71c44fd5f324b635f3261d639295fe47fffcc80b9eb8aaf4"
+  "producerDigest": "963ba9b2dee1cf23375ffa18f24232f0fef2bf0304460e5275b7d8946be4cd55"
 }
