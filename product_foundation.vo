@@ -97,8 +97,8 @@ func blockKartLoadProductSave(settings BlockKartSettings) BlockKartProductSave {
 	}
 	bestTimeSet, _ := strconv.ParseBool(blockKartSaveField(text, "bestTimeSet"))
 	if bestTimeSet {
-		bestTime, ok := strconv.ParseFloat(blockKartSaveField(text, "bestTime"), 64)
-		if ok && bestTime > 0 {
+		bestTime, err := strconv.ParseFloat(blockKartSaveField(text, "bestTime"), 64)
+		if err == nil && bestTime > 0 {
 			save.BestTime = bestTime
 			save.BestTimeSet = true
 		}

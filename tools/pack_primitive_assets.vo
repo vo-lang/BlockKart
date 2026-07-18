@@ -1,8 +1,11 @@
 package main
 
-import "github.com/vo-lang/blockkart/runtimepack"
+import (
+	"github.com/vo-lang/blockkart/runtimepack"
+	"os"
+)
 
-const primitiveAssetPackPath = "assets/blockkart.vpak"
+const primitiveAssetPackOutputEnv = "BLOCKKART_VPAK_OUTPUT"
 
 const primitiveMapAssetPath = "assets/maps/primitive_track/blockkart.map.json"
 
@@ -13,7 +16,12 @@ func mustPack(err error) {
 }
 
 func main() {
-	mustPack(runtimepack.Write(primitiveAssetPackPath, primitiveMapAssetPath, "assets/maps/primitive_track", []runtimepack.File{
+	outputPath := os.Getenv(primitiveAssetPackOutputEnv)
+	if outputPath == "" {
+		panic(primitiveAssetPackOutputEnv +
+			" is required; publish VPAK files through the transaction builder")
+	}
+	mustPack(runtimepack.Write(outputPath, primitiveMapAssetPath, "assets/maps/primitive_track", []runtimepack.File{
 		runtimepack.File{Path: "assets/effects/grass_card_atlas.png", Kind: "texture"},
 		runtimepack.File{Path: "assets/skybox/right.png", Kind: "texture"},
 		runtimepack.File{Path: "assets/skybox/left.png", Kind: "texture"},
@@ -27,5 +35,5 @@ func main() {
 		runtimepack.File{Path: "assets/audio/kart_grass.wav", Kind: "audio"},
 		runtimepack.File{Path: "assets/audio/kart_hit.wav", Kind: "audio"},
 	}))
-	println("packed", primitiveAssetPackPath)
+	println("packed", outputPath)
 }

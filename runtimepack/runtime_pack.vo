@@ -1,8 +1,9 @@
 package runtimepack
 
 import (
+	"errors"
 	"github.com/vo-lang/vopack"
-	"github.com/vo-lang/voplay/scene3d"
+	"github.com/vo-lang/vopack/scene3dmap"
 	"os"
 	"path/filepath"
 )
@@ -13,22 +14,25 @@ type File struct {
 	Dependencies []string
 }
 
-func Write(packPath string, mapPath string, mapBaseDir string, extras []File) error {
+// Write packages one strictly decoded Scene3D map and its complete resource
+// closure. The wire contract lives in vopack/scene3dmap, so this producer stays
+// independent of Voplay and its native extension.
+func Write(packPath, mapPath, mapBaseDir string, extras []File) error {
 	if err := os.MkdirAll("assets", 0755); err != nil {
 		return err
 	}
-	mapAsset, err := scene3d.LoadMapAsset(mapPath)
+	asset, err := loadMapAsset(mapPath)
 	if err != nil {
 		return err
 	}
-	mapDeps := scene3d.MapAssetDependencies(mapAsset, mapBaseDir)
+	mapDeps := scene3dmap.Dependencies(asset, mapBaseDir)
 	writer, createErr := vopack.Create(packPath)
 	if createErr != nil {
 		return createErr
 	}
 	writer.SetManifestInfo("BlockKart", "primitive-track")
 	seen := map[string]bool{}
-	if err := addRuntimePackFile(writer, seen, mapPath, "map", mapDependencyPaths(mapDeps)); err != nil {
+	if err := addRuntimePackFile(writer, seen, mapPath, "map", dependencyPaths(mapDeps)); err != nil {
 		return err
 	}
 	for _, dep := range mapDeps {
@@ -44,26 +48,40 @@ func Write(packPath string, mapPath string, mapBaseDir string, extras []File) er
 	return writer.Close()
 }
 
-func addRuntimePackFile(writer *vopack.PackWriter, seen map[string]bool, path string, kind string, deps []string) error {
+func addRuntimePackFile(writer *vopack.PackWriter, seen map[string]bool, path, kind string, deps []string) error {
 	archivePath := filepath.ToSlash(path)
 	if archivePath == "" || seen[archivePath] {
 		return nil
 	}
-	var portableDeps []string
-	if deps != nil {
-		portableDeps = []string{}
-		for _, dep := range deps {
-			portable := filepath.ToSlash(dep)
-			if portable != "" {
-				portableDeps = append(portableDeps, portable)
-			}
+	portableDeps := []string{}
+	for _, dep := range deps {
+		portable := filepath.ToSlash(dep)
+		if portable != "" {
+			portableDeps = append(portableDeps, portable)
 		}
 	}
 	seen[archivePath] = true
-	return writer.AddFile(archivePath, archivePath, vopack.EntryOpts{Type: kind, Dependencies: portableDeps})
+	return writer.AddFile(archivePath, archivePath, vopack.EntryOpts{
+		Type: kind, Dependencies: portableDeps,
+	})
 }
 
-func mapDependencyPaths(deps []scene3d.MapDependency) []string {
+func loadMapAsset(path string) (*scene3dmap.Asset, error) {
+	if path == "" {
+		return nil, errors.New("runtimepack: map path must not be empty")
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, errors.New("runtimepack: read map " + path + ": " + err.Error())
+	}
+	asset, decodeErr := scene3dmap.Decode(data)
+	if decodeErr != nil {
+		return nil, errors.New("runtimepack: decode map " + path + ": " + decodeErr.Error())
+	}
+	return asset, nil
+}
+
+func dependencyPaths(deps []scene3dmap.Dependency) []string {
 	paths := []string{}
 	for _, dep := range deps {
 		if dep.Path != "" {

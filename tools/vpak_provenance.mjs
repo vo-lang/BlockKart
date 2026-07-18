@@ -33,9 +33,11 @@ const MAX_TOTAL_OBSERVED_BYTES = 128 * 1024 * 1024;
 const MAX_ARCHIVE_ENTRIES = 1024;
 const MAX_IMPORTS = 4096;
 const MAX_PACKAGES = 1024;
+const MAX_SNAPSHOT_EDGES = 100_000;
 const MAX_WALK_ENTRIES = 20_000;
 const MAX_WALK_DEPTH = 64;
 const MAX_PATH_BYTES = 1024;
+const MAX_VPAK_PATH_BYTES = 4096;
 const MAX_TOTAL_PATH_BYTES = 4 * 1024 * 1024;
 const JSON_LIMITS = Object.freeze({
   maxJsonBytes: MAX_METADATA_BYTES,
@@ -89,6 +91,7 @@ function sameStat(left, right) {
   return left.dev === right.dev
     && left.ino === right.ino
     && left.mode === right.mode
+    && left.nlink === right.nlink
     && left.size === right.size
     && left.mtimeNs === right.mtimeNs
     && left.ctimeNs === right.ctimeNs;
@@ -114,19 +117,14 @@ const root = canonicalDirectory(
   path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'),
   'BlockKart root',
 );
-const workspaceModules = [
-  { module: 'github.com/vo-lang/blockkart', root },
-  { module: 'github.com/vo-lang/voplay', root: canonicalDirectory(path.resolve(root, '../voplay'), 'voplay root') },
-  { module: 'github.com/vo-lang/vogui', root: canonicalDirectory(path.resolve(root, '../vogui'), 'vogui root') },
-  { module: 'github.com/vo-lang/vopack', root: canonicalDirectory(path.resolve(root, '../vopack'), 'vopack root') },
-].sort((left, right) => right.module.length - left.module.length || compareUtf8(left.module, right.module));
 const packRelative = 'assets/blockkart.vpak';
 const provenanceRelative = 'assets/blockkart.vpak.provenance.json';
+const transactionDirectoryEnvironment = 'BLOCKKART_VPAK_TRANSACTION_DIR';
+const packOutputEnvironment = 'BLOCKKART_VPAK_OUTPUT';
 const internalManifestPath = '.vopack/manifest.json';
 const producerScripts = [
   '.gitattributes',
   'vo.mod',
-  'vo.lock',
   'vo.work',
   'tools/pack_primitive_assets.vo',
   'tools/generate_primitive_terrain.mjs',
@@ -138,10 +136,54 @@ const producerScripts = [
 
 const fileObservations = new Map();
 const directoryObservations = new Map();
+const sourceRootObservations = new Map();
 const observedPaths = new Set();
+let voBinaryObservation;
 let observedBytes = 0;
 let observedPathBytes = 0;
 let walkEntries = 0;
+
+function resolveProducerOutputs() {
+  const requested = process.env[transactionDirectoryEnvironment];
+  if (requested === undefined || requested === '') {
+    return Object.freeze({
+      pack: packRelative,
+      provenance: provenanceRelative,
+      transactionDirectory: null,
+    });
+  }
+  if (
+    typeof requested !== 'string'
+    || !path.isAbsolute(requested)
+    || /[\u0000-\u001f\u007f]/u.test(requested)
+  ) {
+    throw new Error(`${transactionDirectoryEnvironment} must be an absolute path without control characters`);
+  }
+  const resolved = path.resolve(requested);
+  const canonical = realpathSync.native(resolved);
+  const metadata = lstatSync(resolved, { bigint: true });
+  const assetsDirectory = canonicalDirectory(path.join(root, 'assets'), 'BlockKart assets root');
+  if (
+    !sameNativePath(requested, resolved)
+    || !sameNativePath(canonical, resolved)
+    || !metadata.isDirectory()
+    || metadata.isSymbolicLink()
+    || !sameNativePath(path.dirname(resolved), assetsDirectory)
+    || !/^\.blockkart-vpak-transaction-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u.test(path.basename(resolved))
+  ) {
+    throw new Error(
+      `${transactionDirectoryEnvironment} must name a real direct child of assets with a producer transaction name`,
+    );
+  }
+  const relative = path.relative(root, resolved).split(path.sep).join('/');
+  return Object.freeze({
+    pack: `${relative}/blockkart.vpak`,
+    provenance: `${relative}/blockkart.vpak.provenance.json`,
+    transactionDirectory: resolved,
+  });
+}
+
+const producerOutputs = resolveProducerOutputs();
 
 function sha256(bytes) {
   return createHash('sha256').update(bytes).digest('hex');
@@ -151,13 +193,13 @@ function portableCollisionKey(relative) {
   return relative.toLowerCase();
 }
 
-function validatePortableComponent(component, label) {
+function validatePortableComponent(component, label, { requireLowercase = false } = {}) {
   if (
     typeof component !== 'string'
     || component.length === 0
     || component === '.'
     || component === '..'
-    || !/^[A-Za-z0-9._-]+$/u.test(component)
+    || !(requireLowercase ? /^[a-z0-9._-]+$/u : /^[A-Za-z0-9._-]+$/u).test(component)
     || Buffer.byteLength(component, 'utf8') > 255
     || component.endsWith('.')
     || component.endsWith(' ')
@@ -167,7 +209,17 @@ function validatePortableComponent(component, label) {
   }
 }
 
-function validatePortableRelative(relative, label, { allowEmpty = false } = {}) {
+function validatePortableRelative(
+  relative,
+  label,
+  {
+    allowEmpty = false,
+    allowInternalManifest = false,
+    maxBytes = MAX_PATH_BYTES,
+    requireLowercase = false,
+    reserveVopackNamespace = false,
+  } = {},
+) {
   if (allowEmpty && relative === '') return [];
   if (
     typeof relative !== 'string'
@@ -176,19 +228,42 @@ function validatePortableRelative(relative, label, { allowEmpty = false } = {}) 
     || relative.includes('\0')
     || relative.startsWith('/')
     || path.posix.isAbsolute(relative)
-    || Buffer.byteLength(relative, 'utf8') > MAX_PATH_BYTES
+    || Buffer.byteLength(relative, 'utf8') > maxBytes
   ) {
     throw new Error(`${label} is not a bounded portable relative path: ${JSON.stringify(relative)}`);
   }
   const components = relative.split('/');
-  for (const component of components) validatePortableComponent(component, label);
+  for (const component of components) {
+    validatePortableComponent(component, label, { requireLowercase });
+  }
+  if (
+    reserveVopackNamespace
+    && components[0] === '.vopack'
+    && (!allowInternalManifest || relative !== internalManifestPath)
+  ) {
+    throw new Error(`${label} uses the reserved .vopack namespace: ${JSON.stringify(relative)}`);
+  }
   return components;
 }
 
-function validatePortablePathSet(paths, label) {
+function validatePortablePathSet(
+  paths,
+  label,
+  {
+    allowInternalManifest = false,
+    maxBytes = MAX_PATH_BYTES,
+    requireLowercase = false,
+    reserveVopackNamespace = false,
+  } = {},
+) {
   const keys = new Map();
   for (const relative of paths) {
-    validatePortableRelative(relative, `${label} path`);
+    validatePortableRelative(relative, `${label} path`, {
+      allowInternalManifest,
+      maxBytes,
+      requireLowercase,
+      reserveVopackNamespace,
+    });
     const key = portableCollisionKey(relative);
     const previous = keys.get(key);
     if (previous !== undefined) {
@@ -378,6 +453,7 @@ function readStableDirectory(base, relative, label, { allowEmpty = false } = {})
 }
 
 function revalidateObservedInputs() {
+  currentVoBinary();
   for (const observation of fileObservations.values()) {
     const current = lstatSync(observation.path, { bigint: true });
     if (
@@ -404,6 +480,17 @@ function revalidateObservedInputs() {
       throw new Error(`producer source directory changed before publication: ${directory}`);
     }
   }
+  for (const [directory, observation] of sourceRootObservations) {
+    const current = lstatSync(directory, { bigint: true });
+    if (
+      !current.isDirectory()
+      || current.isSymbolicLink()
+      || !sameStat(observation, current)
+      || !sameNativePath(realpathSync.native(directory), directory)
+    ) {
+      throw new Error(`project snapshot source root changed before publication: ${directory}`);
+    }
+  }
 }
 
 function fileFact(relative, maxBytes = MAX_SOURCE_BYTES) {
@@ -418,6 +505,289 @@ function workspaceFileFact(owner, base, relative) {
     sha256: observation.digest,
     size: observation.size,
   };
+}
+
+function canonicalJsonBytes(value) {
+  return Buffer.from(`${JSON.stringify(value, null, 2)}\n`, 'utf8');
+}
+
+function validateSnapshotConstraint(value, label) {
+  if (
+    typeof value !== 'string'
+    || value.length === 0
+    || Buffer.byteLength(value, 'utf8') >= 255
+  ) {
+    throw new Error(`${label} must be a bounded canonical version constraint`);
+  }
+  const match = value.match(/^[\^~]?(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/u);
+  if (match === null) throw new Error(`${label} is not a canonical version constraint: ${value}`);
+  const maxU64 = (1n << 64n) - 1n;
+  for (const component of match.slice(1, 4)) {
+    if (BigInt(component) > maxU64) throw new Error(`${label} contains an overflowing version component`);
+  }
+  if (match[4] !== undefined) {
+    for (const identifier of match[4].split('.')) {
+      if (/^[0-9]+$/u.test(identifier)) {
+        if ((identifier.length > 1 && identifier.startsWith('0')) || BigInt(identifier) > maxU64) {
+          throw new Error(`${label} contains a non-canonical numeric prerelease identifier`);
+        }
+      }
+    }
+  }
+  return value;
+}
+
+function validateSnapshotModuleIdentity(value, label) {
+  if (
+    typeof value !== 'string'
+    || !value.startsWith('github.com/')
+    || Buffer.byteLength(value, 'utf8') > MAX_PATH_BYTES
+  ) {
+    throw new Error(`${label} must be a bounded canonical github.com module`);
+  }
+  const components = value.split('/');
+  if (components.length < 3 || components.some((component) => !/^[a-z0-9][a-z0-9._-]*$/u.test(component))) {
+    throw new Error(`${label} is not a canonical github.com module: ${value}`);
+  }
+  for (const component of components) validatePortableComponent(component, label);
+  if (components.length > 3) {
+    const suffix = components.at(-1).match(/^v([0-9]+)$/u);
+    if (
+      suffix !== null
+      && (
+        (suffix[1].length > 1 && suffix[1].startsWith('0'))
+        || BigInt(suffix[1]) < 2n
+        || BigInt(suffix[1]) > (1n << 64n) - 1n
+      )
+    ) {
+      throw new Error(`${label} has a non-canonical major-version suffix`);
+    }
+  }
+  return value;
+}
+
+function validateSnapshotDependencies(value, label) {
+  if (!Array.isArray(value) || value.length > MAX_PACKAGES) {
+    throw new Error(`${label} must contain at most ${MAX_PACKAGES} dependencies`);
+  }
+  let previous = '';
+  return value.map((dependency, index) => {
+    exactKeys(dependency, ['module', 'constraint'], `${label}[${index}]`);
+    const module = validateSnapshotModuleIdentity(dependency.module, `${label}[${index}].module`);
+    if (index > 0 && compareUtf8(previous, module) >= 0) {
+      throw new Error(`${label} must be strictly sorted and unique by module`);
+    }
+    previous = module;
+    return {
+      module,
+      constraint: validateSnapshotConstraint(dependency.constraint, `${label}[${index}].constraint`),
+    };
+  });
+}
+
+function observeSnapshotSourceRoot(candidate, label) {
+  if (typeof candidate !== 'string' || !path.isAbsolute(candidate) || /[\u0000-\u001f\u007f]/u.test(candidate)) {
+    throw new Error(`${label} must be an absolute path without control characters`);
+  }
+  const resolved = path.resolve(candidate);
+  const canonical = realpathSync.native(resolved);
+  if (!sameNativePath(candidate, resolved) || !sameNativePath(canonical, resolved)) {
+    throw new Error(`${label} must be a canonical directory path without symbolic links`);
+  }
+  const metadata = lstatSync(resolved, { bigint: true });
+  if (!metadata.isDirectory() || metadata.isSymbolicLink()) {
+    throw new Error(`${label} must name a real directory`);
+  }
+  const previous = sourceRootObservations.get(resolved);
+  if (previous !== undefined && !sameStat(previous, metadata)) {
+    throw new Error(`${label} changed after its first project snapshot`);
+  }
+  sourceRootObservations.set(resolved, metadata);
+  return resolved;
+}
+
+function validateEffectiveWorkspaceSnapshot(value) {
+  exactKeys(
+    value,
+    ['schema_version', 'mode', 'authority', 'root', 'workspace', 'modules'],
+    'effective project snapshot',
+  );
+  if (value.schema_version !== 2 || value.mode !== 'effective' || value.authority !== 'workspace') {
+    throw new Error('VPAK provenance requires ProjectSnapshot v2 with effective workspace authority');
+  }
+  exactKeys(value.root, ['module', 'vo', 'dependencies'], 'project snapshot root');
+  const rootModule = validateSnapshotModuleIdentity(value.root.module, 'project snapshot root module');
+  const rootVo = validateSnapshotConstraint(value.root.vo, 'project snapshot root toolchain constraint');
+  const rootDependencies = validateSnapshotDependencies(
+    value.root.dependencies,
+    'project snapshot root dependencies',
+  );
+  if (rootDependencies.length === 0) {
+    throw new Error('VPAK provenance requires a non-empty workspace dependency graph');
+  }
+  exactKeys(value.workspace, ['file'], 'project snapshot workspace');
+  const workspaceFile = path.join(root, 'vo.work');
+  if (
+    typeof value.workspace.file !== 'string'
+    || !path.isAbsolute(value.workspace.file)
+    || !sameNativePath(value.workspace.file, workspaceFile)
+    || !sameNativePath(realpathSync.native(value.workspace.file), workspaceFile)
+  ) {
+    throw new Error('project snapshot workspace file must be the real BlockKart vo.work');
+  }
+  readStableRegularFile(root, 'vo.work', 'project snapshot workspace file', MAX_METADATA_BYTES);
+  if (!Array.isArray(value.modules) || value.modules.length === 0 || value.modules.length > MAX_PACKAGES) {
+    throw new Error(`project snapshot must contain 1..${MAX_PACKAGES} workspace modules`);
+  }
+
+  const rootDirectory = observeSnapshotSourceRoot(root, `${rootModule} source root`);
+  const moduleRoots = [{ module: rootModule, root: rootDirectory }];
+  const modulesByName = new Map();
+  const sourceDirectories = new Set([process.platform === 'win32' ? rootDirectory.toUpperCase() : rootDirectory]);
+  let previous = '';
+  let edgeCount = rootDependencies.length;
+  const canonicalModules = value.modules.map((module, index) => {
+    exactKeys(module, ['module', 'vo', 'source', 'dependencies'], `project snapshot modules[${index}]`);
+    const moduleName = validateSnapshotModuleIdentity(module.module, `project snapshot modules[${index}].module`);
+    if (moduleName === rootModule || (index > 0 && compareUtf8(previous, moduleName) >= 0)) {
+      throw new Error('project snapshot modules must exclude the root and be strictly sorted and unique');
+    }
+    previous = moduleName;
+    exactKeys(module.source, ['kind', 'directory'], `${moduleName} snapshot source`);
+    if (module.source.kind !== 'workspace') {
+      throw new Error(`${moduleName} must use a workspace source under workspace authority`);
+    }
+    const sourceDirectory = observeSnapshotSourceRoot(module.source.directory, `${moduleName} source root`);
+    const sourceKey = process.platform === 'win32' ? sourceDirectory.toUpperCase() : sourceDirectory;
+    if (sourceDirectories.has(sourceKey)) {
+      throw new Error(`project snapshot assigns more than one module to source directory ${sourceDirectory}`);
+    }
+    sourceDirectories.add(sourceKey);
+    const dependencies = validateSnapshotDependencies(module.dependencies, `${moduleName} dependencies`);
+    edgeCount += dependencies.length;
+    if (!Number.isSafeInteger(edgeCount) || edgeCount > MAX_SNAPSHOT_EDGES) {
+      throw new Error(`project snapshot exceeds the ${MAX_SNAPSHOT_EDGES}-edge limit`);
+    }
+    const canonical = {
+      module: moduleName,
+      vo: validateSnapshotConstraint(module.vo, `${moduleName} toolchain constraint`),
+      source: { kind: 'workspace', directory: sourceDirectory },
+      dependencies,
+    };
+    modulesByName.set(moduleName, canonical);
+    moduleRoots.push({ module: moduleName, root: sourceDirectory });
+    return canonical;
+  });
+
+  const validateEdges = (owner, dependencies) => {
+    for (const dependency of dependencies) {
+      if (dependency.module === owner || dependency.module === rootModule || !modulesByName.has(dependency.module)) {
+        throw new Error(`project snapshot contains an invalid or open edge ${owner} -> ${dependency.module}`);
+      }
+    }
+  };
+  validateEdges(rootModule, rootDependencies);
+  for (const module of canonicalModules) validateEdges(module.module, module.dependencies);
+  const reachable = new Set();
+  const pending = rootDependencies.map((dependency) => dependency.module);
+  for (let cursor = 0; cursor < pending.length; cursor += 1) {
+    const moduleName = pending[cursor];
+    if (reachable.has(moduleName)) continue;
+    reachable.add(moduleName);
+    pending.push(...modulesByName.get(moduleName).dependencies.map((dependency) => dependency.module));
+    if (pending.length > MAX_SNAPSHOT_EDGES) {
+      throw new Error(`project snapshot traversal exceeds the ${MAX_SNAPSHOT_EDGES}-edge limit`);
+    }
+  }
+  if (reachable.size !== canonicalModules.length) {
+    throw new Error('project snapshot contains modules unreachable from the BlockKart root');
+  }
+  moduleRoots.sort((left, right) => (
+    right.module.length - left.module.length || compareUtf8(left.module, right.module)
+  ));
+  return {
+    canonical: {
+      schema_version: 2,
+      mode: 'effective',
+      authority: 'workspace',
+      root: { module: rootModule, vo: rootVo, dependencies: rootDependencies },
+      workspace: { file: workspaceFile },
+      modules: canonicalModules,
+    },
+    moduleRoots,
+  };
+}
+
+function currentVoBinary() {
+  const candidate = process.env.VO_BIN;
+  if (typeof candidate !== 'string' || !path.isAbsolute(candidate)) {
+    throw new Error('VO_BIN must be an absolute path for every VPAK provenance mode');
+  }
+  const resolved = path.resolve(candidate);
+  const canonical = realpathSync.native(resolved);
+  const metadata = lstatSync(resolved, { bigint: true });
+  if (
+    !sameNativePath(candidate, resolved)
+    || !sameNativePath(canonical, resolved)
+    || !metadata.isFile()
+    || metadata.isSymbolicLink()
+    || metadata.nlink !== 1n
+  ) {
+    throw new Error('VO_BIN must be a singly-linked real regular file without symbolic-link path components');
+  }
+  if (voBinaryObservation !== undefined && !sameStat(voBinaryObservation.metadata, metadata)) {
+    throw new Error('VO_BIN changed after it was first observed');
+  }
+  voBinaryObservation = Object.freeze({ metadata, path: resolved });
+  return resolved;
+}
+
+function projectSnapshotEnvironment() {
+  const environment = inheritedGuestEnvironment(process.env);
+  Object.assign(environment, {
+    LANG: 'C',
+    LC_ALL: 'C',
+    TZ: 'UTC',
+    VOWORK: path.join(root, 'vo.work'),
+  });
+  return environment;
+}
+
+function captureEffectiveWorkspaceSnapshot() {
+  const voBinary = currentVoBinary();
+  let bytes;
+  try {
+    bytes = execFileSync(voBinary, ['mod', 'snapshot', root], {
+      cwd: root,
+      env: projectSnapshotEnvironment(),
+      maxBuffer: MAX_METADATA_BYTES,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      timeout: 60_000,
+    });
+  } catch (error) {
+    const detail = Buffer.isBuffer(error?.stderr)
+      ? error.stderr.toString('utf8').trim()
+      : error?.message ?? String(error);
+    throw new Error(`vo mod snapshot failed: ${detail.slice(-2000)}`);
+  }
+  const snapshot = parseStrictJson(bytes, 'vo mod snapshot output');
+  const validated = validateEffectiveWorkspaceSnapshot(snapshot);
+  const canonicalBytes = canonicalJsonBytes(validated.canonical);
+  if (!bytes.equals(canonicalBytes)) {
+    throw new Error('vo mod snapshot output does not use canonical ProjectSnapshot v2 JSON encoding');
+  }
+  currentVoBinary();
+  return Object.freeze({
+    bytes: canonicalBytes,
+    moduleRoots: Object.freeze(validated.moduleRoots.map((entry) => Object.freeze({ ...entry }))),
+    snapshot: Object.freeze(validated.canonical),
+  });
+}
+
+function assertSameWorkspaceSnapshot(expected, current) {
+  if (!expected.bytes.equals(current.bytes)) {
+    throw new Error('effective ProjectSnapshot changed during VPAK provenance capture');
+  }
 }
 
 function stripVoComments(source) {
@@ -532,8 +902,8 @@ function voImports(source, label) {
   return [...imports].sort(compareUtf8);
 }
 
-function resolveWorkspacePackage(importPath) {
-  const owner = workspaceModules.find((entry) => (
+function resolveSnapshotPackage(importPath, moduleRoots) {
+  const owner = moduleRoots.find((entry) => (
     importPath === entry.module || importPath.startsWith(`${entry.module}/`)
   ));
   if (!owner) {
@@ -548,7 +918,7 @@ function resolveWorkspacePackage(importPath) {
   return { ...owner, packagePath };
 }
 
-function voWorkspaceSourceClosure() {
+function voWorkspaceSourceClosure(projectSnapshot) {
   const entry = readStableRegularFile(
     root,
     'tools/pack_primitive_assets.vo',
@@ -560,12 +930,15 @@ function voWorkspaceSourceClosure() {
   const facts = [];
   const usedModules = new Set();
   while (pending.length > 0) {
-    if (visitedPackages.size > MAX_PACKAGES || pending.length > MAX_IMPORTS) {
-      throw new Error('VPAK producer workspace import graph exceeds its package/import limit');
+    if (pending.length > MAX_IMPORTS) {
+      throw new Error(`VPAK producer workspace import graph exceeds the ${MAX_IMPORTS}-pending-import limit`);
     }
     const importPath = pending.pop();
-    const resolved = resolveWorkspacePackage(importPath);
+    const resolved = resolveSnapshotPackage(importPath, projectSnapshot.moduleRoots);
     if (!resolved || visitedPackages.has(importPath)) continue;
+    if (visitedPackages.size >= MAX_PACKAGES) {
+      throw new Error(`VPAK producer workspace import graph exceeds the ${MAX_PACKAGES}-package limit`);
+    }
     visitedPackages.add(importPath);
     usedModules.add(resolved.module);
     const entries = readStableDirectory(
@@ -600,8 +973,10 @@ function voWorkspaceSourceClosure() {
       ));
     }
   }
+  const moduleRootsByName = new Map(projectSnapshot.moduleRoots.map((module) => [module.module, module]));
   for (const moduleName of [...usedModules].sort(compareUtf8)) {
-    const module = workspaceModules.find((candidate) => candidate.module === moduleName);
+    const module = moduleRootsByName.get(moduleName);
+    if (module === undefined) throw new Error(`project snapshot lost source authority for ${moduleName}`);
     facts.push(workspaceFileFact(module.module, module.root, 'vo.mod'));
   }
   facts.sort((left, right) => compareUtf8(left.path, right.path));
@@ -879,8 +1254,16 @@ function validateInternalManifest(manifest, entries) {
   const assetByPath = new Map();
   for (const [index, asset] of manifest.assets.entries()) {
     exactKeys(asset, ['contentHash', 'dependencies', 'path', 'sourcePath', 'type'], `VPAK asset ${index}`);
-    validatePortableRelative(asset.path, `VPAK asset ${index} path`);
-    validatePortableRelative(asset.sourcePath, `VPAK asset ${index} sourcePath`);
+    validatePortableRelative(asset.path, `VPAK asset ${index} path`, {
+      maxBytes: MAX_VPAK_PATH_BYTES,
+      requireLowercase: true,
+      reserveVopackNamespace: true,
+    });
+    validatePortableRelative(asset.sourcePath, `VPAK asset ${index} sourcePath`, {
+      maxBytes: MAX_VPAK_PATH_BYTES,
+      requireLowercase: true,
+      reserveVopackNamespace: true,
+    });
     if (asset.sourcePath !== asset.path) {
       throw new Error(`VPAK source path is not canonical: ${asset.path}`);
     }
@@ -892,27 +1275,43 @@ function validateInternalManifest(manifest, entries) {
     ) {
       throw new Error(`VPAK asset has invalid or duplicate identity: ${asset.path}`);
     }
-    const dependencies = asset.dependencies === null ? [] : asset.dependencies;
+    const dependencies = asset.dependencies;
     if (!Array.isArray(dependencies) || dependencies.length > EXPECTED_PAYLOAD_COUNT) {
       throw new Error(`VPAK asset dependencies are invalid: ${asset.path}`);
     }
     const dependencyKeys = new Set();
+    let previousDependency = '';
     for (const dependency of dependencies) {
-      validatePortableRelative(dependency, `VPAK dependency of ${asset.path}`);
+      validatePortableRelative(dependency, `VPAK dependency of ${asset.path}`, {
+        maxBytes: MAX_VPAK_PATH_BYTES,
+        requireLowercase: true,
+        reserveVopackNamespace: true,
+      });
       const key = portableCollisionKey(dependency);
-      if (key === portableCollisionKey(asset.path) || dependencyKeys.has(key)) {
-        throw new Error(`VPAK asset has a self or duplicate dependency: ${asset.path} -> ${dependency}`);
+      if (
+        key === portableCollisionKey(asset.path)
+        || dependencyKeys.has(key)
+        || (previousDependency !== '' && compareUtf8(previousDependency, dependency) >= 0)
+      ) {
+        throw new Error(
+          `VPAK asset has a self, duplicate, or non-increasing dependency: ${asset.path} -> ${dependency}`,
+        );
       }
       dependencyKeys.add(key);
+      previousDependency = dependency;
     }
     assetByPath.set(portableCollisionKey(asset.path), asset);
     if (publicEntries[index]?.path !== asset.path) {
       throw new Error('VPAK entry order and internal manifest asset order differ');
     }
   }
-  validatePortablePathSet(manifest.assets.map((asset) => asset.path), 'VPAK internal manifest');
+  validatePortablePathSet(manifest.assets.map((asset) => asset.path), 'VPAK internal manifest', {
+    maxBytes: MAX_VPAK_PATH_BYTES,
+    requireLowercase: true,
+    reserveVopackNamespace: true,
+  });
   for (const asset of manifest.assets) {
-    for (const dependency of asset.dependencies ?? []) {
+    for (const dependency of asset.dependencies) {
       if (!assetByPath.has(portableCollisionKey(dependency))) {
         throw new Error(`VPAK dependency is not packed: ${asset.path} -> ${dependency}`);
       }
@@ -922,7 +1321,7 @@ function validateInternalManifest(manifest, entries) {
 }
 
 function readVpak() {
-  const pack = readStableRegularFile(root, packRelative, 'BlockKart VPAK', MAX_VPAK_BYTES);
+  const pack = readStableRegularFile(root, producerOutputs.pack, 'BlockKart VPAK', MAX_VPAK_BYTES);
   const bytes = pack.bytes;
   if (bytes.length < HEADER_SIZE + FOOTER_SIZE || bytes.subarray(0, 4).toString('ascii') !== 'VPAK') {
     throw new Error('invalid BlockKart VPAK header');
@@ -975,7 +1374,7 @@ function readVpak() {
     assertZeroBytes(bytes, offset + 36, offset + ENTRY_SIZE, `VPAK entry ${index}`);
     if (
       pathLength === 0
-      || pathLength > MAX_PATH_BYTES
+      || pathLength > MAX_VPAK_PATH_BYTES
       || pathOffset !== expectedPathOffset
       || pathOffset + pathLength > pathPool.length
     ) {
@@ -988,7 +1387,12 @@ function readVpak() {
     } catch (error) {
       throw new Error(`VPAK entry ${index} path is invalid UTF-8: ${error.message}`);
     }
-    validatePortableRelative(entryPath, `VPAK entry ${index} path`);
+    validatePortableRelative(entryPath, `VPAK entry ${index} path`, {
+      allowInternalManifest: true,
+      maxBytes: MAX_VPAK_PATH_BYTES,
+      requireLowercase: true,
+      reserveVopackNamespace: true,
+    });
     const entryKey = portableCollisionKey(entryPath);
     if (entryKeys.has(entryKey)) throw new Error(`VPAK contains a duplicate path: ${entryPath}`);
     entryKeys.add(entryKey);
@@ -1020,7 +1424,16 @@ function readVpak() {
   if (expectedPathOffset !== pathPool.length || expectedDataOffset !== pathPoolOffset) {
     throw new Error('VPAK path pool or data region contains unreferenced bytes');
   }
-  validatePortablePathSet(entries.map((entry) => entry.path), 'VPAK entry table');
+  validatePortablePathSet(
+    entries.map((entry) => entry.path),
+    'VPAK entry table',
+    {
+      allowInternalManifest: true,
+      maxBytes: MAX_VPAK_PATH_BYTES,
+      requireLowercase: true,
+      reserveVopackNamespace: true,
+    },
+  );
   const manifestEntries = entries.filter((entry) => entry.path === internalManifestPath);
   if (manifestEntries.length !== 1 || entries.at(-1).path !== internalManifestPath) {
     throw new Error('VPAK must contain one final internal manifest entry');
@@ -1031,7 +1444,7 @@ function readVpak() {
   return { bytes, entries, manifest, manifestEntry, pack };
 }
 
-function canonicalProducer() {
+function canonicalProducer(projectSnapshot) {
   const { entries, manifest, manifestEntry, pack } = readVpak();
   const { assetByPath, publicEntries } = validateInternalManifest(manifest, entries);
   const sourceFacts = new Map();
@@ -1071,7 +1484,7 @@ function canonicalProducer() {
   ];
   const inputPaths = [...new Set([...payloadInputs, ...lineageInputs])].sort(compareUtf8);
   validatePortablePathSet(inputPaths, 'BlockKart producer inputs');
-  const workspaceSourceInputs = voWorkspaceSourceClosure();
+  const workspaceSourceInputs = voWorkspaceSourceClosure(projectSnapshot);
   const archiveEntries = publicEntries
     .map((entry) => {
       const asset = assetByPath.get(portableCollisionKey(entry.path));
@@ -1083,7 +1496,7 @@ function canonicalProducer() {
         sourceSha256: source.digest,
         sourceSize: source.size,
         contentHash: asset.contentHash,
-        dependencies: [...(asset.dependencies ?? [])].sort(compareUtf8),
+        dependencies: [...asset.dependencies],
         compression: entry.compression,
         rawSize: entry.rawSize,
         storedSize: entry.storedSize,
@@ -1145,6 +1558,8 @@ function canonicalProducer() {
     ],
   };
   revalidateObservedInputs();
+  assertSameWorkspaceSnapshot(projectSnapshot, captureEffectiveWorkspaceSnapshot());
+  revalidateObservedInputs();
   return { ...producer, producerDigest: sha256(JSON.stringify(producer)) };
 }
 
@@ -1182,28 +1597,16 @@ function inheritedGuestEnvironment(baseEnvironment) {
 }
 
 function buildPack() {
-  const voBin = process.env.VO_BIN;
-  if (typeof voBin !== 'string' || !path.isAbsolute(voBin)) {
-    throw new Error('VO_BIN must be an absolute path for --build');
-  }
-  const canonicalVoBin = realpathSync.native(path.resolve(voBin));
-  const metadata = lstatSync(canonicalVoBin, { bigint: true });
-  if (
-    !metadata.isFile()
-    || metadata.isSymbolicLink()
-    || !sameNativePath(canonicalVoBin, voBin)
-  ) {
-    throw new Error('VO_BIN must be a real regular file without symbolic links');
-  }
-  const environment = inheritedGuestEnvironment(process.env);
-  Object.assign(environment, { LANG: 'C', LC_ALL: 'C', TZ: 'UTC' });
-  execFileSync(canonicalVoBin, ['run', 'tools/pack_primitive_assets.vo'], {
+  const voBinary = currentVoBinary();
+  const environment = projectSnapshotEnvironment();
+  environment[packOutputEnvironment] = producerOutputs.pack;
+  execFileSync(voBinary, ['run', 'tools/pack_primitive_assets.vo'], {
     cwd: root,
     stdio: 'inherit',
     timeout: 300_000,
-    // An absent VOWORK selects the nearest ancestor vo.work from the project root.
     env: environment,
   });
+  currentVoBinary();
 }
 
 function existingMetadata(candidate) {
@@ -1220,7 +1623,7 @@ function writeProvenanceAtomically(encoded) {
   if (payload.byteLength > MAX_PROVENANCE_BYTES) {
     throw new Error(`VPAK provenance exceeds the ${MAX_PROVENANCE_BYTES}-byte limit`);
   }
-  const destination = resolveContained(root, provenanceRelative, 'VPAK provenance destination');
+  const destination = resolveContained(root, producerOutputs.provenance, 'VPAK provenance destination');
   const directory = path.dirname(destination);
   if (!sameNativePath(realpathSync.native(directory), directory)) {
     throw new Error('VPAK provenance parent must be a real directory without symbolic links');
@@ -1294,7 +1697,7 @@ function writeProvenanceAtomically(encoded) {
     }
     const publishedFile = readStableRegularFile(
       root,
-      provenanceRelative,
+      producerOutputs.provenance,
       'published VPAK provenance',
       MAX_PROVENANCE_BYTES,
     );
@@ -1308,25 +1711,31 @@ function writeProvenanceAtomically(encoded) {
 
 if (process.argv.length > 3) throw new Error('vpak_provenance accepts at most one mode argument');
 const mode = process.argv[2] ?? '--check';
-if (mode === '--build') buildPack();
 if (!['--build', '--write', '--check'].includes(mode)) throw new Error(`unknown mode: ${mode}`);
-const producer = canonicalProducer();
+if (mode !== '--check' && producerOutputs.transactionDirectory === null) {
+  throw new Error(
+    `${mode} requires ${transactionDirectoryEnvironment}; publish VPAK files through the transaction builder`,
+  );
+}
+const projectSnapshot = captureEffectiveWorkspaceSnapshot();
+if (mode === '--build') buildPack();
+const producer = canonicalProducer(projectSnapshot);
 const encoded = `${JSON.stringify(producer, null, 2)}\n`;
 if (Buffer.byteLength(encoded, 'utf8') > MAX_PROVENANCE_BYTES) {
   throw new Error(`VPAK provenance exceeds the ${MAX_PROVENANCE_BYTES}-byte limit`);
 }
 if (mode === '--build' || mode === '--write') {
   writeProvenanceAtomically(encoded);
-  console.log(`blockkart vpak provenance: wrote ${producer.archiveEntryCount} entries ${provenanceRelative}`);
+  console.log(`blockkart vpak provenance: wrote ${producer.archiveEntryCount} entries ${producerOutputs.provenance}`);
 } else {
   const current = readStableRegularFile(
     root,
-    provenanceRelative,
+    producerOutputs.provenance,
     'current VPAK provenance',
     MAX_PROVENANCE_BYTES,
   );
   if (!current.bytes.equals(Buffer.from(encoded, 'utf8'))) {
-    throw new Error(`${provenanceRelative} is stale; rebuild the VPAK producer manifest`);
+    throw new Error(`${producerOutputs.provenance} is stale; rebuild the VPAK producer manifest`);
   }
   revalidateObservedInputs();
   console.log(

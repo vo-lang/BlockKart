@@ -281,13 +281,19 @@ func primitiveCatmullValue(a, b, c, d, t float64) float64 {
 func primitiveTrackLength(points []scene3d.TrackControlPoint) float64 {
 	total := 0.0
 	for i := 0; i < len(points) - 1; i++ {
-		total += points[i].Position.Vec3().Distance(points[i + 1].Position.Vec3())
+		current := primitiveVoplayVec3(points[i].Position)
+		next := primitiveVoplayVec3(points[i + 1].Position)
+		total += current.Distance(next)
 	}
 	return total
 }
 
 func primitiveMapVec3(v voplay.Vec3) scene3d.MapVec3 {
 	return scene3d.MapVec3{X: v.X, Y: v.Y, Z: v.Z}
+}
+
+func primitiveVoplayVec3(v scene3d.MapVec3) voplay.Vec3 {
+	return voplay.Vec3{X: v.X, Y: v.Y, Z: v.Z}
 }
 
 func primitiveSceneryVec3(x, y, z float64) voplay.Vec3 {
