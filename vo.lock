@@ -5,7 +5,7 @@ root = "sha256:7da5c9406b9f51acce216282455c1095b15d7381eeb6bc3d9b4f58c84026ba1b"
 path = "github.com/vo-lang/voplay"
 version = "0.1.0"
 origin = "workspace"
-intent = "sha256:cb9d03f957e023d76e277395b81103998bae62e242e16b47fe2fbb8145bee257"
+intent = "sha256:915aab5f55518f29b58c8f876bcd8cb6cba3dcc841ebd7046b3d715552b8d43f"
 
 [module.selection]
 requested_by = ["github.com/vo-lang/blockkart"]
