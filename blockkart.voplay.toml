@@ -1,0 +1,324 @@
+format = 1
+canonical_module = "github.com/vo-lang/blockkart"
+
+[game]
+package = "main"
+type_name = "BlockKart"
+init_type = "BlockKartInit"
+configure = "ConfigureBlockKart"
+start = "StartBlockKart"
+execute = "ExecuteBlockKart"
+max_init_bytes = 4096
+roles = ["logic", "asset", "render", "audio"]
+
+[[game.init_field]]
+name = "seed"
+type = "uint64"
+default = "1"
+editor = ""
+
+[[game.init_field]]
+name = "difficulty"
+type = "uint32"
+default = "1"
+editor = ""
+
+[[component]]
+package = "main"
+type_name = "Transform"
+schema_major = 1
+classification = "simulation"
+
+[[component.field]]
+name = "x"
+type = "int64"
+default = "0"
+editor = "distance"
+
+[[component.field]]
+name = "y"
+type = "int64"
+default = "0"
+editor = "distance"
+
+[[component.field]]
+name = "z"
+type = "int64"
+default = "0"
+editor = "distance"
+
+[[component.field]]
+name = "yaw_milliradians"
+type = "int32"
+default = "0"
+editor = "angle"
+
+[[component]]
+package = "main"
+type_name = "Velocity"
+schema_major = 1
+classification = "simulation"
+
+[[component.field]]
+name = "x_per_second"
+type = "int64"
+default = "0"
+editor = "speed"
+
+[[component.field]]
+name = "y_per_second"
+type = "int64"
+default = "0"
+editor = "speed"
+
+[[component.field]]
+name = "z_per_second"
+type = "int64"
+default = "0"
+editor = "speed"
+
+[[component.field]]
+name = "yaw_per_second"
+type = "int32"
+default = "0"
+editor = "angular-speed"
+
+[[component]]
+package = "main"
+type_name = "KartControl"
+schema_major = 1
+classification = "simulation"
+
+[[component.field]]
+name = "throttle_milli"
+type = "int32"
+default = "0"
+editor = ""
+
+[[component.field]]
+name = "brake_milli"
+type = "int32"
+default = "0"
+editor = ""
+
+[[component.field]]
+name = "steer_milli"
+type = "int32"
+default = "0"
+editor = ""
+
+[[component.field]]
+name = "drift"
+type = "bool"
+default = "false"
+editor = ""
+
+[[component.field]]
+name = "boost"
+type = "bool"
+default = "false"
+editor = ""
+
+[[component]]
+package = "main"
+type_name = "KartState"
+schema_major = 1
+classification = "simulation"
+
+[[component.field]]
+name = "lap"
+type = "uint32"
+default = "0"
+editor = ""
+
+[[component.field]]
+name = "checkpoint"
+type = "uint32"
+default = "0"
+editor = ""
+
+[[component.field]]
+name = "elapsed_millis"
+type = "uint64"
+default = "0"
+editor = "duration"
+
+[[component.field]]
+name = "best_millis"
+type = "uint64"
+default = "0"
+editor = "duration"
+
+[[component.field]]
+name = "finished"
+type = "bool"
+default = "false"
+editor = ""
+
+[[component.field]]
+name = "score"
+type = "uint32"
+default = "0"
+editor = ""
+
+[[component.field]]
+name = "boost_ticks"
+type = "uint32"
+default = "0"
+editor = ""
+
+[[component.field]]
+name = "speed_per_second"
+type = "int64"
+default = "0"
+editor = "speed"
+
+[[component.field]]
+name = "countdown_ticks"
+type = "uint32"
+default = "180"
+editor = "duration"
+
+[[component]]
+package = "main"
+type_name = "TrackMarker"
+schema_major = 1
+classification = "simulation"
+
+[[component.field]]
+name = "kind"
+type = "uint32"
+default = "0"
+editor = ""
+
+[[component.field]]
+name = "order"
+type = "uint32"
+default = "0"
+editor = ""
+
+[[component.field]]
+name = "radius_milli"
+type = "uint32"
+default = "1000"
+editor = "distance"
+
+[[component]]
+package = "main"
+type_name = "RenderPose"
+schema_major = 1
+classification = "presentation"
+
+[[component.field]]
+name = "previous_tick"
+type = "uint64"
+default = "0"
+editor = ""
+
+[[component.field]]
+name = "current_tick"
+type = "uint64"
+default = "0"
+editor = ""
+
+[[component.field]]
+name = "previous_transform"
+type = "bytes"
+default = ""
+editor = ""
+
+[[component.field]]
+name = "current_transform"
+type = "bytes"
+default = ""
+editor = ""
+
+[[component]]
+package = "main"
+type_name = "Collectible"
+schema_major = 1
+classification = "simulation"
+
+[[component.field]]
+name = "value"
+type = "uint32"
+default = "1"
+editor = ""
+
+[[component.field]]
+name = "collected"
+type = "bool"
+default = "false"
+editor = ""
+
+[[component]]
+package = "main"
+type_name = "BoostPad"
+schema_major = 1
+classification = "simulation"
+
+[[component.field]]
+name = "strength"
+type = "uint32"
+default = "12000"
+editor = "speed"
+
+[[component.field]]
+name = "cooldown_ticks"
+type = "uint32"
+default = "0"
+editor = ""
+
+[[component]]
+package = "main"
+type_name = "MovingObstacle"
+schema_major = 1
+classification = "simulation"
+
+[[component.field]]
+name = "origin_x"
+type = "int64"
+default = "0"
+editor = "distance"
+
+[[component.field]]
+name = "origin_y"
+type = "int64"
+default = "0"
+editor = "distance"
+
+[[component.field]]
+name = "origin_z"
+type = "int64"
+default = "0"
+editor = "distance"
+
+[[component.field]]
+name = "axis_x"
+type = "int32"
+default = "1000"
+editor = ""
+
+[[component.field]]
+name = "axis_z"
+type = "int32"
+default = "0"
+editor = ""
+
+[[component.field]]
+name = "amplitude_milli"
+type = "uint32"
+default = "6000"
+editor = "distance"
+
+[[component.field]]
+name = "period_ticks"
+type = "uint32"
+default = "180"
+editor = ""
+
+[[component.field]]
+name = "phase_ticks"
+type = "uint32"
+default = "0"
+editor = ""

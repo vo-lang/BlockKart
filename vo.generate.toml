@@ -1,0 +1,35 @@
+format = 1
+
+[[generation]]
+provider = "voplay.component-store"
+version = "13"
+schema_kind = "voplay.components"
+executable = "../voplay/rust/target/debug/voplay-generator-provider"
+schema = "blockkart.voplay.toml"
+outputs = [
+  "transform_component.vo",
+  "velocity_component.vo",
+  "kartcontrol_component.vo",
+  "kartstate_component.vo",
+  "trackmarker_component.vo",
+  "collectible_component.vo",
+  "boostpad_component.vo",
+  "movingobstacle_component.vo",
+  "renderpose_component.vo",
+  "block_kart_game.vo",
+  "generated/voplay_components.manifest",
+]
+capabilities = [
+  "animation",
+  "audio",
+  "core",
+  "gltf",
+  "image",
+  "pack",
+  "physics2d",
+  "physics3d",
+  "readback",
+  "render2d",
+  "render3d",
+  "text",
+]

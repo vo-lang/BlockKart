@@ -1,0 +1,397 @@
+// governed:voplay-codegen game_factory_id=7605034866940721384
+package main
+
+import (
+	"errors"
+	"github.com/vo-lang/voplay"
+	"github.com/vo-lang/voplay/vo/world"
+)
+
+type BlockKartInit struct {
+	Seed uint64
+	Difficulty uint32
+}
+
+type BlockKartGeneratedGame struct {
+	Value BlockKart
+	Init BlockKartInit
+	World *world.World
+}
+
+func (game *BlockKartGeneratedGame) Configure(builder voplay.Builder) {
+	ConfigureBlockKart(&game.Value, builder)
+}
+
+func (game *BlockKartGeneratedGame) Start(context voplay.StartContext) error {
+	return StartBlockKart(&game.Value, game.Init, context)
+}
+
+func (game *BlockKartGeneratedGame) Execute(invocation voplay.SystemInvocation) (voplay.TickOutput, error) {
+	return ExecuteBlockKart(&game.Value, invocation)
+}
+
+func BlockKartEncodeInit(value BlockKartInit) ([]byte, bool) {
+	output := make([]byte, 0)
+	output = BlockKartAppendU64(output, uint64(value.Seed))
+	output = BlockKartAppendU32(output, uint32(value.Difficulty))
+	if len(output) > 4096 { return nil, false }
+	return output, true
+}
+
+func BlockKartDecodeInit(input []byte) (BlockKartInit, bool) {
+	value := BlockKartInit{}
+	if len(input) > 4096 { return value, false }
+	offset := 0
+	if len(input) - offset < 8 { return value, false }
+	value.Seed = BlockKartReadU64(input, offset)
+	offset += 8
+	if len(input) - offset < 4 { return value, false }
+	value.Difficulty = BlockKartReadU32(input, offset)
+	offset += 4
+	if offset != len(input) { return value, false }
+	return value, true
+}
+
+func BlockKartAppendU32(output []byte, value uint32) []byte {
+	return append(output, byte(value), byte(value >> 8), byte(value >> 16), byte(value >> 24))
+}
+
+func BlockKartAppendU64(output []byte, value uint64) []byte {
+	return append(output, byte(value), byte(value >> 8), byte(value >> 16), byte(value >> 24), byte(value >> 32), byte(value >> 40), byte(value >> 48), byte(value >> 56))
+}
+
+func BlockKartReadU32(input []byte, offset int) uint32 {
+	return uint32(input[offset]) | uint32(input[offset + 1]) << 8 | uint32(input[offset + 2]) << 16 | uint32(input[offset + 3]) << 24
+}
+
+func BlockKartReadU64(input []byte, offset int) uint64 {
+	return uint64(input[offset]) | uint64(input[offset + 1]) << 8 | uint64(input[offset + 2]) << 16 | uint64(input[offset + 3]) << 24 | uint64(input[offset + 4]) << 32 | uint64(input[offset + 5]) << 40 | uint64(input[offset + 6]) << 48 | uint64(input[offset + 7]) << 56
+}
+
+func NewBlockKartEntryDescriptor() voplay.GameEntryDescriptor {
+	return voplay.GameEntryDescriptor{
+		ArtifactId: [32]byte{232, 56, 118, 20, 235, 130, 138, 105, 217, 56, 18, 236, 213, 192, 87, 44, 179, 17, 40, 119, 45, 5, 201, 216, 48, 237, 246, 31, 93, 5, 103, 77},
+		FactoryId: 7605034866940721384,
+		SchemaFingerprint: [32]byte{248, 119, 205, 194, 157, 139, 24, 179, 215, 176, 124, 201, 8, 35, 83, 102, 229, 85, 142, 101, 137, 164, 77, 225, 158, 184, 246, 127, 247, 94, 156, 80},
+		RoleArtifactSetFingerprint: [32]byte{204, 133, 208, 203, 215, 184, 203, 24, 117, 201, 65, 63, 87, 220, 104, 243, 97, 18, 7, 175, 45, 199, 24, 135, 168, 47, 250, 132, 49, 212, 197, 83},
+	}
+}
+
+func __vo_entry_meta_v1_voplay_7605034866940721384_e8387614eb828a69d93812ecd5c0572cb31128772d05c9d830edf61f5d05674d_f877cdc29d8b18b3d7b07cc908235366e5558e6589a44de19eb8f67ff75e9c50_cc85d0cbd7b8cb1875c9413f57dc68f3611207af2dc71887a82ffa8431d4c553(initBytes []byte) {
+	init, ok := BlockKartDecodeInit(initBytes)
+	if !ok { panic("generated Voplay init codec rejected target-island payload") }
+	engine := voplay.TargetEngine()
+	worldValue, ok := world.NewWorld(world.WorldRef{EngineIndex: engine.Engine.Index, EngineGeneration: engine.Engine.Generation, WorldIndex: 1, WorldGeneration: 1}, 1000000, 16777216, 1048576, 16777216)
+	if !ok { panic("generated Voplay World configuration is invalid") }
+	game := &BlockKartGeneratedGame{Init: init, World: worldValue}
+	builder := &BlockKartGeneratedBuilder{}
+	game.Configure(builder)
+	if builder.Failure != nil { panic(builder.Failure.Error()) }
+	orderedSystems, scheduleHash, ok := voplay.FreezeSchedule(builder.Systems)
+	if !ok { panic("generated Voplay schedule is invalid") }
+	builder.Systems = orderedSystems
+	builder.ScheduleHash = scheduleHash
+	context := &BlockKartGeneratedStartContext{NextHandle: 1, Builder: builder, WorldValue: worldValue}
+	if err := game.Start(context); err != nil { panic(err.Error()) }
+	if builder.Failure != nil { panic(builder.Failure.Error()) }
+	if err := voplay.TargetStart(builder.Configuration()); err != nil { panic(err.Error()) }
+	stages := []voplay.Stage{voplay.StagePreTick, voplay.StageInput, voplay.StageGameplay, voplay.StagePrePhysics, voplay.StagePhysics, voplay.StagePostPhysics, voplay.StagePostTick, voplay.StageExtract}
+	for {
+		tickBytes, err := voplay.TargetNextTicks()
+		if err != nil { panic(err.Error()) }
+		batch, ok := BlockKartDecodeTickBatch(tickBytes)
+		if !ok { panic("generated Voplay tick codec rejected provider payload") }
+		output := voplay.TickOutput{}
+		for offset := uint64(0); offset < batch.Count; offset++ {
+			tick := batch
+			tick.FirstTick = batch.FirstTick+offset
+			tick.Count = 1
+			if offset > 0 { tick.InputFrames = nil; tick.PresentationPulses = nil; tick.RenderReturns = nil; tick.AssetReturns = nil; tick.AudioReturns = nil; tick.LogicReturns = nil; tick.InitialEntities = nil; tick.RequestedAssets = nil; tick.RenderViews = nil }
+			for _, stage := range stages {
+				for _, system := range builder.Systems {
+					if system.Stage != stage { continue }
+					tickOutput, err := game.Execute(voplay.SystemInvocation{System: system, Tick: tick, World: game.World})
+					if err != nil { panic(err.Error()) }
+					packetCount := len(output.RenderPackets)+len(output.AssetPackets)+len(output.AudioPackets)+len(output.LogicPackets)+len(tickOutput.RenderPackets)+len(tickOutput.AssetPackets)+len(tickOutput.AudioPackets)+len(tickOutput.LogicPackets)
+					if packetCount > 4096 { panic("generated Voplay tick output exceeds provider packet limit") }
+					output.RenderPackets = append(output.RenderPackets, tickOutput.RenderPackets...)
+					output.AssetPackets = append(output.AssetPackets, tickOutput.AssetPackets...)
+					output.AudioPackets = append(output.AudioPackets, tickOutput.AudioPackets...)
+					output.LogicPackets = append(output.LogicPackets, tickOutput.LogicPackets...)
+				}
+			}
+		}
+		for _, pulse := range batch.PresentationPulses {
+			for _, system := range builder.Systems {
+				if system.Stage != voplay.StageFrame { continue }
+				frameOutput, err := game.Execute(voplay.SystemInvocation{System: system, Tick: batch, World: game.World, PresentationPulse: pulse})
+				if err != nil { panic(err.Error()) }
+				packetCount := len(output.RenderPackets)+len(output.AssetPackets)+len(output.AudioPackets)+len(output.LogicPackets)+len(frameOutput.RenderPackets)+len(frameOutput.AssetPackets)+len(frameOutput.AudioPackets)+len(frameOutput.LogicPackets)
+				if packetCount > 4096 { panic("generated Voplay frame output exceeds provider packet limit") }
+				output.RenderPackets = append(output.RenderPackets, frameOutput.RenderPackets...)
+				output.AssetPackets = append(output.AssetPackets, frameOutput.AssetPackets...)
+				output.AudioPackets = append(output.AudioPackets, frameOutput.AudioPackets...)
+				output.LogicPackets = append(output.LogicPackets, frameOutput.LogicPackets...)
+			}
+		}
+		result, ok := BlockKartEncodeTickOutput(output)
+		if !ok { panic("generated Voplay tick output exceeds provider limits") }
+		if err := voplay.TargetCommitTicks(batch.FirstTick, batch.Count, result); err != nil { panic(err.Error()) }
+	}
+}
+
+func BlockKartDecodeStartupRecords(input []byte, offset int) ([]voplay.StartupRecord, int, bool) {
+	if offset < 0 || offset+4 > len(input) { return nil, offset, false }
+	countValue := BlockKartReadU32(input, offset)
+	offset += 4
+	if countValue > 65536 { return nil, offset, false }
+	records := make([]voplay.StartupRecord, 0, int(countValue))
+	for index := uint32(0); index < countValue; index++ {
+		if offset+12 > len(input) { return nil, offset, false }
+		handleValue := BlockKartReadU64(input, offset)
+		lengthValue := BlockKartReadU32(input, offset+8)
+		offset += 12
+		if handleValue == 0 || handleValue > 4294967295 || lengthValue == 0 || lengthValue > 1048576 { return nil, offset, false }
+		length := int(lengthValue)
+		if offset+length > len(input) { return nil, offset, false }
+		descriptor := make([]byte, length)
+		copy(descriptor, input[offset:offset+length])
+		records = append(records, voplay.StartupRecord{ Handle: voplay.Handle{ Index: uint32(handleValue), Generation: 1 }, Descriptor: descriptor })
+		offset += length
+	}
+	return records, offset, true
+}
+
+func BlockKartDecodeTickPackets(input []byte, offset int) ([][]byte, int, bool) {
+	if offset < 0 || offset+4 > len(input) { return nil, offset, false }
+	countValue := BlockKartReadU32(input, offset)
+	offset += 4
+	if countValue > 4096 { return nil, offset, false }
+	count := int(countValue)
+	packets := make([][]byte, 0, count)
+	for index := 0; index < count; index++ {
+		if offset+4 > len(input) { return nil, offset, false }
+		lengthValue := BlockKartReadU32(input, offset)
+		offset += 4
+		if lengthValue == 0 || lengthValue > 1048576 { return nil, offset, false }
+		length := int(lengthValue)
+		if offset+length > len(input) { return nil, offset, false }
+		packet := make([]byte, length)
+		copy(packet, input[offset:offset+length])
+		packets = append(packets, packet)
+		offset += length
+	}
+	return packets, offset, true
+}
+
+func BlockKartDecodeTickBatch(input []byte) (voplay.TickBatch, bool) {
+	if len(input) < 72 || BlockKartReadU32(input, 0) != 6 { return voplay.TickBatch{}, false }
+	batch := voplay.TickBatch{
+		FirstTick: BlockKartReadU64(input, 4),
+		Count: BlockKartReadU64(input, 12),
+		FixedTickNanos: BlockKartReadU64(input, 20),
+		MonotonicNanos: BlockKartReadU64(input, 28),
+	}
+	if batch.FirstTick == 0 || batch.Count == 0 || batch.FixedTickNanos == 0 { return voplay.TickBatch{}, false }
+	offset := 36
+	var ok bool
+	batch.InputFrames, offset, ok = BlockKartDecodeTickPackets(input, offset)
+	if !ok { return voplay.TickBatch{}, false }
+	batch.PresentationPulses, offset, ok = BlockKartDecodeTickPackets(input, offset)
+	if !ok { return voplay.TickBatch{}, false }
+	batch.RenderReturns, offset, ok = BlockKartDecodeTickPackets(input, offset)
+	if !ok { return voplay.TickBatch{}, false }
+	batch.AssetReturns, offset, ok = BlockKartDecodeTickPackets(input, offset)
+	if !ok { return voplay.TickBatch{}, false }
+	batch.AudioReturns, offset, ok = BlockKartDecodeTickPackets(input, offset)
+	if !ok { return voplay.TickBatch{}, false }
+	batch.LogicReturns, offset, ok = BlockKartDecodeTickPackets(input, offset)
+	if !ok { return voplay.TickBatch{}, false }
+	batch.InitialEntities, offset, ok = BlockKartDecodeStartupRecords(input, offset)
+	if !ok { return voplay.TickBatch{}, false }
+	batch.RequestedAssets, offset, ok = BlockKartDecodeStartupRecords(input, offset)
+	if !ok { return voplay.TickBatch{}, false }
+	batch.RenderViews, offset, ok = BlockKartDecodeStartupRecords(input, offset)
+	if !ok || offset != len(input) || len(batch.InputFrames)+len(batch.PresentationPulses) > 4096 || len(batch.RenderReturns)+len(batch.AssetReturns)+len(batch.AudioReturns)+len(batch.LogicReturns) > 4096 || len(batch.InitialEntities)+len(batch.RequestedAssets)+len(batch.RenderViews) > 65536 { return voplay.TickBatch{}, false }
+	if batch.FirstTick != 1 && len(batch.InitialEntities)+len(batch.RequestedAssets)+len(batch.RenderViews) != 0 { return voplay.TickBatch{}, false }
+	return batch, true
+}
+
+func BlockKartEncodeTickOutput(output voplay.TickOutput) ([]byte, bool) {
+	count := len(output.RenderPackets)+len(output.AssetPackets)+len(output.AudioPackets)+len(output.LogicPackets)
+	if count > 4096 { return nil, false }
+	result := []byte("voplay-tick-output-v1\x00")
+	result = BlockKartAppendU32(result, uint32(count))
+	for _, packet := range output.RenderPackets {
+		var ok bool
+		result, ok = BlockKartAppendTickOutputPacket(result, 1, packet)
+		if !ok { return nil, false }
+	}
+	for _, packet := range output.AssetPackets {
+		var ok bool
+		result, ok = BlockKartAppendTickOutputPacket(result, 2, packet)
+		if !ok { return nil, false }
+	}
+	for _, packet := range output.AudioPackets {
+		var ok bool
+		result, ok = BlockKartAppendTickOutputPacket(result, 3, packet)
+		if !ok { return nil, false }
+	}
+	for _, packet := range output.LogicPackets {
+		var ok bool
+		result, ok = BlockKartAppendTickOutputPacket(result, 4, packet)
+		if !ok { return nil, false }
+	}
+	return result, true
+}
+
+func BlockKartAppendTickOutputPacket(result []byte, role byte, packet []byte) ([]byte, bool) {
+	if len(packet) == 0 || len(packet) > 1048576 || len(result)+5+len(packet) > 16777216 { return nil, false }
+	result = append(result, role)
+	result = BlockKartAppendU32(result, uint32(len(packet)))
+	return append(result, packet...), true
+}
+
+type BlockKartGeneratedBuilder struct {
+	Operations []byte
+	Count uint32
+	Systems []voplay.RegisteredSystem
+	ScheduleHash uint64
+	Failure error
+}
+
+func (builder *BlockKartGeneratedBuilder) appendOperation(tag byte, first []byte, second []byte) error {
+	if builder.Failure != nil { return builder.Failure }
+	if builder.Count == 65536 || len(first) > 1048576 || len(second) > 1048576 || len(builder.Operations)+9+len(first)+len(second)+27 > 16777216 {
+		builder.Failure = errors.New("generated Voplay configuration exceeds startup limit")
+		return builder.Failure
+	}
+	builder.Operations = append(builder.Operations, tag)
+	builder.Operations = BlockKartAppendU32(builder.Operations, uint32(len(first)))
+	builder.Operations = BlockKartAppendU32(builder.Operations, uint32(len(second)))
+	builder.Operations = append(builder.Operations, first...)
+	builder.Operations = append(builder.Operations, second...)
+	builder.Count++
+	return nil
+}
+
+func (builder *BlockKartGeneratedBuilder) Configuration() []byte {
+	configuration := []byte("voplay-target-start-v3\x00")
+	configuration = BlockKartAppendU64(configuration, builder.ScheduleHash)
+	configuration = BlockKartAppendU32(configuration, builder.Count)
+	return append(configuration, builder.Operations...)
+}
+
+func (builder *BlockKartGeneratedBuilder) RegisterSystem(stage voplay.Stage, descriptor []byte) error {
+	return builder.RegisterScheduledSystem(voplay.SystemSpec{Stage: stage, Descriptor: descriptor, Deterministic: true})
+}
+
+func (builder *BlockKartGeneratedBuilder) RegisterScheduledSystem(spec voplay.SystemSpec) error {
+	if !spec.Stage.Valid() || spec.Stage == voplay.StageStartup || spec.Stage == voplay.StageShutdown || len(spec.Descriptor) == 0 { return errors.New("generated Voplay system stage is not driven by the target loop") }
+	id := spec.Id
+	if id == 0 {
+		id = uint64(14695981039346656037)
+		for _, value := range spec.Descriptor { id = (id ^ uint64(value)) * 1099511628211 }
+		id = (id ^ uint64(spec.Stage)) * 1099511628211
+		if id == 0 { id = 1 }
+	}
+	for _, system := range builder.Systems { if system.Id == id { return errors.New("generated Voplay system identity is duplicated") } }
+	copyDescriptor := append([]byte{}, spec.Descriptor...)
+	first := BlockKartAppendU32(nil, uint32(spec.Stage))
+	first = BlockKartAppendU64(first, id)
+	if err := builder.appendOperation(2, first, copyDescriptor); err != nil { return err }
+	builder.Systems = append(builder.Systems, voplay.RegisteredSystem{Id: id, Stage: spec.Stage, Descriptor: copyDescriptor, Deterministic: spec.Deterministic, SimulationReads: append([]uint64{}, spec.SimulationReads...), SimulationWrites: append([]uint64{}, spec.SimulationWrites...), PresentationReads: append([]uint64{}, spec.PresentationReads...), PresentationWrites: append([]uint64{}, spec.PresentationWrites...), Before: append([]uint64{}, spec.Before...), After: append([]uint64{}, spec.After...)})
+	return nil
+}
+
+func (builder *BlockKartGeneratedBuilder) RegisterComponent(schema []byte) error {
+	return builder.appendOperation(1, schema, nil)
+}
+
+func (builder *BlockKartGeneratedBuilder) RegisterPlugin(descriptor []byte) error {
+	return builder.appendOperation(3, descriptor, nil)
+}
+
+func (builder *BlockKartGeneratedBuilder) RegisterAssetLoader(descriptor []byte) error {
+	return builder.appendOperation(4, descriptor, nil)
+}
+
+func (builder *BlockKartGeneratedBuilder) RegisterRenderFeature(descriptor []byte) error {
+	return builder.appendOperation(5, descriptor, nil)
+}
+
+func (builder *BlockKartGeneratedBuilder) SetFixedTick(nanos uint64, maxCatchUp uint32) error {
+	first := BlockKartAppendU64(nil, nanos)
+	second := BlockKartAppendU32(nil, maxCatchUp)
+	return builder.appendOperation(6, first, second)
+}
+
+type BlockKartGeneratedStartContext struct {
+	NextHandle uint32
+	Builder *BlockKartGeneratedBuilder
+	WorldValue *world.World
+}
+
+func (context *BlockKartGeneratedStartContext) Engine() voplay.EngineRef {
+	return voplay.TargetEngine()
+}
+
+func (context *BlockKartGeneratedStartContext) World() *world.World {
+	return context.WorldValue
+}
+
+func (context *BlockKartGeneratedStartContext) Spawn(initialComponents []byte) (voplay.Handle, error) {
+	if err := context.Builder.appendOperation(16, initialComponents, nil); err != nil { return voplay.Handle{}, err }
+	commands, ok := context.WorldValue.Begin()
+	if !ok || !commands.Spawn(uint64(context.NextHandle), []world.ComponentRecord{world.ComponentRecord{Component: 1, Value: initialComponents}}) { return voplay.Handle{}, errors.New("generated Voplay World rejected startup entity") }
+	if _, ok = commands.Commit(); !ok { return voplay.Handle{}, errors.New("generated Voplay World failed startup transaction") }
+	entity, ok := context.WorldValue.Entity(uint64(context.NextHandle))
+	if !ok { return voplay.Handle{}, errors.New("generated Voplay World lost startup entity") }
+	handle := voplay.Handle{Index: entity.Index, Generation: entity.Generation}
+	context.NextHandle++
+	return handle, nil
+}
+
+func (context *BlockKartGeneratedStartContext) RequestAsset(descriptor []byte) (voplay.Handle, error) {
+	if err := context.Builder.appendOperation(17, descriptor, nil); err != nil { return voplay.Handle{}, err }
+	handle := voplay.Handle{Index: context.NextHandle, Generation: 1}
+	context.NextHandle++
+	return handle, nil
+}
+
+func (context *BlockKartGeneratedStartContext) CreateRenderView(descriptor []byte) (voplay.Handle, error) {
+	if err := context.Builder.appendOperation(18, descriptor, nil); err != nil { return voplay.Handle{}, err }
+	handle := voplay.Handle{Index: context.NextHandle, Generation: 1}
+	context.NextHandle++
+	return handle, nil
+}
+
+func NewBlockKartOwnedInit(value BlockKartInit) (voplay.OwnedInitData, bool) {
+	bytes, ok := BlockKartEncodeInit(value)
+	if !ok { return voplay.OwnedInitData{}, false }
+	return voplay.OwnedInitData{Bytes: bytes}, true
+}
+
+func __VoplayRunBlockKart(game *BlockKartGeneratedGame) error {
+	init, ok := NewBlockKartOwnedInit(game.Init)
+	if !ok { return errors.New("generated init config exceeds descriptor limit") }
+	descriptor := NewBlockKartEntryDescriptor()
+	descriptorBytes := make([]byte, 0, 104)
+	descriptorBytes = append(descriptorBytes, descriptor.ArtifactId[:]...)
+	descriptorBytes = BlockKartAppendU64(descriptorBytes, descriptor.FactoryId)
+	descriptorBytes = append(descriptorBytes, descriptor.SchemaFingerprint[:]...)
+	descriptorBytes = append(descriptorBytes, descriptor.RoleArtifactSetFingerprint[:]...)
+	return voplay.RunEntry(descriptorBytes, init.Bytes)
+}
+
+func __VoplayInstallBlockKart(engine voplay.EngineRef, game *BlockKartGeneratedGame, init voplay.OwnedInitData) (voplay.GameEntryDescriptor, error) {
+	descriptor := NewBlockKartEntryDescriptor()
+	descriptorBytes := make([]byte, 0, 104)
+	descriptorBytes = append(descriptorBytes, descriptor.ArtifactId[:]...)
+	descriptorBytes = BlockKartAppendU64(descriptorBytes, descriptor.FactoryId)
+	descriptorBytes = append(descriptorBytes, descriptor.SchemaFingerprint[:]...)
+	descriptorBytes = append(descriptorBytes, descriptor.RoleArtifactSetFingerprint[:]...)
+	if len(init.Bytes) > 16777216 { return voplay.GameEntryDescriptor{}, errors.New("generated init config exceeds descriptor limit") }
+	if err := voplay.InstallEntry(engine, descriptorBytes, init.Bytes); err != nil { return voplay.GameEntryDescriptor{}, err }
+	return descriptor, nil
+}

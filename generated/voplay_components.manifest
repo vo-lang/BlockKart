@@ -1,0 +1,71 @@
+format = 1
+generator = "voplay.component-store"
+generator_version = "13"
+schema_kind = "voplay.components"
+module_fingerprint = "1d60ff149b9b3c5e40ee9ad0fae3474839b0b35312787c1cebf1cb162e722f1c"
+
+[[component]]
+name = "github.com/vo-lang/blockkart/main/BoostPad@1"
+id = "090b9de889649385cb69f28b095f38c6"
+schema_fingerprint = "bf389138e93af76147532389e0b29cf223373f80bce164007a00186fb12122a1"
+source = "boostpad_component.vo"
+
+[[component]]
+name = "github.com/vo-lang/blockkart/main/Collectible@1"
+id = "4440fd99ea086d4dc2ce17616a9ad61c"
+schema_fingerprint = "7a0f08bfaef86f23df4fdad98584adb46d2e03d3235745e0ee5ff9bd3e43c44f"
+source = "collectible_component.vo"
+
+[[component]]
+name = "github.com/vo-lang/blockkart/main/KartControl@1"
+id = "967e66c0db18a65cc4a6a0002b2014d8"
+schema_fingerprint = "5068e6691f4806cb228105f34151a2f71ffb5611006596e20b306baef0ec988c"
+source = "kartcontrol_component.vo"
+
+[[component]]
+name = "github.com/vo-lang/blockkart/main/KartState@1"
+id = "4189c1bebc2c538af3c5be9fca4b989a"
+schema_fingerprint = "53e88be67b107c0a32aa3e75332b4f94de74357bb21ace17fd13cbcb2f16cf01"
+source = "kartstate_component.vo"
+
+[[component]]
+name = "github.com/vo-lang/blockkart/main/MovingObstacle@1"
+id = "ccf8748516647cebf6ad1b70b53aaf3e"
+schema_fingerprint = "0bfc90554faab8a7192817cb4c744aea4edf9cd2a62c69049fb2d216a42c527c"
+source = "movingobstacle_component.vo"
+
+[[component]]
+name = "github.com/vo-lang/blockkart/main/RenderPose@1"
+id = "fc75529ce5d2c73a9543ef3260f3520b"
+schema_fingerprint = "cd3d2d628eea65f58b30020553ce431d1d480a3c0abf952699dd3d057b864bc2"
+source = "renderpose_component.vo"
+
+[[component]]
+name = "github.com/vo-lang/blockkart/main/TrackMarker@1"
+id = "6e1b1f56faa80b55049331f1b6206ab7"
+schema_fingerprint = "1ba0f6430178c308deeafd9d0960c2536aa29d322a41641ec26494b2f8c9bbc3"
+source = "trackmarker_component.vo"
+
+[[component]]
+name = "github.com/vo-lang/blockkart/main/Transform@1"
+id = "6c69fdc3b27f1c3adc1cb27d04b63a7b"
+schema_fingerprint = "df2f10c845cab5caba497d1a26491245a54ece15db7c1e7dfa21ca3571b6f362"
+source = "transform_component.vo"
+
+[[component]]
+name = "github.com/vo-lang/blockkart/main/Velocity@1"
+id = "191d3f33844c71f017ae9388a64f02d4"
+schema_fingerprint = "b825f062a1ed45d3f3a4d9f3c0e9932f7073e34238c5b3792dc472612b8349fb"
+source = "velocity_component.vo"
+
+[game]
+name = "BlockKart"
+package = "main"
+source = "block_kart_game.vo"
+artifact_id = "e8387614eb828a69d93812ecd5c0572cb31128772d05c9d830edf61f5d05674d"
+schema_fingerprint = "f877cdc29d8b18b3d7b07cc908235366e5558e6589a44de19eb8f67ff75e9c50"
+role_artifact_set_fingerprint = "cc85d0cbd7b8cb1875c9413f57dc68f3611207af2dc71887a82ffa8431d4c553"
+roles = ["logic", "asset", "render", "audio"]
+configure = "ConfigureBlockKart"
+start = "StartBlockKart"
+execute = "ExecuteBlockKart"

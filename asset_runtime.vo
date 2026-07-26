@@ -1,0 +1,123 @@
+package main
+
+import (
+	"errors"
+	"github.com/vo-lang/voplay"
+	"github.com/vo-lang/voplay/vo/assets"
+)
+
+func (game *BlockKart) processAssetLifecycle(tick voplay.TickBatch) ([][]byte, error) {
+	packets := [][]byte{}
+	if game.AssetTickets == nil {
+		game.AssetTickets = map[uint64]assets.AssetTicket{}
+	}
+	if game.ReadyAssets == nil {
+		game.ReadyAssets = map[uint64]bool{}
+	}
+	for _, packet := range tick.AssetReturns {
+		completion, decoded := assets.DecodeCompletionPacket(game.Engine, packet)
+		if !decoded {
+			return nil, errors.New("blockkart: decode asset role completion")
+		}
+		switch completion.Kind {
+		case assets.CompletionRegistration:
+			if len(game.RegisteredAssets) != 0 ||
+				uint32(len(completion.Registered)) != game.RequestedAssetCount {
+				return nil, errors.New("blockkart: asset registration result")
+			}
+			game.RegisteredAssets = append([]assets.AssetRef{}, completion.Registered...)
+		case assets.CompletionScope:
+			if completion.ScopeKind != assets.ScopeScene || game.AssetScope.Index != 0 {
+				return nil, errors.New("blockkart: asset scene scope result")
+			}
+			game.AssetScope = completion.Scope
+		case assets.CompletionTicket:
+			key := blockKartAssetRefKey(completion.Asset)
+			game.AssetTickets[key] = completion.Ticket
+		case assets.CompletionWork:
+			game.AssetSequence++
+			workPacket, encoded := assets.EncodeCompletePacket(
+				game.Engine, 1, game.AssetSequence, tick.FirstTick, completion.Work,
+			)
+			if !encoded {
+				return nil, errors.New("blockkart: complete asset work")
+			}
+			packets = append(packets, workPacket)
+		case assets.CompletionOutcome:
+			if completion.Outcome != assets.OutcomeReady {
+				return nil, errors.New("blockkart: governed asset failed")
+			}
+			game.ReadyAssets[blockKartAssetRefKey(completion.Asset)] = true
+		case assets.CompletionControlAck:
+			// Release/expire/restart acknowledgements are terminal lifecycle data.
+		default:
+			return nil, errors.New("blockkart: unsupported asset completion")
+		}
+	}
+	if !game.AssetRegistrationSent && len(tick.RequestedAssets) != 0 {
+		game.RequestedAssetCount = uint32(len(tick.RequestedAssets))
+		registrations := make([]assets.Registration, 0, len(tick.RequestedAssets))
+		for index, record := range tick.RequestedAssets {
+			if !record.Handle.Valid() || len(record.Descriptor) == 0 {
+				return nil, errors.New("blockkart: invalid startup asset descriptor")
+			}
+			registrations = append(registrations, assets.Registration{
+				AssetId: blockKartAssetIdentity(byte(index + 1), 1),
+				TypeId: uint64(1000 + index),
+				SourceRevision: 1,
+				ArtifactId: blockKartAssetIdentity(byte(index + 1), 2),
+			})
+		}
+		game.AssetSequence++
+		packet, encoded := assets.EncodeRegisterPacket(
+			game.Engine, 1, game.AssetSequence, tick.FirstTick, registrations,
+		)
+		if !encoded {
+			return nil, errors.New("blockkart: register governed assets")
+		}
+		packets = append(packets, packet)
+		game.AssetRegistrationSent = true
+	}
+	if len(game.RegisteredAssets) != 0 && !game.AssetScopeRequested {
+		game.AssetSequence++
+		packet, encoded := assets.EncodeCreateScopePacket(
+			game.Engine, 1, game.AssetSequence, tick.FirstTick, assets.ScopeScene,
+		)
+		if !encoded {
+			return nil, errors.New("blockkart: request asset scene scope")
+		}
+		packets = append(packets, packet)
+		game.AssetScopeRequested = true
+	}
+	if game.AssetScope.Index != 0 && len(game.RegisteredAssets) != 0 &&
+		!game.AssetRequestsSent {
+		deadline := tick.MonotonicNanos / 1000000 + 30000
+		if deadline == 0 {
+			deadline = 30000
+		}
+		for _, asset := range game.RegisteredAssets {
+			game.AssetSequence++
+			packet, encoded := assets.EncodeRequestPacket(
+				game.Engine, 1, game.AssetSequence, tick.FirstTick,
+				game.AssetScope, asset, deadline,
+			)
+			if !encoded {
+				return nil, errors.New("blockkart: request registered asset")
+			}
+			packets = append(packets, packet)
+		}
+		game.AssetRequestsSent = true
+	}
+	return packets, nil
+}
+
+func blockKartAssetIdentity(index byte, role byte) [16]byte {
+	return [16]byte{
+		'B', 'L', 'O', 'C', 'K', 'K', 'A', 'R', 'T',
+		'-', 'A', 'S', 'S', 'E', index, role,
+	}
+}
+
+func blockKartAssetRefKey(asset assets.AssetRef) uint64 {
+	return uint64(asset.Index) | uint64(asset.Generation) << 32
+}

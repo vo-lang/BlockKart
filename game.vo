@@ -1,0 +1,1559 @@
+package main
+
+import (
+	"errors"
+	"math"
+	"github.com/vo-lang/voplay"
+	"github.com/vo-lang/voplay/vo/assets"
+	"github.com/vo-lang/voplay/vo/audio"
+	"github.com/vo-lang/voplay/vo/input"
+	"github.com/vo-lang/voplay/vo/physics3d"
+	"github.com/vo-lang/voplay/vo/render"
+	"github.com/vo-lang/voplay/vo/render2d"
+)
+
+const (
+	blockKartSystemInput uint64 = 100
+	blockKartSystemDrive uint64 = 200
+	blockKartSystemDynamics uint64 = 250
+	blockKartSystemPhysics uint64 = 300
+	blockKartSystemSync uint64 = 400
+	blockKartSystemJournal uint64 = 450
+	blockKartSystemFrame uint64 = 500
+)
+
+const (
+	blockKartComponentTransform uint64 = 1001
+	blockKartComponentVelocity uint64 = 1002
+	blockKartComponentControl uint64 = 1003
+	blockKartComponentKartState uint64 = 1004
+	blockKartComponentTrackMarker uint64 = 1005
+	blockKartComponentRenderPose uint64 = 1006
+	blockKartComponentCollectible uint64 = 1007
+	blockKartComponentBoostPad uint64 = 1008
+	blockKartComponentMovingObstacle uint64 = 1009
+)
+
+const (
+	blockKartLayerWorld uint32 = 1
+	blockKartLayerKart uint32 = 2
+	blockKartLayerTrigger uint32 = 4
+)
+
+type BlockKart struct {
+	Engine voplay.EngineRef
+	Transforms *TransformStore
+	Velocities *VelocityStore
+	Controls *KartControlStore
+	KartStates *KartStateStore
+	TrackMarkers *TrackMarkerStore
+	RenderPoses *RenderPoseStore
+	Collectibles *CollectibleStore
+	BoostPads *BoostPadStore
+	MovingObstacles *MovingObstacleStore
+	Physics *physics3d.Runtime
+	KartEntity uint64
+	KartBody physics3d.BodyRef
+	KartCollider physics3d.ColliderRef
+	TrackBody physics3d.BodyRef
+	TrackCollider physics3d.ColliderRef
+	TrackGates []BlockKartGate
+	Pickups []BlockKartPhysicsEntity
+	PadEntities []BlockKartPhysicsEntity
+	ObstacleEntities []BlockKartPhysicsEntity
+	Contacts []physics3d.ContactEvent
+	RenderControls *render.RenderControlStore
+	RenderTarget render.StableControlRef
+	RenderView render.StableControlRef
+	RenderWidth uint32
+	RenderHeight uint32
+	RenderControlPublished bool
+	StaticRenderPackets [][]byte
+	RenderAssetPackets [][]byte
+	RenderAssetsPublished bool
+	RenderAssetAcks map[uint64]uint64
+	RenderRevision uint64
+	KartMeshAsset uint64
+	BoostAudioAsset uint64
+	EngineAudioAsset uint64
+	HitAudioAsset uint64
+	SkidAudioAsset uint64
+	GrassAudioAsset uint64
+	Audio *audio.ControlState
+	AudioAssetPackets [][]byte
+	AudioAssetsPublished bool
+	AudioAssetAcks map[uint64]uint64
+	EngineAudioSource audio.PersistentSourceRef
+	AudioSequence uint64
+	AssetSequence uint64
+	AssetRegistrationSent bool
+	RequestedAssetCount uint32
+	AssetScopeRequested bool
+	AssetRequestsSent bool
+	AssetScope assets.AssetScope
+	RegisteredAssets []assets.AssetRef
+	AssetTickets map[uint64]assets.AssetTicket
+	ReadyAssets map[uint64]bool
+	InputSequence uint64
+	LeftPressed bool
+	RightPressed bool
+	ThrottlePressed bool
+	BrakePressed bool
+	DriftPressed bool
+	BoostKeyPressed bool
+	GamepadSteer int32
+	GamepadThrottle int32
+	GamepadBrake int32
+	GamepadDrift bool
+	GamepadBoost bool
+	TouchPoints map[uint32]BlockKartTouchPoint
+	Paused bool
+	CameraMode uint32
+	DebugOverlayVisible bool
+	RenderDebugMode uint32
+	StressMode bool
+	BoostPressed bool
+	OffRoad bool
+	Drifting bool
+	HitAudioPending bool
+	LastBoostAudioTick uint64
+	LastSkidAudioTick uint64
+	LastGrassAudioTick uint64
+	ConfigurationError error
+}
+
+type BlockKartTouchPoint struct {
+	Role uint32
+	X int32
+	Y int32
+}
+
+type BlockKartGate struct {
+	Entity uint64
+	Order uint32
+	Body physics3d.BodyRef
+	Collider physics3d.ColliderRef
+	Position [3]int64
+}
+
+func ConfigureBlockKart(game *BlockKart, builder voplay.Builder) {
+	if game == nil {
+		return
+	}
+	if err := builder.SetFixedTick(16666667, 4); err != nil {
+		game.ConfigurationError = err
+		return
+	}
+	systems := []voplay.SystemSpec{
+		{
+			Id: blockKartSystemInput,
+			Stage: voplay.StageInput,
+			Descriptor: []byte("blockkart.input.v1"),
+			Deterministic: true,
+			SimulationWrites: []uint64{blockKartComponentControl},
+		},
+		{
+			Id: blockKartSystemDrive,
+			Stage: voplay.StageGameplay,
+			Descriptor: []byte("blockkart.drive.v1"),
+			Deterministic: true,
+			SimulationReads: []uint64{blockKartComponentControl},
+			SimulationWrites: []uint64{blockKartComponentVelocity, blockKartComponentKartState},
+		},
+		{
+			Id: blockKartSystemDynamics,
+			Stage: voplay.StagePrePhysics,
+			Descriptor: []byte("blockkart.dynamics.v1"),
+			Deterministic: true,
+			SimulationReads: []uint64{blockKartComponentMovingObstacle},
+			SimulationWrites: []uint64{blockKartComponentTransform, blockKartComponentBoostPad},
+		},
+		{
+			Id: blockKartSystemPhysics,
+			Stage: voplay.StagePhysics,
+			Descriptor: []byte("blockkart.physics.v1"),
+			Deterministic: true,
+			SimulationReads: []uint64{blockKartComponentVelocity},
+			SimulationWrites: []uint64{blockKartComponentTransform},
+		},
+		{
+			Id: blockKartSystemSync,
+			Stage: voplay.StagePostPhysics,
+			Descriptor: []byte("blockkart.sync.v1"),
+			Deterministic: true,
+			SimulationReads: []uint64{blockKartComponentTransform},
+			SimulationWrites: []uint64{blockKartComponentKartState},
+		},
+		{
+			Id: blockKartSystemFrame,
+			Stage: voplay.StageFrame,
+			Descriptor: []byte("blockkart.frame.v1"),
+			Deterministic: false,
+			SimulationReads: []uint64{blockKartComponentTransform},
+			PresentationWrites: []uint64{blockKartComponentRenderPose},
+		},
+		{
+			Id: blockKartSystemJournal,
+			Stage: voplay.StagePostTick,
+			Descriptor: []byte("blockkart.journal.v1"),
+			Deterministic: true,
+		},
+	}
+	for _, system := range systems {
+		if err := builder.RegisterScheduledSystem(system); err != nil {
+			game.ConfigurationError = err
+			return
+		}
+	}
+}
+
+func StartBlockKart(game *BlockKart, init BlockKartInit, context voplay.StartContext) error {
+	if game == nil || context == nil {
+		return errors.New("blockkart: missing game or start context")
+	}
+	if game.ConfigurationError != nil {
+		return game.ConfigurationError
+	}
+	if init.Seed == 0 || init.Difficulty == 0 || init.Difficulty > 5 {
+		return errors.New("blockkart: invalid governed init")
+	}
+	game.Engine = context.Engine()
+	var ok bool
+	game.Transforms, ok = NewTransformStore(4096, 32768)
+	if !ok {
+		return errors.New("blockkart: transform store")
+	}
+	game.Velocities, ok = NewVelocityStore(4096, 32768)
+	if !ok {
+		return errors.New("blockkart: velocity store")
+	}
+	game.Controls, ok = NewKartControlStore(16, 4096)
+	if !ok {
+		return errors.New("blockkart: control store")
+	}
+	game.KartStates, ok = NewKartStateStore(16, 4096)
+	if !ok {
+		return errors.New("blockkart: kart state store")
+	}
+	game.TrackMarkers, ok = NewTrackMarkerStore(1024, 8192)
+	if !ok {
+		return errors.New("blockkart: track marker store")
+	}
+	game.RenderPoses, ok = NewRenderPoseStore(4096, 32768)
+	if !ok {
+		return errors.New("blockkart: render pose store")
+	}
+	game.Collectibles, ok = NewCollectibleStore(1024, 8192)
+	if !ok {
+		return errors.New("blockkart: collectible store")
+	}
+	game.BoostPads, ok = NewBoostPadStore(128, 8192)
+	if !ok {
+		return errors.New("blockkart: boost pad store")
+	}
+	game.MovingObstacles, ok = NewMovingObstacleStore(128, 8192)
+	if !ok {
+		return errors.New("blockkart: moving obstacle store")
+	}
+	game.Physics, ok = physics3d.NewRuntime(4096, 8192, 16384, 16384)
+	if !ok {
+		return errors.New("blockkart: physics owner")
+	}
+	if err := game.startWorld(context); err != nil {
+		return err
+	}
+	return nil
+}
+
+func ExecuteBlockKart(game *BlockKart, invocation voplay.SystemInvocation) (voplay.TickOutput, error) {
+	if game == nil || invocation.Tick.Count == 0 || invocation.Tick.FirstTick == 0 ||
+		invocation.System.Id != blockKartSystemFrame && invocation.Tick.Count != 1 {
+		return voplay.TickOutput{}, errors.New("blockkart: invalid system invocation")
+	}
+	switch invocation.System.Id {
+	case blockKartSystemInput:
+		return voplay.TickOutput{}, game.readInput(invocation.Tick)
+	case blockKartSystemDrive:
+		return voplay.TickOutput{}, game.drive(invocation.Tick)
+	case blockKartSystemDynamics:
+		return voplay.TickOutput{}, game.updateDynamics(invocation.Tick)
+	case blockKartSystemPhysics:
+		return voplay.TickOutput{}, game.stepPhysics(invocation.Tick)
+	case blockKartSystemSync:
+		return voplay.TickOutput{}, game.syncRace(invocation.Tick)
+	case blockKartSystemJournal:
+		return voplay.TickOutput{}, game.drainJournals()
+	case blockKartSystemFrame:
+		return game.frame(invocation.Tick, invocation.PresentationPulse)
+	default:
+		return voplay.TickOutput{}, errors.New("blockkart: unknown scheduled system")
+	}
+}
+
+func (game *BlockKart) drainJournals() error {
+	game.Transforms.TakeChanges()
+	game.Velocities.TakeChanges()
+	game.Controls.TakeChanges()
+	game.KartStates.TakeChanges()
+	game.TrackMarkers.TakeChanges()
+	game.Collectibles.TakeChanges()
+	game.BoostPads.TakeChanges()
+	game.MovingObstacles.TakeChanges()
+	game.RenderPoses.TakeChanges()
+	return nil
+}
+
+func (game *BlockKart) startWorld(context voplay.StartContext) error {
+	kart, err := context.Spawn([]byte("blockkart.entity.kart.v1"))
+	if err != nil || !kart.Valid() {
+		return errors.New("blockkart: spawn kart")
+	}
+	game.KartEntity = uint64(kart.Index)
+	if !game.Transforms.Upsert(game.KartEntity, Transform{
+		X: 0, Y: 1200, Z: 367500, Yaw_milliradians: 1571,
+	}) ||
+		!game.Velocities.Upsert(game.KartEntity, Velocity{}) ||
+		!game.Controls.Upsert(game.KartEntity, KartControl{}) ||
+		!game.KartStates.Upsert(game.KartEntity, KartState{Countdown_ticks: 180}) {
+		return errors.New("blockkart: initialize kart components")
+	}
+	game.KartBody, _ = game.Physics.CreateBody(physics3d.BodyDesc{
+		Kind: physics3d.BodyDynamic,
+		Position: [3]int64{0, 1200, 367500},
+	})
+	if !game.KartBody.Valid() {
+		return errors.New("blockkart: create kart body")
+	}
+	game.KartCollider, _ = game.Physics.CreateCollider(physics3d.ColliderDesc{
+		Body: game.KartBody,
+		HalfExtent: [3]uint32{700, 400, 1100},
+		Layer: blockKartLayerKart,
+		Mask: blockKartLayerWorld | blockKartLayerTrigger,
+	})
+	if game.KartCollider.Index == 0 {
+		return errors.New("blockkart: create kart collider")
+	}
+	game.TrackBody, _ = game.Physics.CreateBody(physics3d.BodyDesc{
+		Kind: physics3d.BodyStatic,
+		Position: [3]int64{0, 0, 0},
+	})
+	game.TrackCollider, _ = game.Physics.CreateCollider(physics3d.ColliderDesc{
+		Body: game.TrackBody,
+		HalfExtent: [3]uint32{600000, 500, 600000},
+		Layer: blockKartLayerWorld,
+		Mask: blockKartLayerKart,
+	})
+	if !game.TrackBody.Valid() || game.TrackCollider.Index == 0 {
+		return errors.New("blockkart: create track collision")
+	}
+	if err = game.startTrack(context); err != nil {
+		return err
+	}
+	if err = game.startGameplay(context); err != nil {
+		return err
+	}
+	if _, err = context.CreateRenderView([]byte("blockkart.main-view.v1")); err != nil {
+		return errors.New("blockkart: create render view")
+	}
+	if err = game.startRenderControl(); err != nil {
+		return err
+	}
+	if err = game.startAssets(context); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (game *BlockKart) startRenderControl() error {
+	var ok bool
+	game.RenderControls, ok = render.NewRenderControlStore(1, 16, 16, 1048576)
+	if !ok {
+		return errors.New("blockkart: create render control owner")
+	}
+	graph, ok := render.EncodeGraphProgram(
+		[]render.GraphResourceDescriptor{
+			{ID: 1, Format: 2, SampleCount: 4, Usage: 8 | 32, Lifetime: 2},
+		},
+		[]render.GraphNodeDescriptor{
+			{
+				ID: 1, StableType: 100, Label: []byte("blockkart.scene"),
+				Queue: 1,
+				Writes: []render.GraphResourceWrite{
+					{Resource: 1, BaseVersion: 0, Usage: 8},
+				},
+			},
+			{
+				ID: 2, StableType: 101, Label: []byte("blockkart.present"),
+				Queue: 3, Dependencies: []uint32{1},
+				Reads: []render.GraphResourceRead{
+					{Resource: 1, Version: 1, Usage: 32},
+				},
+			},
+		},
+	)
+	if !ok {
+		return errors.New("blockkart: encode render graph")
+	}
+	first, ok := game.RenderControls.Commit(render.RenderControlTransaction{
+		ExpectedRevision: 0,
+		Operations: []render.RenderControlOperation{
+			{
+				Kind: render.RenderCreateTarget,
+				Target: render.TargetDescriptor{
+					Width: 1280, Height: 720, Format: 2, DepthFormat: 4,
+					SampleCount: 4, Usage: 1 | 8 | 16 | 32,
+					Lifetime: 2, Clear: 2,
+					SurfaceIndex: 1, SurfaceGeneration: 1,
+				},
+			},
+			{
+				Kind: render.RenderCreateGraph,
+				Graph: render.GraphDescriptor{Signature: 7001, Nodes: graph},
+			},
+		},
+	})
+	if !ok || len(first.Created) != 2 {
+		return errors.New("blockkart: create render target and graph")
+	}
+	game.RenderTarget = first.Created[0]
+	second, ok := game.RenderControls.Commit(render.RenderControlTransaction{
+		ExpectedRevision: first.Revision,
+		Operations: []render.RenderControlOperation{
+			{
+				Kind: render.RenderCreateView,
+				View: render.ViewDescriptor{
+					Target: first.Created[0],
+					CameraWorldIndex: 1, CameraWorldGeneration: 1,
+					CameraEntityIndex: 900001, CameraEntityGeneration: 1,
+					PresentationDomainIndex: 1, PresentationDomainGeneration: 1,
+					ViewportWidth: 1280, ViewportHeight: 720,
+					LayerMask: 3, GraphTemplate: 7001,
+					QualityProfile: 1, Clear: 1,
+					ClearColor: [4]uint16{5000, 9000, 16000, 65535},
+					ClearDepth: 65535, Enabled: true,
+				},
+			},
+		},
+	})
+	if !ok {
+		return errors.New("blockkart: create render view")
+	}
+	if len(second.Created) != 1 {
+		return errors.New("blockkart: retain render view")
+	}
+	game.RenderView = second.Created[0]
+	game.RenderWidth = 1280
+	game.RenderHeight = 720
+	return nil
+}
+
+func (game *BlockKart) updateRenderMetrics(metrics render.SurfaceMetrics) error {
+	if metrics.Width == game.RenderWidth && metrics.Height == game.RenderHeight {
+		return nil
+	}
+	if metrics.Width == 0 || metrics.Height == 0 {
+		return errors.New("blockkart: invalid render metrics")
+	}
+	_, ok := game.RenderControls.Commit(render.RenderControlTransaction{
+		ExpectedRevision: game.RenderControls.Revision,
+		Operations: []render.RenderControlOperation{
+			{
+				Kind: render.RenderUpdateTarget, Ref: game.RenderTarget,
+				Target: render.TargetDescriptor{
+					Width: metrics.Width, Height: metrics.Height,
+					Format: 2, DepthFormat: 4, SampleCount: 4,
+					Usage: 1 | 8 | 16 | 32, Lifetime: 2, Clear: 2,
+					SurfaceIndex: 1, SurfaceGeneration: 1,
+				},
+			},
+			{
+				Kind: render.RenderUpdateView, Ref: game.RenderView,
+				View: render.ViewDescriptor{
+					Target: game.RenderTarget,
+					CameraWorldIndex: 1, CameraWorldGeneration: 1,
+					CameraEntityIndex: 900001, CameraEntityGeneration: 1,
+					PresentationDomainIndex: 1, PresentationDomainGeneration: 1,
+					ViewportWidth: metrics.Width, ViewportHeight: metrics.Height,
+					LayerMask: 3, GraphTemplate: 7001,
+					QualityProfile: 1, Clear: 1,
+					ClearColor: [4]uint16{5000, 9000, 16000, 65535},
+					ClearDepth: 65535, Enabled: true,
+				},
+			},
+		},
+	})
+	if !ok {
+		return errors.New("blockkart: resize render target")
+	}
+	game.RenderWidth = metrics.Width
+	game.RenderHeight = metrics.Height
+	game.RenderControlPublished = false
+	return nil
+}
+
+func (game *BlockKart) readInput(tick voplay.TickBatch) error {
+	control, ok := game.Controls.Get(game.KartEntity)
+	if !ok {
+		return errors.New("blockkart: missing control component")
+	}
+	for _, packet := range tick.InputFrames {
+		event, decoded := input.DecodePlatformEvent(packet)
+		if !decoded || event.ConsumedByUi || event.Sequence <= game.InputSequence {
+			continue
+		}
+		game.InputSequence = event.Sequence
+		if event.Kind >= input.PlatformPointerDown &&
+			event.Kind <= input.PlatformPointerCancel {
+			if err := game.readTouchInput(&control, event); err != nil {
+				return err
+			}
+			continue
+		}
+		if event.Kind == 16 {
+			switch event.Code {
+			case 0:
+				game.GamepadSteer = blockKartInputMagnitude(event.Value)
+			case 4:
+				game.GamepadBrake = blockKartInputMagnitude(event.Value)
+			case 5:
+				game.GamepadThrottle = blockKartInputMagnitude(event.Value)
+			}
+			continue
+		}
+		if event.Kind == 15 {
+			switch event.Code {
+			case 0:
+				game.GamepadThrottle = blockKartInputMagnitude(event.Value)
+			case 1:
+				game.GamepadBrake = blockKartInputMagnitude(event.Value)
+			case 4:
+				game.GamepadDrift = event.Value != 0
+			case 5:
+				game.GamepadBoost = event.Value != 0
+			}
+			continue
+		}
+		if event.Kind != input.PlatformKeyDown &&
+			event.Kind != input.PlatformKeyUp {
+			continue
+		}
+		pressed := event.Value != 0
+		if pressed {
+			switch event.Code {
+			case 19:
+				game.Paused = !game.Paused
+			case 21:
+				if err := game.restartRace(); err != nil {
+					return err
+				}
+			case 60, 114:
+				game.DebugOverlayVisible = !game.DebugOverlayVisible
+			case 61, 115:
+				game.RenderDebugMode = (game.RenderDebugMode + 1) % 8
+			case 62, 116:
+				if game.CameraMode == 1 {
+					game.CameraMode = 0
+				} else {
+					game.CameraMode = 1
+				}
+			case 63, 117:
+				game.CameraMode = (game.CameraMode + 1) % 3
+			case 64, 118:
+				game.StressMode = !game.StressMode
+			}
+		}
+		switch event.Code {
+		case 4, 37, 65, 80:
+			game.LeftPressed = pressed
+		case 7, 39, 68, 79:
+			game.RightPressed = pressed
+		case 26, 38, 82, 87:
+			game.ThrottlePressed = pressed
+		case 22, 40, 81, 83:
+			game.BrakePressed = pressed
+		case 32, 44:
+			game.DriftPressed = pressed
+		case 16, 225:
+			game.BoostKeyPressed = pressed
+		}
+	}
+	control = KartControl{}
+	if game.LeftPressed == game.RightPressed {
+		control.Steer_milli = game.GamepadSteer
+	} else if game.LeftPressed {
+		control.Steer_milli = -1000
+	} else {
+		control.Steer_milli = 1000
+	}
+	if game.ThrottlePressed {
+		control.Throttle_milli = 1000
+	} else {
+		control.Throttle_milli = game.GamepadThrottle
+	}
+	if game.BrakePressed {
+		control.Brake_milli = 1000
+	} else {
+		control.Brake_milli = game.GamepadBrake
+	}
+	control.Drift = game.DriftPressed || game.GamepadDrift
+	control.Boost = game.BoostKeyPressed || game.GamepadBoost
+	game.applyTouchControls(&control)
+	if !game.Controls.Upsert(game.KartEntity, control) {
+		return errors.New("blockkart: update control component")
+	}
+	return nil
+}
+
+func (game *BlockKart) readTouchInput(control *KartControl,
+	event input.PlatformEvent) error {
+	position, decoded := input.DecodePointerPosition(event)
+	if !decoded {
+		return nil
+	}
+	if game.TouchPoints == nil {
+		game.TouchPoints = map[uint32]BlockKartTouchPoint{}
+	}
+	if event.Kind == input.PlatformPointerUp ||
+		event.Kind == input.PlatformPointerCancel {
+		delete(game.TouchPoints, position.Contact)
+		game.applyTouchControls(control)
+		return nil
+	}
+	point, exists := game.TouchPoints[position.Contact]
+	if !exists {
+		point.Role = game.touchRole(position.XMilli, position.YMilli)
+	}
+	if point.Role == 0 {
+		return nil
+	}
+	point.X = position.XMilli
+	point.Y = position.YMilli
+	game.TouchPoints[position.Contact] = point
+	if point.Role == 6 && event.Kind == input.PlatformPointerDown {
+		return game.restartRace()
+	}
+	game.applyTouchControls(control)
+	return nil
+}
+
+func (game *BlockKart) touchRole(x int32, y int32) uint32 {
+	width := int64(game.RenderWidth) * 1000
+	height := int64(game.RenderHeight) * 1000
+	px := int64(x)
+	py := int64(y)
+	if width == 0 || height == 0 || px < 0 || py < 0 ||
+		px > width || py > height {
+		return 0
+	}
+	if px < width*52/100 && py > height*48/100 {
+		return 1
+	}
+	if px > width*88/100 && py < height*30/100 {
+		return 6
+	}
+	if px > width*82/100 && py > height*72/100 {
+		return 2
+	}
+	if px > width*66/100 && px <= width*82/100 && py > height*72/100 {
+		return 3
+	}
+	if px > width*66/100 && px <= width*82/100 &&
+		py > height*52/100 && py <= height*72/100 {
+		return 4
+	}
+	if px > width*82/100 && py > height*52/100 && py <= height*72/100 {
+		return 5
+	}
+	return 0
+}
+
+func (game *BlockKart) applyTouchControls(control *KartControl) {
+	if control == nil || len(game.TouchPoints) == 0 {
+		return
+	}
+	width := int64(game.RenderWidth) * 1000
+	height := int64(game.RenderHeight) * 1000
+	centerX := width * 18 / 100
+	centerY := height * 78 / 100
+	radius := height * 16 / 100
+	if radius < 1 {
+		radius = 1
+	}
+	for _, point := range game.TouchPoints {
+		switch point.Role {
+		case 1:
+			steer := (int64(point.X)-centerX)*1000/radius
+			vertical := (centerY-int64(point.Y))*1000/radius
+			if steer < -1000 {
+				steer = -1000
+			}
+			if steer > 1000 {
+				steer = 1000
+			}
+			control.Steer_milli = int32(steer)
+			if vertical > 0 {
+				if vertical > 1000 {
+					vertical = 1000
+				}
+				control.Throttle_milli = int32(vertical)
+			} else {
+				vertical = -vertical
+				if vertical > 1000 {
+					vertical = 1000
+				}
+				control.Brake_milli = int32(vertical)
+			}
+		case 2:
+			control.Throttle_milli = 1000
+		case 3:
+			control.Brake_milli = 1000
+		case 4:
+			control.Drift = true
+		case 5:
+			control.Boost = true
+		}
+	}
+}
+
+func (game *BlockKart) drive(tick voplay.TickBatch) error {
+	control, ok := game.Controls.Get(game.KartEntity)
+	if !ok {
+		return errors.New("blockkart: read control component")
+	}
+	velocity, ok := game.Velocities.Get(game.KartEntity)
+	if !ok {
+		return errors.New("blockkart: read velocity component")
+	}
+	transform, ok := game.Transforms.Get(game.KartEntity)
+	if !ok {
+		return errors.New("blockkart: read drive transform")
+	}
+	state, ok := game.KartStates.Get(game.KartEntity)
+	if !ok {
+		return errors.New("blockkart: read kart state")
+	}
+	if game.Paused || state.Countdown_ticks != 0 || state.Finished {
+		if state.Countdown_ticks != 0 && !game.Paused {
+			state.Countdown_ticks--
+		}
+		state.Speed_per_second = 0
+		velocity.X_per_second = 0
+		velocity.Z_per_second = 0
+		if !game.Velocities.Upsert(game.KartEntity, velocity) ||
+			!game.KartStates.Upsert(game.KartEntity, state) {
+			return errors.New("blockkart: hold race state")
+		}
+		game.BoostPressed = false
+		return nil
+	}
+	target := int64(control.Throttle_milli-control.Brake_milli) * 24
+	if control.Boost || state.Boost_ticks != 0 {
+		target += 8000
+	}
+	if control.Throttle_milli == 0 && control.Brake_milli == 0 {
+		target = 0
+	}
+	game.OffRoad = blockKartDistanceFromRoad(transform) > 15000
+	if game.OffRoad {
+		target = target * 55 / 100
+	}
+	state.Speed_per_second += (target - state.Speed_per_second) / 8
+	if state.Speed_per_second > 34000 {
+		state.Speed_per_second = 34000
+	}
+	if state.Speed_per_second < -10000 {
+		state.Speed_per_second = -10000
+	}
+	velocity.Yaw_per_second = control.Steer_milli * 2
+	turnScale := int64(1)
+	if control.Drift {
+		turnScale = 2
+	}
+	game.Drifting = control.Drift &&
+		(state.Speed_per_second > 8000 || state.Speed_per_second < -8000)
+	transform.Yaw_milliradians += int32(
+		int64(velocity.Yaw_per_second) * turnScale *
+			int64(tick.FixedTickNanos) / 1000000000,
+	)
+	heading := float64(transform.Yaw_milliradians) / 1000.0
+	forward := state.Speed_per_second
+	velocity.X_per_second = int64(math.Sin(heading) * float64(forward))
+	velocity.Z_per_second = int64(math.Cos(heading) * float64(forward))
+	if !game.Transforms.Upsert(game.KartEntity, transform) {
+		return errors.New("blockkart: update drive transform")
+	}
+	if !game.Velocities.Upsert(game.KartEntity, velocity) {
+		return errors.New("blockkart: update velocity component")
+	}
+	state.Elapsed_millis += tick.FixedTickNanos / 1000000
+	if state.Boost_ticks != 0 {
+		state.Boost_ticks--
+	}
+	if !game.KartStates.Upsert(game.KartEntity, state) {
+		return errors.New("blockkart: update kart state")
+	}
+	game.BoostPressed = control.Boost || state.Boost_ticks != 0
+	return nil
+}
+
+func (game *BlockKart) stepPhysics(tick voplay.TickBatch) error {
+	velocity, ok := game.Velocities.Get(game.KartEntity)
+	if !ok {
+		return errors.New("blockkart: physics velocity")
+	}
+	if !game.Physics.Submit(physics3d.Command{
+		Kind: physics3d.CommandVelocity,
+		Body: game.KartBody,
+		Value: [3]int64{velocity.X_per_second, velocity.Y_per_second, velocity.Z_per_second},
+	}) {
+		return errors.New("blockkart: submit physics velocity")
+	}
+	game.Contacts, ok = game.Physics.Step(tick.FirstTick, tick.FixedTickNanos)
+	if !ok {
+		return errors.New("blockkart: step physics")
+	}
+	snapshot, ok := game.Physics.Snapshot()
+	if !ok {
+		return errors.New("blockkart: snapshot physics")
+	}
+	for _, body := range snapshot.Bodies {
+		if body.Ref != game.KartBody {
+			continue
+		}
+		transform, found := game.Transforms.Get(game.KartEntity)
+		if !found {
+			return errors.New("blockkart: physics transform")
+		}
+		transform.X = body.Position[0]
+		transform.Y = body.Position[1]
+		transform.Z = body.Position[2]
+		if !game.Transforms.Upsert(game.KartEntity, transform) {
+			return errors.New("blockkart: publish physics transform")
+		}
+		return nil
+	}
+	return errors.New("blockkart: kart body missing from physics snapshot")
+}
+
+func (game *BlockKart) syncRace(tick voplay.TickBatch) error {
+	transform, ok := game.Transforms.Get(game.KartEntity)
+	if !ok {
+		return errors.New("blockkart: race transform")
+	}
+	state, ok := game.KartStates.Get(game.KartEntity)
+	if !ok {
+		return errors.New("blockkart: race state")
+	}
+	for _, contact := range game.Contacts {
+		var other physics3d.BodyRef
+		if contact.A == game.KartBody {
+			other = contact.B
+		} else if contact.B == game.KartBody {
+			other = contact.A
+		} else {
+			continue
+		}
+		for _, gate := range game.TrackGates {
+			if gate.Body == other && gate.Order == state.Checkpoint+1 {
+				state.Checkpoint++
+				break
+			}
+		}
+	}
+	if err := game.applyGameplayContacts(&state); err != nil {
+		return err
+	}
+	if state.Checkpoint >= uint32(len(game.TrackGates)) {
+		state.Lap++
+		state.Checkpoint = 0
+		if state.Lap >= 3 {
+			state.Finished = true
+			if state.Best_millis == 0 || state.Elapsed_millis < state.Best_millis {
+				state.Best_millis = state.Elapsed_millis
+			}
+		}
+	}
+	if !game.KartStates.Upsert(game.KartEntity, state) {
+		return errors.New("blockkart: publish race state")
+	}
+	if transform.Y < -10000 || transform.X < -650000 || transform.X > 650000 ||
+		transform.Z < -650000 || transform.Z > 650000 {
+		return game.respawn()
+	}
+	return nil
+}
+
+func (game *BlockKart) frame(tick voplay.TickBatch, pulse []byte) (voplay.TickOutput, error) {
+	if err := game.processEndpointReturns(tick); err != nil {
+		return voplay.TickOutput{}, err
+	}
+	assetPackets, err := game.processAssetLifecycle(tick)
+	if err != nil {
+		return voplay.TickOutput{}, err
+	}
+	framePulse, decodedPulse := render.DecodeFramePulse(pulse)
+	if !decodedPulse {
+		return voplay.TickOutput{}, errors.New("blockkart: decode presentation pulse")
+	}
+	if err := game.updateRenderMetrics(framePulse.Metrics); err != nil {
+		return voplay.TickOutput{}, err
+	}
+	transform, ok := game.Transforms.Get(game.KartEntity)
+	if !ok {
+		return voplay.TickOutput{}, errors.New("blockkart: extract transform")
+	}
+	kartPackets, kartEncoded := game.kartRenderPackets(transform, tick.FirstTick)
+	if !kartEncoded {
+		return voplay.TickOutput{}, errors.New("blockkart: encode retained kart")
+	}
+	poseBytes := blockKartTransformBytes(transform)
+	previous, _ := game.RenderPoses.Get(game.KartEntity)
+	if !game.RenderPoses.Upsert(game.KartEntity, RenderPose{
+		Previous_tick: previous.Current_tick,
+		Current_tick: tick.FirstTick,
+		Previous_transform: previous.Current_transform,
+		Current_transform: poseBytes,
+	}) {
+		return voplay.TickOutput{}, errors.New("blockkart: publish render pose")
+	}
+	gameplayObjects, ok := game.gameplayRenderPackets(tick.FirstTick)
+	if !ok {
+		return voplay.TickOutput{}, errors.New("blockkart: encode gameplay entities")
+	}
+	effectObjects, ok := game.effectRenderObjects(transform, tick.FirstTick)
+	if !ok {
+		return voplay.TickOutput{}, errors.New("blockkart: encode driving effects")
+	}
+	stressObjects, ok := game.stressRenderObjects(tick.FirstTick)
+	if !ok {
+		return voplay.TickOutput{}, errors.New("blockkart: encode render stress field")
+	}
+	camera := game.cameraPacket(transform, tick.FirstTick)
+	if len(camera) == 0 {
+		return voplay.TickOutput{}, errors.New("blockkart: encode camera")
+	}
+	hud := game.hudPackets()
+	if len(hud) == 0 {
+		return voplay.TickOutput{}, errors.New("blockkart: encode HUD")
+	}
+	objects := make([]render.SnapshotObject, 0,
+		len(game.StaticRenderPackets)+len(kartPackets)+len(gameplayObjects)+
+			len(effectObjects)+len(stressObjects)+len(hud)+1)
+	for index, bytes := range game.StaticRenderPackets {
+		objects = append(objects, render.SnapshotObject{
+			Entity: voplay.Handle{Index: uint32(1000 + index), Generation: 1}, Bytes: bytes,
+		})
+	}
+	for index, bytes := range kartPackets {
+		objects = append(objects, render.SnapshotObject{
+			Entity: voplay.Handle{Index: uint32(100 + index), Generation: 1}, Bytes: bytes,
+		})
+	}
+	objects = append(objects, gameplayObjects...)
+	objects = append(objects, effectObjects...)
+	objects = append(objects, stressObjects...)
+	objects = append(objects, render.SnapshotObject{
+		Entity: voplay.Handle{Index: 900001, Generation: 1}, Bytes: camera,
+	})
+	objects = append(objects, hud...)
+	blockKartSortSnapshotObjects(objects)
+	game.RenderRevision++
+	snapshot, encodedSnapshot := render.EncodeSnapshotPacket(
+		game.Engine, 1, framePulse.PulseId, game.RenderRevision,
+		game.RenderControls.Revision,
+		tick.FirstTick, objects,
+	)
+	if !encodedSnapshot {
+		return voplay.TickOutput{}, errors.New("blockkart: encode render snapshot")
+	}
+	output := voplay.TickOutput{AssetPackets: assetPackets}
+	if !game.RenderControlPublished {
+		controlPacket, controlEncoded := game.RenderControls.EncodeSnapshotPacket(game.Engine, 1)
+		if !controlEncoded {
+			return voplay.TickOutput{}, errors.New("blockkart: encode render control")
+		}
+		output.RenderPackets = append(output.RenderPackets, controlPacket)
+		game.RenderControlPublished = true
+	}
+	if !game.RenderAssetsPublished {
+		output.RenderPackets = append(output.RenderPackets, game.RenderAssetPackets...)
+		game.RenderAssetsPublished = true
+	}
+	output.RenderPackets = append(output.RenderPackets, snapshot)
+	if err := game.updateAudio(transform, tick.FirstTick); err != nil {
+		return voplay.TickOutput{}, err
+	}
+	audioSnapshot, encoded := game.Audio.EncodeSnapshotPacket(game.Engine, 1)
+	if !encoded {
+		return voplay.TickOutput{}, errors.New("blockkart: encode audio state")
+	}
+	output.AudioPackets = append(output.AudioPackets, audioSnapshot)
+	if !game.AudioAssetsPublished {
+		output.AudioPackets = append(output.AudioPackets, game.AudioAssetPackets...)
+		game.AudioAssetsPublished = true
+	}
+	if game.BoostPressed && tick.FirstTick >= game.LastBoostAudioTick + 30 {
+		packet, eventEncoded := game.audioOneShot(
+			game.BoostAudioAsset, 700, tick.FirstTick,
+			framePulse.DeadlineNanos / 1000000,
+		)
+		if !eventEncoded {
+			return voplay.TickOutput{}, errors.New("blockkart: encode boost audio event")
+		}
+		if len(packet) != 0 {
+			output.AudioPackets = append(output.AudioPackets, packet)
+			game.LastBoostAudioTick = tick.FirstTick
+		}
+	}
+	if game.HitAudioPending {
+		packet, eventEncoded := game.audioOneShot(
+			game.HitAudioAsset, 820, tick.FirstTick,
+			framePulse.DeadlineNanos / 1000000,
+		)
+		if !eventEncoded {
+			return voplay.TickOutput{}, errors.New("blockkart: encode collision audio event")
+		}
+		if len(packet) != 0 {
+			output.AudioPackets = append(output.AudioPackets, packet)
+			game.HitAudioPending = false
+		}
+	}
+	if game.Drifting && tick.FirstTick >= game.LastSkidAudioTick + 18 {
+		packet, eventEncoded := game.audioOneShot(
+			game.SkidAudioAsset, 520, tick.FirstTick,
+			framePulse.DeadlineNanos / 1000000,
+		)
+		if !eventEncoded {
+			return voplay.TickOutput{}, errors.New("blockkart: encode skid audio event")
+		}
+		if len(packet) != 0 {
+			output.AudioPackets = append(output.AudioPackets, packet)
+			game.LastSkidAudioTick = tick.FirstTick
+		}
+	}
+	if game.OffRoad && tick.FirstTick >= game.LastGrassAudioTick + 24 {
+		packet, eventEncoded := game.audioOneShot(
+			game.GrassAudioAsset, 430, tick.FirstTick,
+			framePulse.DeadlineNanos / 1000000,
+		)
+		if !eventEncoded {
+			return voplay.TickOutput{}, errors.New("blockkart: encode grass audio event")
+		}
+		if len(packet) != 0 {
+			output.AudioPackets = append(output.AudioPackets, packet)
+			game.LastGrassAudioTick = tick.FirstTick
+		}
+	}
+	return output, nil
+}
+
+func (game *BlockKart) audioOneShot(asset uint64, gain int32,
+	tick uint64, deadlineMillis uint64) ([]byte, bool) {
+	if game.AudioAssetAcks[
+		uint64(uint32(asset))|uint64(1)<<32] == 0 {
+		return nil, true
+	}
+	oneShot := audio.EncodeOneShot(audio.OneShot{
+		AssetIndex: uint32(asset), AssetGeneration: 1,
+		Bus: audio.AudioBusRef{Index: 1, Generation: 1},
+		GainMilli: gain, Tick: tick,
+	})
+	if len(oneShot) == 0 {
+		return nil, false
+	}
+	game.AudioSequence++
+	return audio.EncodeEventPacket(
+		game.Engine, 1, game.AudioSequence, game.AudioSequence,
+		tick, game.Audio.Revision, deadlineMillis, oneShot,
+	)
+}
+
+func blockKartDistanceFromRoad(transform Transform) int64 {
+	points := blockKartTrackPoints()
+	bestSquared := float64(1.0e30)
+	x := float64(transform.X)
+	z := float64(transform.Z)
+	for index, from := range points {
+		to := points[(index+1)%len(points)]
+		ax := float64(from[0])
+		az := float64(from[2])
+		dx := float64(to[0] - from[0])
+		dz := float64(to[2] - from[2])
+		lengthSquared := dx*dx + dz*dz
+		if lengthSquared == 0 {
+			continue
+		}
+		along := ((x-ax)*dx + (z-az)*dz) / lengthSquared
+		if along < 0 {
+			along = 0
+		}
+		if along > 1 {
+			along = 1
+		}
+		offsetX := x - (ax + dx*along)
+		offsetZ := z - (az + dz*along)
+		distanceSquared := offsetX*offsetX + offsetZ*offsetZ
+		if distanceSquared < bestSquared {
+			bestSquared = distanceSquared
+		}
+	}
+	return int64(math.Sqrt(bestSquared))
+}
+
+func (game *BlockKart) processEndpointReturns(tick voplay.TickBatch) error {
+	if game.RenderAssetAcks == nil {
+		game.RenderAssetAcks = map[uint64]uint64{}
+	}
+	if game.AudioAssetAcks == nil {
+		game.AudioAssetAcks = map[uint64]uint64{}
+	}
+	for _, packet := range tick.RenderReturns {
+		ack, ok := render.DecodeAssetAck(game.Engine, packet)
+		if !ok {
+			continue
+		}
+		key := ack.Asset | uint64(ack.Kind) << 56
+		if current, found := game.RenderAssetAcks[key]; !found || current < ack.Revision {
+			game.RenderAssetAcks[key] = ack.Revision
+		}
+	}
+	for _, packet := range tick.AudioReturns {
+		ack, ok := audio.DecodeAssetAck(game.Engine, packet)
+		if !ok {
+			continue
+		}
+		key := uint64(ack.Asset.Index) | uint64(ack.Asset.Generation) << 32
+		if current, found := game.AudioAssetAcks[key]; !found || current < ack.Revision {
+			game.AudioAssetAcks[key] = ack.Revision
+		}
+		if ack.Asset.Index == uint32(game.EngineAudioAsset) {
+			source, found := game.Audio.Source(game.EngineAudioSource)
+			if !found {
+				return errors.New("blockkart: activate resident engine audio")
+			}
+			if !source.Playing {
+				source.Playing = true
+				if _, committed := game.Audio.Commit(audio.ControlTransaction{
+					ExpectedRevision: game.Audio.Revision,
+					Operations: []audio.ControlOperation{
+						{
+							Kind: audio.ControlUpdateSource,
+							Source: game.EngineAudioSource,
+							SourceValue: source,
+						},
+					},
+				}); !committed {
+					return errors.New("blockkart: start resident engine audio")
+				}
+			}
+		}
+	}
+	return nil
+}
+
+func blockKartSortSnapshotObjects(objects []render.SnapshotObject) {
+	for index := 1; index < len(objects); index++ {
+		value := objects[index]
+		position := index
+		for position > 0 &&
+			(objects[position-1].Entity.Index > value.Entity.Index ||
+				objects[position-1].Entity.Index == value.Entity.Index &&
+					objects[position-1].Entity.Generation > value.Entity.Generation) {
+			objects[position] = objects[position-1]
+			position--
+		}
+		objects[position] = value
+	}
+}
+
+func (game *BlockKart) updateAudio(transform Transform, tick uint64) error {
+	source, ok := game.Audio.Source(game.EngineAudioSource)
+	if !ok {
+		return errors.New("blockkart: engine audio source")
+	}
+	velocity, ok := game.Velocities.Get(game.KartEntity)
+	if !ok {
+		return errors.New("blockkart: engine audio velocity")
+	}
+	speed := velocity.Z_per_second
+	if speed < 0 {
+		speed = -speed
+	}
+	gain := int32(280 + speed / 80)
+	if gain > 900 {
+		gain = 900
+	}
+	source.GainMilli = gain
+	source.TransportTick = tick
+	source.Spatial = &audio.SpatialSource{
+		PositionMilli: [3]int32{
+			int32(transform.X), int32(transform.Y), int32(transform.Z),
+		},
+		MinDistanceMilli: 1000,
+		MaxDistanceMilli: 80000,
+	}
+	heading := float64(transform.Yaw_milliradians) / 1000.0
+	_, ok = game.Audio.Commit(audio.ControlTransaction{
+		ExpectedRevision: game.Audio.Revision,
+		Operations: []audio.ControlOperation{
+			{
+				Kind: audio.ControlUpdateSource,
+				Source: game.EngineAudioSource,
+				SourceValue: source,
+			},
+			{
+				Kind: audio.ControlSetListener,
+				ListenerValue: audio.Listener{
+					PositionMilli: [3]int32{
+						int32(transform.X), int32(transform.Y + 8500), int32(transform.Z),
+					},
+					ForwardMilli: [3]int32{
+						int32(math.Sin(heading) * 1000), 0,
+						int32(math.Cos(heading) * 1000),
+					},
+					UpMilli: [3]int32{0, 1000, 0},
+				},
+			},
+		},
+	})
+	if !ok {
+		return errors.New("blockkart: update audio control")
+	}
+	return nil
+}
+
+func (game *BlockKart) hudPackets() []render.SnapshotObject {
+	state, ok := game.KartStates.Get(game.KartEntity)
+	if !ok || len(game.TrackGates) == 0 {
+		return nil
+	}
+	progress := state.Checkpoint * 240 / uint32(len(game.TrackGates))
+	lapWidth := state.Lap * 80
+	if lapWidth > 240 {
+		lapWidth = 240
+	}
+	shapes := []render2d.Shape{
+		{Id: 1, Kind: render2d.ShapeRoundedRect, Bounds: [4]int64{32000, 32000, 256000, 56000}, RadiusMilli: 8000, Fill: [4]byte{10, 14, 20, 210}, Z: 100, Layers: 2},
+		{Id: 2, Kind: render2d.ShapeRoundedRect, Bounds: [4]int64{40000, 44000, 240000, 12000}, RadiusMilli: 6000, Fill: [4]byte{42, 48, 58, 255}, Z: 101, Layers: 2},
+		{Id: 3, Kind: render2d.ShapeRoundedRect, Bounds: [4]int64{40000, 44000, int64(progress+1) * 1000, 12000}, RadiusMilli: 6000, Fill: [4]byte{246, 184, 48, 255}, Z: 102, Layers: 2},
+		{Id: 4, Kind: render2d.ShapeRoundedRect, Bounds: [4]int64{40000, 64000, 240000, 10000}, RadiusMilli: 5000, Fill: [4]byte{42, 48, 58, 255}, Z: 101, Layers: 2},
+		{Id: 5, Kind: render2d.ShapeRoundedRect, Bounds: [4]int64{40000, 64000, int64(lapWidth+1) * 1000, 10000}, RadiusMilli: 5000, Fill: [4]byte{84, 206, 122, 255}, Z: 102, Layers: 2},
+	}
+	speed := state.Speed_per_second
+	if speed < 0 {
+		speed = -speed
+	}
+	speedWidth := speed * 180 / 34000
+	if speedWidth > 180 {
+		speedWidth = 180
+	}
+	shapes = append(shapes,
+		render2d.Shape{
+			Id: 6, Kind: render2d.ShapeRoundedRect,
+			Bounds: [4]int64{1040000, 650000, 200000, 38000},
+			RadiusMilli: 19000, Fill: [4]byte{10, 14, 20, 220},
+			Z: 100, Layers: 2,
+		},
+		render2d.Shape{
+			Id: 7, Kind: render2d.ShapeRoundedRect,
+			Bounds: [4]int64{1050000, 660000, (speedWidth + 1) * 1000, 18000},
+			RadiusMilli: 9000, Fill: [4]byte{238, 78, 48, 255},
+			Z: 102, Layers: 2,
+		},
+	)
+	if state.Boost_ticks != 0 || game.BoostPressed {
+		shapes = append(shapes, render2d.Shape{
+			Id: 8, Kind: render2d.ShapeCircle,
+			Bounds: [4]int64{1210000, 600000, 36000, 36000},
+			Fill: [4]byte{32, 206, 255, 240}, Z: 103, Layers: 2,
+		})
+	}
+	if state.Countdown_ticks != 0 {
+		color := [4]byte{246, 84, 54, 240}
+		if state.Countdown_ticks <= 120 {
+			color = [4]byte{246, 184, 48, 240}
+		}
+		if state.Countdown_ticks <= 60 {
+			color = [4]byte{84, 220, 116, 240}
+		}
+		shapes = append(shapes, render2d.Shape{
+			Id: 9, Kind: render2d.ShapeCircle,
+			Bounds: [4]int64{600000, 260000, 80000, 80000},
+			Fill: color, StrokeMilli: 5000,
+			Stroke: [4]byte{255, 255, 255, 230}, Z: 120, Layers: 2,
+		})
+	}
+	if game.Paused {
+		shapes = append(shapes, render2d.Shape{
+			Id: 10, Kind: render2d.ShapeRoundedRect,
+			Bounds: [4]int64{390000, 300000, 500000, 120000},
+			RadiusMilli: 18000, Fill: [4]byte{8, 12, 20, 220},
+			StrokeMilli: 3000, Stroke: [4]byte{255, 255, 255, 180},
+			Z: 130, Layers: 2,
+		},
+			render2d.Shape{
+				Id: 12, Kind: render2d.ShapeRoundedRect,
+				Bounds: [4]int64{590000, 330000, 22000, 62000},
+				RadiusMilli: 7000, Fill: [4]byte{255, 255, 255, 230},
+				Z: 132, Layers: 2,
+			},
+			render2d.Shape{
+				Id: 13, Kind: render2d.ShapeRoundedRect,
+				Bounds: [4]int64{630000, 330000, 22000, 62000},
+				RadiusMilli: 7000, Fill: [4]byte{255, 255, 255, 230},
+				Z: 132, Layers: 2,
+			},
+		)
+	}
+	if state.Finished {
+		shapes = append(shapes, render2d.Shape{
+			Id: 11, Kind: render2d.ShapeRoundedRect,
+			Bounds: [4]int64{340000, 245000, 600000, 230000},
+			RadiusMilli: 26000, Fill: [4]byte{14, 22, 34, 235},
+			StrokeMilli: 6000, Stroke: [4]byte{246, 184, 48, 255},
+			Z: 140, Layers: 2,
+		},
+			render2d.Shape{
+				Id: 14, Kind: render2d.ShapeRect,
+				Bounds: [4]int64{565000, 300000, 36000, 36000},
+				Fill: [4]byte{255, 255, 255, 255}, Z: 142, Layers: 2,
+			},
+			render2d.Shape{
+				Id: 15, Kind: render2d.ShapeRect,
+				Bounds: [4]int64{601000, 336000, 36000, 36000},
+				Fill: [4]byte{255, 255, 255, 255}, Z: 142, Layers: 2,
+			},
+			render2d.Shape{
+				Id: 16, Kind: render2d.ShapeRect,
+				Bounds: [4]int64{601000, 300000, 36000, 36000},
+				Fill: [4]byte{20, 24, 32, 255}, Z: 142, Layers: 2,
+			},
+			render2d.Shape{
+				Id: 17, Kind: render2d.ShapeRect,
+				Bounds: [4]int64{565000, 336000, 36000, 36000},
+				Fill: [4]byte{20, 24, 32, 255}, Z: 142, Layers: 2,
+			},
+		)
+	}
+	if state.Countdown_ticks != 0 {
+		countdown := uint64((state.Countdown_ticks + 59) / 60)
+		shapes = blockKartAppendDigits(
+			shapes, 500, countdown, 1, 622000, 266000, 1600,
+			[4]byte{255, 255, 255, 255}, 124,
+		)
+	}
+	lapValue := uint64(state.Lap + 1)
+	if lapValue > 3 {
+		lapValue = 3
+	}
+	shapes = blockKartAppendDigits(
+		shapes, 100, lapValue, 1, 54000, 90000, 1000,
+		[4]byte{246, 184, 48, 255}, 108,
+	)
+	speedValue := uint64(speed / 1000)
+	shapes = blockKartAppendDigits(
+		shapes, 200, speedValue, 2, 1090000, 598000, 1400,
+		[4]byte{255, 255, 255, 255}, 108,
+	)
+	elapsedSeconds := state.Elapsed_millis / 1000
+	if elapsedSeconds > 999 {
+		elapsedSeconds = 999
+	}
+	shapes = blockKartAppendDigits(
+		shapes, 300, elapsedSeconds, 3, 590000, 30000, 1100,
+		[4]byte{255, 255, 255, 235}, 108,
+	)
+	score := uint64(state.Score)
+	if score > 9999 {
+		score = 9999
+	}
+	shapes = blockKartAppendDigits(
+		shapes, 400, score, 4, 54000, 126000, 850,
+		[4]byte{84, 206, 122, 255}, 108,
+	)
+	if game.RenderWidth <= 1000 || game.RenderHeight > game.RenderWidth {
+		shapes = game.appendTouchHud(shapes)
+	}
+	if game.DebugOverlayVisible {
+		shapes = append(shapes, render2d.Shape{
+			Id: 700, Kind: render2d.ShapeRoundedRect,
+			Bounds: [4]int64{880000, 26000, 360000, 150000},
+			RadiusMilli: 12000, Fill: [4]byte{4, 10, 18, 225},
+			StrokeMilli: 2000, Stroke: [4]byte{32, 206, 255, 180},
+			Z: 170, Layers: 2,
+		})
+		shapes = blockKartAppendDigits(
+			shapes, 710, uint64(len(game.StaticRenderPackets)), 3,
+			910000, 48000, 900, [4]byte{255, 255, 255, 230}, 172,
+		)
+		shapes = blockKartAppendDigits(
+			shapes, 750, uint64(len(game.RenderAssetAcks)), 2,
+			1060000, 48000, 900, [4]byte{84, 206, 122, 255}, 172,
+		)
+		shapes = blockKartAppendDigits(
+			shapes, 780, uint64(game.RenderDebugMode), 1,
+			1160000, 112000, 900, [4]byte{246, 184, 48, 255}, 172,
+		)
+	}
+	objects := make([]render.SnapshotObject, 0, len(shapes))
+	for _, shape := range shapes {
+		packet := render2d.EncodeShape(shape)
+		if len(packet) == 0 {
+			return nil
+		}
+		objects = append(objects, render.SnapshotObject{
+			Entity: voplay.Handle{
+				Index: uint32(910000 + shape.Id), Generation: 1,
+			},
+			Bytes: packet,
+		})
+	}
+	return objects
+}
+
+func (game *BlockKart) appendTouchHud(shapes []render2d.Shape) []render2d.Shape {
+	width := int64(game.RenderWidth) * 1000
+	height := int64(game.RenderHeight) * 1000
+	radius := height * 13 / 100
+	if radius > width*13/100 {
+		radius = width * 13 / 100
+	}
+	centerX := width * 18 / 100
+	centerY := height * 78 / 100
+	knobX := centerX
+	knobY := centerY
+	for _, point := range game.TouchPoints {
+		if point.Role == 1 {
+			knobX = int64(point.X)
+			knobY = int64(point.Y)
+			break
+		}
+	}
+	button := height * 15 / 100
+	if button > width*14/100 {
+		button = width * 14 / 100
+	}
+	shapes = append(shapes,
+		render2d.Shape{
+			Id: 600, Kind: render2d.ShapeCircle,
+			Bounds: [4]int64{centerX-radius, centerY-radius, radius*2, radius*2},
+			Fill: [4]byte{16, 35, 61, 150}, StrokeMilli: 3000,
+			Stroke: [4]byte{255, 255, 255, 180}, Z: 160, Layers: 2,
+		},
+		render2d.Shape{
+			Id: 601, Kind: render2d.ShapeCircle,
+			Bounds: [4]int64{
+				knobX-radius/3, knobY-radius/3, radius*2/3, radius*2/3,
+			},
+			Fill: [4]byte{33, 223, 255, 220}, Z: 161, Layers: 2,
+		},
+		render2d.Shape{
+			Id: 602, Kind: render2d.ShapeCircle,
+			Bounds: [4]int64{
+				width-button*6/5, height-button*6/5, button, button,
+			},
+			Fill: [4]byte{84, 206, 122, 190}, Z: 160, Layers: 2,
+		},
+		render2d.Shape{
+			Id: 603, Kind: render2d.ShapeCircle,
+			Bounds: [4]int64{
+				width-button*12/5, height-button*11/10, button*4/5, button*4/5,
+			},
+			Fill: [4]byte{238, 78, 48, 190}, Z: 160, Layers: 2,
+		},
+		render2d.Shape{
+			Id: 604, Kind: render2d.ShapeCircle,
+			Bounds: [4]int64{
+				width-button*12/5, height-button*23/10, button*4/5, button*4/5,
+			},
+			Fill: [4]byte{246, 184, 48, 190}, Z: 160, Layers: 2,
+		},
+		render2d.Shape{
+			Id: 605, Kind: render2d.ShapeCircle,
+			Bounds: [4]int64{
+				width-button*6/5, height-button*5/2, button*4/5, button*4/5,
+			},
+			Fill: [4]byte{32, 206, 255, 210}, Z: 160, Layers: 2,
+		},
+		render2d.Shape{
+			Id: 606, Kind: render2d.ShapeRoundedRect,
+			Bounds: [4]int64{
+				width-button, height/12, button*3/5, button*3/5,
+			},
+			RadiusMilli: uint32(button/8),
+			Fill: [4]byte{255, 255, 255, 150}, Z: 160, Layers: 2,
+		},
+	)
+	return shapes
+}
+
+func blockKartAppendDigits(shapes []render2d.Shape, baseId uint64,
+	value uint64, digits uint32, x int64, y int64, scale int64,
+	color [4]byte, z int64) []render2d.Shape {
+	divisor := uint64(1)
+	for index := uint32(1); index < digits; index++ {
+		divisor *= 10
+	}
+	for digitIndex := uint32(0); digitIndex < digits; digitIndex++ {
+		digit := uint32(value / divisor % 10)
+		originX := x + int64(digitIndex)*30*scale
+		shapes = blockKartAppendDigit(
+			shapes, baseId+uint64(digitIndex)*10, digit,
+			originX, y, scale, color, z,
+		)
+		if divisor > 1 {
+			divisor /= 10
+		}
+	}
+	return shapes
+}
+
+func blockKartAppendDigit(shapes []render2d.Shape, baseId uint64,
+	digit uint32, x int64, y int64, scale int64,
+	color [4]byte, z int64) []render2d.Shape {
+	masks := [10]uint8{
+		119, 36, 93, 109, 46, 107, 123, 37, 127, 111,
+	}
+	if digit > 9 || scale <= 0 {
+		return shapes
+	}
+	mask := masks[digit]
+	bounds := [7][4]int64{
+		{x + 4*scale, y, 16*scale, 4*scale},
+		{x + 20*scale, y + 4*scale, 4*scale, 16*scale},
+		{x + 20*scale, y + 24*scale, 4*scale, 16*scale},
+		{x + 4*scale, y + 40*scale, 16*scale, 4*scale},
+		{x, y + 24*scale, 4*scale, 16*scale},
+		{x, y + 4*scale, 4*scale, 16*scale},
+		{x + 4*scale, y + 20*scale, 16*scale, 4*scale},
+	}
+	for segment := uint32(0); segment < 7; segment++ {
+		if mask&(1<<segment) == 0 {
+			continue
+		}
+		shapes = append(shapes, render2d.Shape{
+			Id: baseId + uint64(segment) + 1,
+			Kind: render2d.ShapeRoundedRect,
+			Bounds: bounds[segment],
+			RadiusMilli: uint32(scale * 2),
+			Fill: color, Z: z, Layers: 2,
+		})
+	}
+	return shapes
+}
+
+func blockKartInputMagnitude(value int32) int32 {
+	if value == 0 {
+		return 0
+	}
+	if value >= -1 && value <= 1 {
+		return value * 1000
+	}
+	if value < -1000 {
+		return -1000
+	}
+	if value > 1000 {
+		return 1000
+	}
+	return value
+}

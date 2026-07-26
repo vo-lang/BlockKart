@@ -1,0 +1,128 @@
+// governed:voplay-codegen component_id=ccf8748516647cebf6ad1b70b53aaf3e
+package main
+
+type MovingObstacle struct {
+	Origin_x int64
+	Origin_y int64
+	Origin_z int64
+	Axis_x int32
+	Axis_z int32
+	Amplitude_milli uint32
+	Period_ticks uint32
+	Phase_ticks uint32
+}
+
+type MovingObstacleStore struct {
+	DenseEntities []uint64
+	DenseValues []MovingObstacle
+	Sparse []uint32
+	Added []uint64
+	Changed []uint64
+	Removed []uint64
+	Revision uint64
+	MaxEntities uint32
+	MaxChanges uint32
+}
+
+type MovingObstacleQuery struct {
+	Store *MovingObstacleStore
+	Cursor uint32
+	ExpectedRevision uint64
+}
+
+func NewMovingObstacleStore(maxEntities uint32, maxChanges uint32) (*MovingObstacleStore, bool) {
+	if maxEntities == 0 || maxEntities > 1000000 || maxChanges == 0 || maxChanges > 1000000 { return nil, false }
+	return &MovingObstacleStore{Sparse: make([]uint32, int(maxEntities)+1), MaxEntities: maxEntities, MaxChanges: maxChanges}, true
+}
+
+func (store *MovingObstacleStore) Get(entity uint64) (MovingObstacle, bool) {
+	var zero MovingObstacle
+	if entity == 0 { return zero, false }
+	index := uint32(entity)
+	if index == 0 || index > store.MaxEntities { return zero, false }
+	slot := store.Sparse[index]
+	if slot == 0 { return zero, false }
+	dense := int(slot-1)
+	if dense >= len(store.DenseEntities) || store.DenseEntities[dense] != entity { return zero, false }
+	return store.DenseValues[dense], true
+}
+
+func (store *MovingObstacleStore) Upsert(entity uint64, value MovingObstacle) bool {
+	changeCount := len(store.Added)+len(store.Changed)+len(store.Removed)
+	if entity == 0 || store.Revision == 18446744073709551615 || changeCount >= int(store.MaxChanges) { return false }
+	index := uint32(entity)
+	if index == 0 || index > store.MaxEntities { return false }
+	slot := store.Sparse[index]
+	if slot != 0 {
+		dense := int(slot-1)
+		if dense >= len(store.DenseEntities) || store.DenseEntities[dense] != entity { return false }
+		store.DenseValues[dense] = value
+		store.Changed = append(store.Changed, entity)
+		store.Revision++
+		return true
+	}
+	if len(store.DenseEntities) >= int(store.MaxEntities) { return false }
+	insert := 0
+	for insert < len(store.DenseEntities) && store.DenseEntities[insert] < entity { insert++ }
+	store.DenseEntities = append(store.DenseEntities, 0)
+	store.DenseValues = append(store.DenseValues, value)
+	cursor := len(store.DenseEntities)-1
+	for cursor > insert {
+		store.DenseEntities[cursor] = store.DenseEntities[cursor-1]
+		store.DenseValues[cursor] = store.DenseValues[cursor-1]
+		movedIndex := uint32(store.DenseEntities[cursor])
+		store.Sparse[movedIndex] = uint32(cursor+1)
+		cursor--
+	}
+	store.DenseEntities[insert] = entity
+	store.DenseValues[insert] = value
+	store.Sparse[index] = uint32(insert+1)
+	store.Added = append(store.Added, entity)
+	store.Revision++
+	return true
+}
+
+func (store *MovingObstacleStore) Remove(entity uint64) bool {
+	changeCount := len(store.Added)+len(store.Changed)+len(store.Removed)
+	if entity == 0 || store.Revision == 18446744073709551615 || changeCount >= int(store.MaxChanges) { return false }
+	index := uint32(entity)
+	if index == 0 || index > store.MaxEntities { return false }
+	slot := store.Sparse[index]
+	if slot == 0 { return false }
+	dense := int(slot-1)
+	if dense >= len(store.DenseEntities) || store.DenseEntities[dense] != entity { return false }
+	for cursor := dense; cursor+1 < len(store.DenseEntities); cursor++ {
+		store.DenseEntities[cursor] = store.DenseEntities[cursor+1]
+		store.DenseValues[cursor] = store.DenseValues[cursor+1]
+		movedIndex := uint32(store.DenseEntities[cursor])
+		store.Sparse[movedIndex] = uint32(cursor+1)
+	}
+	store.DenseEntities = store.DenseEntities[:len(store.DenseEntities)-1]
+	store.DenseValues = store.DenseValues[:len(store.DenseValues)-1]
+	store.Sparse[index] = 0
+	store.Removed = append(store.Removed, entity)
+	store.Revision++
+	return true
+}
+
+func (store *MovingObstacleStore) Query() MovingObstacleQuery {
+	return MovingObstacleQuery{Store: store, ExpectedRevision: store.Revision}
+}
+
+func (query *MovingObstacleQuery) Next() (uint64, MovingObstacle, bool) {
+	var zero MovingObstacle
+	if query.Store == nil || query.ExpectedRevision != query.Store.Revision || int(query.Cursor) >= len(query.Store.DenseEntities) { return 0, zero, false }
+	index := int(query.Cursor)
+	query.Cursor++
+	return query.Store.DenseEntities[index], query.Store.DenseValues[index], true
+}
+
+func (store *MovingObstacleStore) TakeChanges() ([]uint64, []uint64, []uint64, uint64) {
+	added := store.Added
+	changed := store.Changed
+	removed := store.Removed
+	store.Added = nil
+	store.Changed = nil
+	store.Removed = nil
+	return added, changed, removed, store.Revision
+}
