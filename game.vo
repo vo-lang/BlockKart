@@ -219,43 +219,43 @@ func StartBlockKart(game *BlockKart, init BlockKartInit, context voplay.StartCon
 	}
 	game.Engine = context.Engine()
 	var ok bool
-	game.Transforms, ok = NewTransformStore(4096, 32768)
+	game.Transforms, ok = NewTransformStore(512, 4096)
 	if !ok {
 		return errors.New("blockkart: transform store")
 	}
-	game.Velocities, ok = NewVelocityStore(4096, 32768)
+	game.Velocities, ok = NewVelocityStore(512, 4096)
 	if !ok {
 		return errors.New("blockkart: velocity store")
 	}
-	game.Controls, ok = NewKartControlStore(16, 4096)
+	game.Controls, ok = NewKartControlStore(16, 256)
 	if !ok {
 		return errors.New("blockkart: control store")
 	}
-	game.KartStates, ok = NewKartStateStore(16, 4096)
+	game.KartStates, ok = NewKartStateStore(16, 256)
 	if !ok {
 		return errors.New("blockkart: kart state store")
 	}
-	game.TrackMarkers, ok = NewTrackMarkerStore(1024, 8192)
+	game.TrackMarkers, ok = NewTrackMarkerStore(128, 1024)
 	if !ok {
 		return errors.New("blockkart: track marker store")
 	}
-	game.RenderPoses, ok = NewRenderPoseStore(4096, 32768)
+	game.RenderPoses, ok = NewRenderPoseStore(512, 4096)
 	if !ok {
 		return errors.New("blockkart: render pose store")
 	}
-	game.Collectibles, ok = NewCollectibleStore(1024, 8192)
+	game.Collectibles, ok = NewCollectibleStore(128, 1024)
 	if !ok {
 		return errors.New("blockkart: collectible store")
 	}
-	game.BoostPads, ok = NewBoostPadStore(128, 8192)
+	game.BoostPads, ok = NewBoostPadStore(64, 512)
 	if !ok {
 		return errors.New("blockkart: boost pad store")
 	}
-	game.MovingObstacles, ok = NewMovingObstacleStore(128, 8192)
+	game.MovingObstacles, ok = NewMovingObstacleStore(64, 512)
 	if !ok {
 		return errors.New("blockkart: moving obstacle store")
 	}
-	game.Physics, ok = physics3d.NewRuntime(4096, 8192, 16384, 16384)
+	game.Physics, ok = physics3d.NewRuntime(512, 1024, 4096, 4096)
 	if !ok {
 		return errors.New("blockkart: physics owner")
 	}
