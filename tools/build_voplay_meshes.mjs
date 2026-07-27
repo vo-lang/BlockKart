@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const sources = [
-  ['lowpoly_terrain.glb', 11001n],
+  ['lowpoly_terrain_lod.glb', 11001n, 'lowpoly_terrain.vmg1'],
   ['road_asphalt.glb', 11002n],
   ['road_center_dashes.glb', 11003n],
   ['road_curbs.glb', 11004n],
@@ -18,10 +18,10 @@ const sourceDir = resolve(root, 'assets/maps/primitive_track');
 const outputDir = resolve(root, 'generated/render');
 
 await mkdir(outputDir, { recursive: true });
-for (const [name, id] of sources) {
+for (const [name, id, outputName] of sources) {
   const source = await readFile(resolve(sourceDir, name));
   const artifact = encodeVmg1(decodeGlb(source), id);
-  const output = resolve(outputDir, `${name.slice(0, -4)}.vmg1`);
+  const output = resolve(outputDir, outputName ?? `${name.slice(0, -4)}.vmg1`);
   await writeFile(output, artifact);
   console.log(`${basename(output)} ${artifact.byteLength} bytes`);
 }
