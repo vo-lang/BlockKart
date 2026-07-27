@@ -275,7 +275,7 @@ func (game *BlockKart) startWorld(context voplay.StartContext) error {
 	}) ||
 		!game.Velocities.Upsert(game.KartEntity, Velocity{}) ||
 		!game.Controls.Upsert(game.KartEntity, KartControl{}) ||
-		!game.KartStates.Upsert(game.KartEntity, KartState{Countdown_ticks: 30}) {
+		!game.KartStates.Upsert(game.KartEntity, KartState{Checkpoint: 1, Countdown_ticks: 30}) {
 		return errors.New("blockkart: initialize kart components")
 	}
 	if err = game.startTrack(context); err != nil {
