@@ -628,7 +628,7 @@ func (game *BlockKart) restartRace() error {
 	if !ok {
 		return errors.New("blockkart: restart state")
 	}
-	next := KartState{Countdown_ticks: 180, Best_millis: previous.Best_millis}
+	next := KartState{Countdown_ticks: 30, Best_millis: previous.Best_millis}
 	if !game.KartStates.Upsert(game.KartEntity, next) {
 		return errors.New("blockkart: reset race state")
 	}

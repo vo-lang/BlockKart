@@ -275,7 +275,7 @@ func (game *BlockKart) startWorld(context voplay.StartContext) error {
 	}) ||
 		!game.Velocities.Upsert(game.KartEntity, Velocity{}) ||
 		!game.Controls.Upsert(game.KartEntity, KartControl{}) ||
-		!game.KartStates.Upsert(game.KartEntity, KartState{Countdown_ticks: 180}) {
+		!game.KartStates.Upsert(game.KartEntity, KartState{Countdown_ticks: 30}) {
 		return errors.New("blockkart: initialize kart components")
 	}
 	if err = game.startTrack(context); err != nil {
@@ -1065,10 +1065,10 @@ func (game *BlockKart) hudPackets() []render.SnapshotObject {
 	}
 	if state.Countdown_ticks != 0 {
 		color := [4]byte{246, 84, 54, 240}
-		if state.Countdown_ticks <= 120 {
+		if state.Countdown_ticks <= 20 {
 			color = [4]byte{246, 184, 48, 240}
 		}
-		if state.Countdown_ticks <= 60 {
+		if state.Countdown_ticks <= 10 {
 			color = [4]byte{84, 220, 116, 240}
 		}
 		shapes = append(shapes, render2d.Shape{
