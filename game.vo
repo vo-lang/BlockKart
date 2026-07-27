@@ -826,6 +826,10 @@ func (game *BlockKart) frame(tick voplay.TickBatch, pulse []byte) (voplay.TickOu
 	if !ok {
 		return voplay.TickOutput{}, errors.New("blockkart: extract transform")
 	}
+	state, ok := game.KartStates.Get(game.KartEntity)
+	if !ok {
+		return voplay.TickOutput{}, errors.New("blockkart: extract race state")
+	}
 	kartPackets, kartEncoded := game.kartRenderPackets(transform, tick.FirstTick)
 	if !kartEncoded {
 		return voplay.TickOutput{}, errors.New("blockkart: encode retained kart")
@@ -842,6 +846,10 @@ func (game *BlockKart) frame(tick voplay.TickBatch, pulse []byte) (voplay.TickOu
 	if !ok {
 		return voplay.TickOutput{}, errors.New("blockkart: encode gameplay entities")
 	}
+	checkpointObjects, ok := game.checkpointRenderObjects(state, tick.FirstTick)
+	if !ok {
+		return voplay.TickOutput{}, errors.New("blockkart: encode checkpoint gate")
+	}
 	effectObjects, ok := game.effectRenderObjects(transform, tick.FirstTick)
 	if !ok {
 		return voplay.TickOutput{}, errors.New("blockkart: encode driving effects")
@@ -855,7 +863,7 @@ func (game *BlockKart) frame(tick voplay.TickBatch, pulse []byte) (voplay.TickOu
 		return voplay.TickOutput{}, errors.New("blockkart: encode HUD")
 	}
 	objects := make([]render.SnapshotObject, 0, len(game.StaticRenderPackets) + len(kartPackets) +
-		len(gameplayObjects) + len(effectObjects) + len(hud) + 1)
+		len(gameplayObjects) + len(checkpointObjects) + len(effectObjects) + len(hud) + 1)
 	for index, bytes := range game.StaticRenderPackets {
 		objects = append(objects, render.SnapshotObject{
 			Entity: voplay.Handle{Index: uint32(1000 + index), Generation: 1}, Bytes: bytes,
@@ -867,6 +875,7 @@ func (game *BlockKart) frame(tick voplay.TickBatch, pulse []byte) (voplay.TickOu
 		})
 	}
 	objects = append(objects, gameplayObjects...)
+	objects = append(objects, checkpointObjects...)
 	objects = append(objects, effectObjects...)
 	objects = append(objects, render.SnapshotObject{
 		Entity: voplay.Handle{Index: 900001, Generation: 1}, Bytes: camera,

@@ -503,8 +503,11 @@ func (game *BlockKart) gameplayRenderPackets(tick uint64) ([]render.SnapshotObje
 }
 
 func (game *BlockKart) checkpointRenderObjects(state KartState, tick uint64) ([]render.SnapshotObject, bool) {
-	objects := make([]render.SnapshotObject, 0, len(game.TrackGates) * 3)
+	objects := make([]render.SnapshotObject, 0, 3)
 	for index, gate := range game.TrackGates {
+		if gate.Order != state.Checkpoint + 1 {
+			continue
+		}
 		next := game.TrackGates[(index + 1) % len(game.TrackGates)]
 		deltaX := next.Position[0] - gate.Position[0]
 		deltaZ := next.Position[2] - gate.Position[2]
@@ -512,10 +515,7 @@ func (game *BlockKart) checkpointRenderObjects(state KartState, tick uint64) ([]
 			X: gate.Position[0], Y: gate.Position[1], Z: gate.Position[2],
 			Yaw_milliradians: int32(math.Atan2(float64(deltaX), float64(deltaZ)) * 1000),
 		}
-		material := uint64(107)
-		if gate.Order == state.Checkpoint + 1 {
-			material = 104
-		}
+		material := uint64(104)
 		parts := [3]struct {
 			Local [3]int64
 			Half [3]int64
