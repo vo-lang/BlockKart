@@ -643,17 +643,42 @@ func (game *BlockKart) retainedGameplayObject(transform Transform, tick uint64, 
 }
 
 func (game *BlockKart) retainedGameplayMeshObject(transform Transform, tick uint64, meshAsset uint64, material uint64, halfX int64, halfY int64, halfZ int64) []byte {
-	cacheKey := meshAsset * 1000 + material
-	mesh := game.MeshInstancePackets[cacheKey]
-	if len(mesh) == 0 {
-		mesh = render3d.EncodeMeshInstance(render3d.RetainedMeshInstance{
-			MaterialAsset: material, Layers: 1, CastsShadow: true, ReceivesShadow: true,
-			Lods: []render3d.LodMesh{{MeshAsset: meshAsset, MaxDistanceMilli: 600000}},
-		})
+	return game.retainedGameplayMeshPartsObject(
+		transform, tick, []blockKartMeshPart{{Mesh: meshAsset, Material: material}},
+		halfX, halfY, halfZ,
+	)
+}
+
+type blockKartMeshPart struct {
+	Mesh uint64
+	Material uint64
+}
+
+func (game *BlockKart) retainedGameplayMeshPartsObject(
+	transform Transform,
+	tick uint64,
+	parts []blockKartMeshPart,
+	halfX int64,
+	halfY int64,
+	halfZ int64,
+) []byte {
+	components := make([]render.RenderComponent, 0, len(parts))
+	for _, part := range parts {
+		cacheKey := part.Mesh * 1000 + part.Material
+		mesh := game.MeshInstancePackets[cacheKey]
 		if len(mesh) == 0 {
-			return nil
+			mesh = render3d.EncodeMeshInstance(render3d.RetainedMeshInstance{
+				MaterialAsset: part.Material, Layers: 1, CastsShadow: true, ReceivesShadow: true,
+				Lods: []render3d.LodMesh{{MeshAsset: part.Mesh, MaxDistanceMilli: 600000}},
+			})
+			if len(mesh) == 0 {
+				return nil
+			}
+			game.MeshInstancePackets[cacheKey] = mesh
 		}
-		game.MeshInstancePackets[cacheKey] = mesh
+		components = append(components, render.RenderComponent{
+			Kind: 1, SchemaHash: part.Mesh, Bytes: mesh,
+		})
 	}
 	matrix := blockKartScaledPoseMatrix(transform, halfX * 2, halfY * 2, halfZ * 2)
 	return render.EncodeRetainedObject(render.RetainedObject{
@@ -665,29 +690,20 @@ func (game *BlockKart) retainedGameplayMeshObject(transform Transform, tick uint
 			Min: [3]int64{transform.X - halfX, transform.Y - halfY, transform.Z - halfZ},
 			Max: [3]int64{transform.X + halfX, transform.Y + halfY, transform.Z + halfZ},
 		},
-		Components: []render.RenderComponent{{Kind: 1, SchemaHash: 1, Bytes: mesh}},
+		Components: components,
 	})
 }
 
 func (game *BlockKart) kartRenderPackets(transform Transform, tick uint64) ([][]byte, bool) {
-	type part struct {
-		Local [3]int64
-		Size [3]int64
-		Material uint64
-		Mesh uint64
+	bodyParts := []blockKartMeshPart{
+		{Material: 102, Mesh: 10002},
+		{Material: 106, Mesh: 10003},
+		{Material: 103, Mesh: 10004},
+		{Material: 118, Mesh: 10005},
+		{Material: 124, Mesh: 10006},
+		{Material: 107, Mesh: 10007},
 	}
-	bodyParts := []part{
-		{Size: [3]int64{1000, 1000, 1000}, Material: 102, Mesh: 10002},
-		{Size: [3]int64{1000, 1000, 1000}, Material: 106, Mesh: 10003},
-		{Size: [3]int64{1000, 1000, 1000}, Material: 103, Mesh: 10004},
-		{Size: [3]int64{1000, 1000, 1000}, Material: 118, Mesh: 10005},
-		{Size: [3]int64{1000, 1000, 1000}, Material: 124, Mesh: 10006},
-		{Size: [3]int64{1000, 1000, 1000}, Material: 107, Mesh: 10007},
-	}
-	wheelMeshes := []struct {
-		Mesh uint64
-		Material uint64
-	}{
+	wheelMeshes := []blockKartMeshPart{
 		{Mesh: 10008, Material: 106},
 		{Mesh: 10009, Material: 122},
 		{Mesh: 10010, Material: 103},
@@ -698,27 +714,23 @@ func (game *BlockKart) kartRenderPackets(transform Transform, tick uint64) ([][]
 		{-1050, -320, 850}, {1050, -320, 850},
 		{-1050, -320, -850}, {1050, -320, -850},
 	}
-	packets := make([][]byte, 0, len(bodyParts) + len(wheelMeshes) * len(wheelLocations))
-	for _, value := range bodyParts {
-		partTransform := blockKartLocalTransform(transform, value.Local)
-		packet := game.retainedGameplayMeshObject(partTransform, tick, value.Mesh, value.Material, value.Size[0] /
-			2, value.Size[1] / 2, value.Size[2] / 2)
+	packets := make([][]byte, 0, 1 + len(wheelLocations))
+	bodyPacket := game.retainedGameplayMeshPartsObject(
+		transform, tick, bodyParts, 500, 500, 500,
+	)
+	if len(bodyPacket) == 0 {
+		return nil, false
+	}
+	packets = append(packets, bodyPacket)
+	for _, location := range wheelLocations {
+		partTransform := blockKartLocalTransform(transform, location)
+		packet := game.retainedGameplayMeshPartsObject(
+			partTransform, tick, wheelMeshes, 500, 500, 500,
+		)
 		if len(packet) == 0 {
 			return nil, false
 		}
 		packets = append(packets, packet)
-	}
-	for _, location := range wheelLocations {
-		for _, wheel := range wheelMeshes {
-			partTransform := blockKartLocalTransform(transform, location)
-			packet := game.retainedGameplayMeshObject(
-				partTransform, tick, wheel.Mesh, wheel.Material, 500, 500, 500,
-			)
-			if len(packet) == 0 {
-				return nil, false
-			}
-			packets = append(packets, packet)
-		}
 	}
 	return packets, true
 }
