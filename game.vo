@@ -1220,33 +1220,26 @@ func (game *BlockKart) hudPackets() []render.SnapshotObject {
 	if !ok || len(game.TrackGates) == 0 {
 		return nil
 	}
-	progress := state.Checkpoint * 240 / uint32(len(game.TrackGates))
-	lapWidth := state.Lap * 80
-	if lapWidth > 240 {
-		lapWidth = 240
-	}
+	progress := state.Checkpoint * 360 / uint32(len(game.TrackGates))
 	shapes := []render2d.Shape{
 		{
-			Id: 1, Kind: render2d.ShapeRoundedRect, Bounds: [4]int64{32000, 32000, 256000, 56000},
-			RadiusMilli: 8000, Fill: [4]byte{10, 14, 20, 210}, Z: 100, Layers: 2,
+			Id: 1, Kind: render2d.ShapeRoundedRect, Bounds: [4]int64{24000, 22000, 420000, 112000},
+			RadiusMilli: 10000, Fill: [4]byte{8, 18, 30, 225}, StrokeMilli: 2000,
+			Stroke: [4]byte{45, 166, 218, 190}, Z: 100, Layers: 2,
 		},
 		{
-			Id: 2, Kind: render2d.ShapeRoundedRect, Bounds: [4]int64{40000, 44000, 240000, 12000},
-			RadiusMilli: 6000, Fill: [4]byte{42, 48, 58, 255}, Z: 101, Layers: 2,
+			Id: 2, Kind: render2d.ShapeRoundedRect, Bounds: [4]int64{42000, 110000, 360000, 10000},
+			RadiusMilli: 5000, Fill: [4]byte{32, 48, 62, 255}, Z: 101, Layers: 2,
 		},
 		{
 			Id: 3, Kind: render2d.ShapeRoundedRect,
-			Bounds: [4]int64{40000, 44000, int64(progress + 1) * 1000, 12000}, RadiusMilli: 6000,
+			Bounds: [4]int64{42000, 110000, int64(progress + 1) * 1000, 10000}, RadiusMilli: 5000,
 			Fill: [4]byte{246, 184, 48, 255}, Z: 102, Layers: 2,
 		},
 		{
-			Id: 4, Kind: render2d.ShapeRoundedRect, Bounds: [4]int64{40000, 64000, 240000, 10000},
-			RadiusMilli: 5000, Fill: [4]byte{42, 48, 58, 255}, Z: 101, Layers: 2,
-		},
-		{
-			Id: 5, Kind: render2d.ShapeRoundedRect,
-			Bounds: [4]int64{40000, 64000, int64(lapWidth + 1) * 1000, 10000}, RadiusMilli: 5000,
-			Fill: [4]byte{84, 206, 122, 255}, Z: 102, Layers: 2,
+			Id: 18, Kind: render2d.ShapeRoundedRect, Bounds: [4]int64{540000, 20000, 200000, 90000},
+			RadiusMilli: 10000, Fill: [4]byte{8, 18, 30, 215}, StrokeMilli: 2000,
+			Stroke: [4]byte{246, 184, 48, 170}, Z: 100, Layers: 2,
 		},
 	}
 	speed := state.Speed_per_second
@@ -1258,11 +1251,12 @@ func (game *BlockKart) hudPackets() []render.SnapshotObject {
 		speedWidth = 180
 	}
 	shapes = append(shapes, render2d.Shape{
-		Id: 6, Kind: render2d.ShapeRoundedRect, Bounds: [4]int64{1040000, 650000, 200000, 38000},
-		RadiusMilli: 19000, Fill: [4]byte{10, 14, 20, 220}, Z: 100, Layers: 2,
+		Id: 6, Kind: render2d.ShapeRoundedRect, Bounds: [4]int64{1020000, 590000, 230000, 100000},
+		RadiusMilli: 12000, Fill: [4]byte{8, 18, 30, 225}, StrokeMilli: 2000,
+		Stroke: [4]byte{238, 78, 48, 180}, Z: 100, Layers: 2,
 	}, render2d.Shape{
 		Id: 7, Kind: render2d.ShapeRoundedRect,
-		Bounds: [4]int64{1050000, 660000, (speedWidth + 1) * 1000, 18000}, RadiusMilli: 9000,
+		Bounds: [4]int64{1035000, 670000, (speedWidth + 1) * 1000, 9000}, RadiusMilli: 4500,
 		Fill: [4]byte{238, 78, 48, 255}, Z: 102, Layers: 2,
 	})
 	if state.Boost_ticks != 0 || game.BoostPressed {
@@ -1362,15 +1356,15 @@ func (game *BlockKart) hudPackets() []render.SnapshotObject {
 		})
 	}
 	texts := []render2d.TextRun{
-		{Id: 1, Font: 1, Text: []byte("BlockKart"), Position: [2]int64{42000, 70000}, SizeMilli: 26000, Color: [4]byte{255, 255, 255, 255}, Z: 180, Layers: 2},
-		{Id: 2, Font: 1, Text: []byte("PRIMITIVE CIRCUIT"), Position: [2]int64{42000, 104000}, SizeMilli: 15000, Color: [4]byte{246, 184, 48, 255}, Z: 180, Layers: 2},
-		{Id: 3, Font: 1, Text: []byte("LAP"), Position: [2]int64{42000, 145000}, SizeMilli: 13000, Color: [4]byte{210, 225, 238, 255}, Z: 180, Layers: 2},
-		{Id: 4, Font: 1, Text: []byte("TIME"), Position: [2]int64{566000, 25000}, SizeMilli: 13000, Color: [4]byte{210, 225, 238, 255}, Z: 180, Layers: 2},
-		{Id: 5, Font: 1, Text: []byte("SPEED"), Position: [2]int64{1050000, 630000}, SizeMilli: 13000, Color: [4]byte{210, 225, 238, 255}, Z: 180, Layers: 2},
-		{Id: 6, Font: 1, Text: []byte("W/UP GAS   S/DOWN BRAKE   A/D STEER   SPACE DRIFT   R RESTART"), Position: [2]int64{30000, 700000}, SizeMilli: 13000, Color: [4]byte{235, 244, 250, 235}, Z: 180, Layers: 2},
-		{Id: 7, Font: 1, Text: blockKartDecimalText(lapValue, 1), Position: [2]int64{54000, 134000}, SizeMilli: 44000, Color: [4]byte{246, 184, 48, 255}, Z: 180, Layers: 2},
-		{Id: 8, Font: 1, Text: blockKartDecimalText(elapsedSeconds, 3), Position: [2]int64{590000, 76000}, SizeMilli: 47000, Color: [4]byte{255, 255, 255, 235}, Z: 180, Layers: 2},
-		{Id: 9, Font: 1, Text: blockKartDecimalText(speedValue, 2), Position: [2]int64{1090000, 690000}, SizeMilli: 56000, Color: [4]byte{255, 255, 255, 255}, Z: 180, Layers: 2},
+		{Id: 1, Font: 1, Text: []byte("BLOCKKART"), Position: [2]int64{42000, 52000}, SizeMilli: 30000, Color: [4]byte{255, 255, 255, 255}, Z: 180, Layers: 2},
+		{Id: 2, Font: 1, Text: []byte("PRIMITIVE CIRCUIT"), Position: [2]int64{42000, 88000}, SizeMilli: 14000, Color: [4]byte{246, 184, 48, 255}, Z: 180, Layers: 2},
+		{Id: 3, Font: 1, Text: []byte("LAP"), Position: [2]int64{338000, 50000}, SizeMilli: 12000, Color: [4]byte{180, 210, 228, 255}, Z: 180, Layers: 2},
+		{Id: 4, Font: 1, Text: []byte("TIME"), Position: [2]int64{604000, 36000}, SizeMilli: 12000, Color: [4]byte{210, 225, 238, 255}, Z: 180, Layers: 2},
+		{Id: 5, Font: 1, Text: []byte("SPEED"), Position: [2]int64{1040000, 615000}, SizeMilli: 12000, Color: [4]byte{210, 225, 238, 255}, Z: 180, Layers: 2},
+		{Id: 6, Font: 1, Text: []byte("W/UP GAS   S/DOWN BRAKE   A/D STEER   SPACE DRIFT   R RESTART"), Position: [2]int64{30000, 700000}, SizeMilli: 12000, Color: [4]byte{235, 244, 250, 235}, Z: 180, Layers: 2},
+		{Id: 7, Font: 1, Text: blockKartDecimalText(lapValue, 1), Position: [2]int64{365000, 81000}, SizeMilli: 36000, Color: [4]byte{246, 184, 48, 255}, Z: 180, Layers: 2},
+		{Id: 8, Font: 1, Text: blockKartDecimalText(elapsedSeconds, 3), Position: [2]int64{578000, 88000}, SizeMilli: 42000, Color: [4]byte{255, 255, 255, 235}, Z: 180, Layers: 2},
+		{Id: 9, Font: 1, Text: blockKartDecimalText(speedValue, 2), Position: [2]int64{1090000, 655000}, SizeMilli: 46000, Color: [4]byte{255, 255, 255, 255}, Z: 180, Layers: 2},
 	}
 	if countdown != 0 {
 		texts = append(texts, render2d.TextRun{
@@ -1397,7 +1391,7 @@ func (game *BlockKart) hudPackets() []render.SnapshotObject {
 }
 
 func blockKartStaticHudShape(id uint64) bool {
-	return id == 1 || id == 2 || id == 4 || id == 6
+	return id == 1 || id == 2 || id == 6 || id == 18
 }
 
 func (game *BlockKart) appendTouchHud(shapes []render2d.Shape) []render2d.Shape {

@@ -364,6 +364,26 @@ func (game *BlockKart) buildStaticRenderPackets() [][]byte {
 		return nil
 	}
 	packets = append(packets, underlay)
+	startGantry := []struct {
+		Transform Transform
+		Material uint64
+		Half [3]int64
+	}{
+		{Transform: Transform{X: 72000, Y: 4400, Z: 358500}, Material: 110, Half: [3]int64{450, 3600, 450}},
+		{Transform: Transform{X: 72000, Y: 4400, Z: 376500}, Material: 110, Half: [3]int64{450, 3600, 450}},
+		{Transform: Transform{X: 72000, Y: 8250, Z: 367500}, Material: 110, Half: [3]int64{500, 450, 9450}},
+		{Transform: Transform{X: 71500, Y: 8250, Z: 364500}, Material: 105, Half: [3]int64{520, 460, 1500}},
+		{Transform: Transform{X: 71500, Y: 8250, Z: 370500}, Material: 105, Half: [3]int64{520, 460, 1500}},
+	}
+	for _, part := range startGantry {
+		packet := game.staticMeshObject(
+			part.Transform, part.Material, part.Half[0], part.Half[1], part.Half[2],
+		)
+		if len(packet) == 0 {
+			return nil
+		}
+		packets = append(packets, packet)
+	}
 	meshes := []struct {
 		Id uint64
 		Material uint64
@@ -779,7 +799,7 @@ func blockKartLocalTransform(parent Transform, local [3]int64) Transform {
 func (game *BlockKart) cameraPacket(kart Transform, tick uint64) []byte {
 	camera := render3d.EncodeCamera(render3d.Camera3d{
 		Projection: render3d.CameraProjection{
-			Kind: render3d.CameraPerspective, VerticalFovMillidegrees: 62000, NearMilli: 100,
+			Kind: render3d.CameraPerspective, VerticalFovMillidegrees: 58000, NearMilli: 100,
 			FarMilli: 1600000,
 		},
 		ExposureMilli: 100,
@@ -788,8 +808,8 @@ func (game *BlockKart) cameraPacket(kart Transform, tick uint64) []byte {
 		return nil
 	}
 	heading := float64(kart.Yaw_milliradians) / 1000.0
-	distance := float64(14000)
-	height := int64(8500)
+	distance := float64(12000)
+	height := int64(6200)
 	if game.CameraMode == 1 {
 		distance = 4500
 		height = 2600
