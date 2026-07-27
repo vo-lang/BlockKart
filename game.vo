@@ -271,7 +271,7 @@ func (game *BlockKart) startWorld(context voplay.StartContext) error {
 	}
 	game.KartEntity = uint64(kart.Index)
 	if !game.Transforms.Upsert(game.KartEntity, Transform{
-		X: 19600, Y: 1200, Z: 367500, Yaw_milliradians: 1571,
+		X: 30000, Y: 1200, Z: 367500, Yaw_milliradians: 1571,
 	}) ||
 		!game.Velocities.Upsert(game.KartEntity, Velocity{}) ||
 		!game.Controls.Upsert(game.KartEntity, KartControl{}) ||
@@ -1228,13 +1228,6 @@ func (game *BlockKart) hudPackets() []render.SnapshotObject {
 	}
 	shapes = blockKartAppendDigits(shapes, 300, elapsedSeconds, 3, 590000, 30000, 1100, [4]byte{
 		255, 255, 255, 235,
-	}, 108)
-	score := uint64(state.Score)
-	if score > 9999 {
-		score = 9999
-	}
-	shapes = blockKartAppendDigits(shapes, 400, score, 4, 54000, 126000, 850, [4]byte{
-		84, 206, 122, 255,
 	}, 108)
 	if game.RenderWidth <= 1000 || game.RenderHeight > game.RenderWidth {
 		shapes = game.appendTouchHud(shapes)

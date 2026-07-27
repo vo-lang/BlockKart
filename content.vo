@@ -218,7 +218,7 @@ func (game *BlockKart) startAssets(context voplay.StartContext) error {
 					AssetIndex: uint32(game.EngineAudioAsset), AssetGeneration: 1, Bus: game.Audio.Master(),
 					GainMilli: 450, Looping: true, Playing: false, Recovery: audio.ResumeTimeline,
 					Spatial: &audio.SpatialSource{
-						PositionMilli: [3]int32{19600, 1200, 367500}, MinDistanceMilli: 1000, MaxDistanceMilli: 80000,
+						PositionMilli: [3]int32{30000, 1200, 367500}, MinDistanceMilli: 1000, MaxDistanceMilli: 80000,
 					},
 				},
 			},
@@ -829,7 +829,7 @@ func (game *BlockKart) restartRace() error {
 }
 
 func (game *BlockKart) respawn() error {
-	transform := Transform{X: 19600, Y: 1200, Z: 367500, Yaw_milliradians: 1571}
+	transform := Transform{X: 30000, Y: 1200, Z: 367500, Yaw_milliradians: 1571}
 	if !game.Physics.Submit(physics3d.Command{
 		Kind: physics3d.CommandTeleport, Body: game.KartBody,
 		Value: [3]int64{transform.X, transform.Y, transform.Z},
