@@ -730,7 +730,7 @@ func (game *BlockKart) drive(tick voplay.TickBatch) error {
 		acceleration += 9000.0
 	}
 	if throttle == 0 && brake == 0 {
-		resistance := 850.0 + absoluteSpeed * 0.72
+		resistance := 700.0 + absoluteSpeed * 0.10
 		if speed > 0 {
 			acceleration -= resistance
 		} else if speed < 0 {
