@@ -300,85 +300,60 @@ func (game *BlockKart) buildStaticRenderPackets() [][]byte {
 		return nil
 	}
 	game.RenderAssetPackets = append(game.RenderAssetPackets, meshPacket)
-	terrainTransform := Transform{Y: -1500}
-	terrain := game.staticMeshObject(terrainTransform, 100, 600000, 1000, 600000)
-	if len(terrain) == 0 {
-		return nil
+	meshes := []struct {
+		Id uint64
+		Material uint64
+		Path string
+	}{
+		{11001, 100, "generated/render/lowpoly_terrain.vmg1"},
+		{11002, 101, "generated/render/road_asphalt.vmg1"},
+		{11003, 110, "generated/render/road_center_dashes.vmg1"},
+		{11004, 105, "generated/render/road_curbs.vmg1"},
+		{11005, 110, "generated/render/road_edge_lines.vmg1"},
+		{11006, 109, "generated/render/road_shoulders.vmg1"},
+		{11007, 106, "generated/render/road_edge_grime.vmg1"},
+		{11008, 106, "generated/render/road_tire_grime.vmg1"},
+		{11009, 104, "generated/render/hero_creek_ribbon.vmg1"},
 	}
-	packets = append(packets, terrain)
-	points := blockKartTrackPoints()
-	for index, from := range points {
-		to := points[(index + 1) % len(points)]
-		deltaX := to[0] - from[0]
-		deltaZ := to[2] - from[2]
-		length := int64(math.Sqrt(float64(deltaX * deltaX + deltaZ * deltaZ)))
-		transform := Transform{
-			X: (from[0] + to[0]) / 2, Y: (from[1] + to[1]) / 2 - 450, Z: (from[2] + to[2]) / 2,
-			Yaw_milliradians: int32(math.Atan2(float64(deltaX), float64(deltaZ)) * 1000),
-		}
-		matrix := blockKartScaledPoseMatrix(transform, 18000, 800, length + 4000)
-		instance := render3d.EncodeMeshInstance(render3d.RetainedMeshInstance{
-			MaterialAsset: 101, Layers: 1, CastsShadow: false, ReceivesShadow: true,
-			Lods: []render3d.LodMesh{{MeshAsset: game.KartMeshAsset, MaxDistanceMilli: 1400000}},
-		})
-		object := render.EncodeRetainedObject(render.RetainedObject{
-			Layers: 1,
-			Transform: render.TransformSample{
-				PreviousTick: 1, CurrentTick: 1, Previous: matrix, Current: matrix,
-			},
-			Bounds: render.Bounds3{
-				Min: [3]int64{transform.X - 20000, transform.Y - 1000, transform.Z - length / 2 - 20000},
-				Max: [3]int64{transform.X + 20000, transform.Y + 1000, transform.Z + length / 2 + 20000},
-			},
-			Components: []render.RenderComponent{{Kind: 1, SchemaHash: 1, Bytes: instance}},
-		})
-		if len(instance) == 0 || len(object) == 0 {
+	for _, mesh := range meshes {
+		bytes, readErr := os.ReadFile(mesh.Path)
+		if readErr != nil || len(bytes) == 0 {
 			return nil
 		}
+		assetPacket, encoded := render.EncodeAssetPacket(
+			game.Engine, 1, render.AssetMesh3d, mesh.Id, 1,
+			game.RenderControls.Revision, 1, bytes,
+		)
+		object := game.staticArtifactObject(mesh.Id, mesh.Material)
+		if !encoded || len(object) == 0 {
+			return nil
+		}
+		game.RenderAssetPackets = append(game.RenderAssetPackets, assetPacket)
 		packets = append(packets, object)
-		for _, curbSide := range []int64{-1, 1} {
-			curbMaterial := uint64(110)
-			curbParity := index
-			if curbSide > 0 {
-				curbParity++
-			}
-			if curbParity % 2 != 0 {
-				curbMaterial = 105
-			}
-			curbTransform := blockKartLocalTransform(transform, [3]int64{curbSide * 9400, 250, 0})
-			curb := game.staticMeshObject(curbTransform, curbMaterial, 700, 450, (length + 4000) / 2)
-			if len(curb) == 0 {
-				return nil
-			}
-			packets = append(packets, curb)
-		}
-		if index % 2 == 0 {
-			nextX := float64(to[0] - from[0])
-			nextZ := float64(to[2] - from[2])
-			segmentLength := math.Sqrt(nextX * nextX + nextZ * nextZ)
-			if segmentLength < 1 {
-				continue
-			}
-			side := int64(1)
-			if index % 4 != 0 {
-				side = -1
-			}
-			perpendicularX := int64(-nextZ / segmentLength * 30000) * side
-			perpendicularZ := int64(nextX / segmentLength * 30000) * side
-			base := Transform{X: from[0] + perpendicularX, Y: from[1] + 1800, Z: from[2] + perpendicularZ}
-			trunk := game.staticMeshObject(base, 109, 700, 2300, 700)
-			canopyTransform := base
-			canopyTransform.Y += 3200
-			canopy := game.staticMeshObject(canopyTransform, 108, 2400, 2800, 2400)
-			rock := Transform{X: from[0] - perpendicularX, Y: from[1] + 900, Z: from[2] - perpendicularZ}
-			rockObject := game.staticMeshObject(rock, 107, 1800, 1100, 1500)
-			if len(trunk) == 0 || len(canopy) == 0 || len(rockObject) == 0 {
-				return nil
-			}
-			packets = append(packets, trunk, canopy, rockObject)
-		}
 	}
 	return packets
+}
+
+func (game *BlockKart) staticArtifactObject(meshAsset uint64, material uint64) []byte {
+	mesh := render3d.EncodeMeshInstance(render3d.RetainedMeshInstance{
+		MaterialAsset: material, Layers: 1, CastsShadow: true, ReceivesShadow: true,
+		Lods: []render3d.LodMesh{{MeshAsset: meshAsset, MaxDistanceMilli: 1600000}},
+	})
+	if len(mesh) == 0 {
+		return nil
+	}
+	identity := blockKartIdentityMatrix()
+	return render.EncodeRetainedObject(render.RetainedObject{
+		Layers: 1,
+		Transform: render.TransformSample{
+			PreviousTick: 1, CurrentTick: 1, Previous: identity, Current: identity,
+		},
+		Bounds: render.Bounds3{
+			Min: [3]int64{-600000, -10000, -600000},
+			Max: [3]int64{600000, 60000, 600000},
+		},
+		Components: []render.RenderComponent{{Kind: 1, SchemaHash: 1, Bytes: mesh}},
+	})
 }
 
 func (game *BlockKart) staticMeshObject(transform Transform, material uint64, halfX int64, halfY int64, halfZ int64) []byte {
