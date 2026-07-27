@@ -267,8 +267,31 @@ func (game *BlockKart) buildStaticRenderPackets() [][]byte {
 		return nil
 	}
 	packets = append(packets, blockKartStaticRenderObject(10, environment), blockKartStaticRenderObject(11, sun))
+	textures := []struct {
+		Id uint64
+		Path string
+	}{
+		{12001, "assets/maps/primitive_track/grass_texture.png"},
+		{12002, "assets/maps/primitive_track/dirt_texture.png"},
+		{12003, "assets/maps/primitive_track/meadow_texture.png"},
+		{12004, "assets/maps/primitive_track/rock_texture.png"},
+	}
+	for _, texture := range textures {
+		bytes, readErr := os.ReadFile(texture.Path)
+		if readErr != nil || len(bytes) == 0 {
+			return nil
+		}
+		packet, encoded := render.EncodeAssetPacket(
+			game.Engine, 1, render.AssetTexture2d, texture.Id, 1,
+			game.RenderControls.Revision, 1, bytes,
+		)
+		if !encoded {
+			return nil
+		}
+		game.RenderAssetPackets = append(game.RenderAssetPackets, packet)
+	}
 	materials := []render3d.Material{
-		{Id: 100, BaseColor: [4]uint16{18000, 50000, 13000, 65535}, Roughness: 59000, Alpha: render3d.AlphaOpaque, Revision: 1},
+		{Id: 100, BaseColor: [4]uint16{65535, 65535, 65535, 65535}, Roughness: 59000, Alpha: render3d.AlphaOpaque, Textures: [5]uint64{12001}, Revision: 1},
 		{Id: 101, BaseColor: [4]uint16{4200, 5200, 5600, 65535}, Roughness: 57000, Alpha: render3d.AlphaOpaque, Revision: 1},
 		{Id: 102, BaseColor: [4]uint16{6000, 37000, 62000, 65535}, Metallic: 5000, Roughness: 30000, Alpha: render3d.AlphaOpaque, Revision: 1},
 		{Id: 103, BaseColor: [4]uint16{65535, 50000, 5000, 65535}, Metallic: 12000, Roughness: 18000, Emissive: [3]uint16{16000, 9000, 500}, Alpha: render3d.AlphaOpaque, Revision: 1},
@@ -277,7 +300,7 @@ func (game *BlockKart) buildStaticRenderPackets() [][]byte {
 		{Id: 106, BaseColor: [4]uint16{1800, 2100, 2400, 65535}, Roughness: 62000, Alpha: render3d.AlphaOpaque, Revision: 1},
 		{Id: 107, BaseColor: [4]uint16{36000, 39000, 42000, 65535}, Metallic: 50000, Roughness: 18000, Alpha: render3d.AlphaOpaque, Revision: 1},
 		{Id: 108, BaseColor: [4]uint16{9000, 43000, 7000, 65535}, Roughness: 60000, Alpha: render3d.AlphaOpaque, Revision: 1},
-		{Id: 109, BaseColor: [4]uint16{24000, 12000, 4500, 65535}, Roughness: 62000, Alpha: render3d.AlphaOpaque, Revision: 1},
+		{Id: 109, BaseColor: [4]uint16{65535, 65535, 65535, 65535}, Roughness: 62000, Alpha: render3d.AlphaOpaque, Textures: [5]uint64{12002}, Revision: 1},
 		{Id: 110, BaseColor: [4]uint16{61000, 61000, 61000, 65535}, Roughness: 52000, Alpha: render3d.AlphaOpaque, Revision: 1},
 	}
 	for _, material := range materials {
