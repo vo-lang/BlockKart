@@ -510,7 +510,7 @@ func (game *BlockKart) gameplayRenderPackets(tick uint64) ([]render.SnapshotObje
 	return objects, true
 }
 
-func (game *BlockKart) checkpointRenderObjects(state KartState, tick uint64) ([]render.SnapshotObject, bool) {
+func (game *BlockKart) checkpointRenderObjects(state KartState) ([]render.SnapshotObject, bool) {
 	objects := make([]render.SnapshotObject, 0, 3)
 	for index, gate := range game.TrackGates {
 		if gate.Order != state.Checkpoint + 1 {
@@ -534,7 +534,7 @@ func (game *BlockKart) checkpointRenderObjects(state KartState, tick uint64) ([]
 		}
 		for partIndex, part := range parts {
 			transform := blockKartLocalTransform(base, part.Local)
-			packet := game.retainedGameplayObject(transform, tick, material, part.Half[0], part.Half[1], part.Half[2])
+			packet := game.retainedGameplayObject(transform, 1, material, part.Half[0], part.Half[1], part.Half[2])
 			if len(packet) == 0 {
 				return nil, false
 			}

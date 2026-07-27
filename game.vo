@@ -70,6 +70,7 @@ type BlockKart struct {
 	RenderControlPublished bool
 	RenderWorldPublished bool
 	RenderLiveDynamicEntities map[uint32]bool
+	RenderLastDynamicPackets map[uint32][]byte
 	StaticRenderPackets [][]byte
 	MeshInstancePackets map[uint64][]byte
 	HudStaticPackets map[uint64][]byte
@@ -192,6 +193,7 @@ func StartBlockKart(game *BlockKart, init BlockKartInit, context voplay.StartCon
 	}
 	game.Engine = context.Engine()
 	game.RenderLiveDynamicEntities = map[uint32]bool{}
+	game.RenderLastDynamicPackets = map[uint32][]byte{}
 	game.MeshInstancePackets = map[uint64][]byte{}
 	game.HudStaticPackets = map[uint64][]byte{}
 	game.GameplayStaticPackets = map[uint64][]byte{}
@@ -858,7 +860,7 @@ func (game *BlockKart) frame(tick voplay.TickBatch, pulse []byte) (voplay.TickOu
 	if !ok {
 		return voplay.TickOutput{}, errors.New("blockkart: encode gameplay entities")
 	}
-	checkpointObjects, ok := game.checkpointRenderObjects(state, tick.FirstTick)
+	checkpointObjects, ok := game.checkpointRenderObjects(state)
 	if !ok {
 		return voplay.TickOutput{}, errors.New("blockkart: encode checkpoint gate")
 	}
@@ -907,6 +909,9 @@ func (game *BlockKart) frame(tick voplay.TickBatch, pulse []byte) (voplay.TickOu
 		)
 		if renderEncoded {
 			game.RenderLiveDynamicEntities = blockKartDynamicEntitySet(dynamicObjects)
+			for _, object := range dynamicObjects {
+				game.RenderLastDynamicPackets[object.Entity.Index] = object.Bytes
+			}
 			game.RenderWorldPublished = true
 		}
 	} else {
@@ -1127,6 +1132,11 @@ func (game *BlockKart) renderTransactionOps(objects []render.SnapshotObject) []r
 	current := blockKartDynamicEntitySet(objects)
 	ops := make([]render.TransactionOp, 0, len(objects) + len(game.RenderLiveDynamicEntities))
 	for _, object := range objects {
+		previous := game.RenderLastDynamicPackets[object.Entity.Index]
+		if game.RenderLiveDynamicEntities[object.Entity.Index] &&
+			blockKartBytesEqual(previous, object.Bytes) {
+			continue
+		}
 		kind := render.TransactionUpsert
 		if !game.RenderLiveDynamicEntities[object.Entity.Index] {
 			kind = render.TransactionSpawn
@@ -1134,6 +1144,7 @@ func (game *BlockKart) renderTransactionOps(objects []render.SnapshotObject) []r
 		ops = append(ops, render.TransactionOp{
 			Kind: kind, Entity: object.Entity, Bytes: object.Bytes,
 		})
+		game.RenderLastDynamicPackets[object.Entity.Index] = object.Bytes
 	}
 	for entity := range game.RenderLiveDynamicEntities {
 		if !current[entity] {
@@ -1141,10 +1152,23 @@ func (game *BlockKart) renderTransactionOps(objects []render.SnapshotObject) []r
 				Kind: render.TransactionDespawn,
 				Entity: voplay.Handle{Index: entity, Generation: 1},
 			})
+			delete(game.RenderLastDynamicPackets, entity)
 		}
 	}
 	game.RenderLiveDynamicEntities = current
 	return ops
+}
+
+func blockKartBytesEqual(left []byte, right []byte) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for index, value := range left {
+		if right[index] != value {
+			return false
+		}
+	}
+	return true
 }
 
 func (game *BlockKart) updateAudio(transform Transform, tick uint64) error {
