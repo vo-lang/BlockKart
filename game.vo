@@ -935,7 +935,18 @@ func (game *BlockKart) frame(tick voplay.TickBatch, pulse []byte) (voplay.TickOu
 		game.LastRenderDeadlineNanos != 0 &&
 		framePulse.DeadlineNanos > game.LastRenderDeadlineNanos &&
 		framePulse.DeadlineNanos - game.LastRenderDeadlineNanos < 50000000 {
-		return voplay.TickOutput{AssetPackets: assetPackets}, nil
+		game.RenderRevision++
+		noOpPacket, encoded := render.EncodeTransactionPacket(
+			game.Engine, 1, framePulse.PulseId, game.RenderRevision - 1, game.RenderRevision,
+			game.RenderControls.Revision, tick.FirstTick, []render.TransactionOp{},
+		)
+		if !encoded {
+			return voplay.TickOutput{}, errors.New("blockkart: encode retained no-op frame")
+		}
+		return voplay.TickOutput{
+			RenderPackets: [][]byte{noOpPacket},
+			AssetPackets: assetPackets,
+		}, nil
 	}
 	game.LastRenderDeadlineNanos = framePulse.DeadlineNanos
 	transform, ok := game.Transforms.Get(game.KartEntity)
