@@ -842,13 +842,20 @@ func (game *BlockKart) frame(tick voplay.TickBatch, pulse []byte) (voplay.TickOu
 	if !ok {
 		return voplay.TickOutput{}, errors.New("blockkart: encode gameplay entities")
 	}
+	effectObjects, ok := game.effectRenderObjects(transform, tick.FirstTick)
+	if !ok {
+		return voplay.TickOutput{}, errors.New("blockkart: encode driving effects")
+	}
+	camera := game.cameraPacket(transform, tick.FirstTick)
+	if len(camera) == 0 {
+		return voplay.TickOutput{}, errors.New("blockkart: encode camera")
+	}
 	hud := game.hudPackets()
 	if len(hud) == 0 {
 		return voplay.TickOutput{}, errors.New("blockkart: encode HUD")
 	}
 	objects := make([]render.SnapshotObject, 0, len(game.StaticRenderPackets) + len(kartPackets) +
-		len(gameplayObjects) +
-		len(hud))
+		len(gameplayObjects) + len(effectObjects) + len(hud) + 1)
 	for index, bytes := range game.StaticRenderPackets {
 		objects = append(objects, render.SnapshotObject{
 			Entity: voplay.Handle{Index: uint32(1000 + index), Generation: 1}, Bytes: bytes,
@@ -860,6 +867,10 @@ func (game *BlockKart) frame(tick voplay.TickBatch, pulse []byte) (voplay.TickOu
 		})
 	}
 	objects = append(objects, gameplayObjects...)
+	objects = append(objects, effectObjects...)
+	objects = append(objects, render.SnapshotObject{
+		Entity: voplay.Handle{Index: 900001, Generation: 1}, Bytes: camera,
+	})
 	objects = append(objects, hud...)
 	blockKartSortSnapshotObjects(objects)
 	game.RenderRevision++
@@ -1194,6 +1205,37 @@ func (game *BlockKart) hudPackets() []render.SnapshotObject {
 			Fill: [4]byte{20, 24, 32, 255}, Z: 142, Layers: 2,
 		})
 	}
+	if state.Countdown_ticks != 0 {
+		countdown := uint64((state.Countdown_ticks + 9) / 10)
+		shapes = blockKartAppendDigits(shapes, 500, countdown, 1, 622000, 266000, 1600, [4]byte{
+			255, 255, 255, 255,
+		}, 124)
+	}
+	lapValue := uint64(state.Lap + 1)
+	if lapValue > 3 {
+		lapValue = 3
+	}
+	shapes = blockKartAppendDigits(shapes, 100, lapValue, 1, 54000, 90000, 1000, [4]byte{
+		246, 184, 48, 255,
+	}, 108)
+	speedValue := uint64(speed / 1000)
+	shapes = blockKartAppendDigits(shapes, 200, speedValue, 2, 1090000, 598000, 1400, [4]byte{
+		255, 255, 255, 255,
+	}, 108)
+	elapsedSeconds := state.Elapsed_millis / 1000
+	if elapsedSeconds > 999 {
+		elapsedSeconds = 999
+	}
+	shapes = blockKartAppendDigits(shapes, 300, elapsedSeconds, 3, 590000, 30000, 1100, [4]byte{
+		255, 255, 255, 235,
+	}, 108)
+	score := uint64(state.Score)
+	if score > 9999 {
+		score = 9999
+	}
+	shapes = blockKartAppendDigits(shapes, 400, score, 4, 54000, 126000, 850, [4]byte{
+		84, 206, 122, 255,
+	}, 108)
 	if game.RenderWidth <= 1000 || game.RenderHeight > game.RenderWidth {
 		shapes = game.appendTouchHud(shapes)
 	}

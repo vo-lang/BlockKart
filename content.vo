@@ -184,15 +184,26 @@ func (game *BlockKart) applyGameplayContacts(state *KartState) error {
 }
 
 func (game *BlockKart) startAssets(context voplay.StartContext) error {
-	handle, err := context.RequestAsset([]byte("assets/audio/kart_engine.wav"))
-	if err != nil || !handle.Valid() {
-		return errors.New("blockkart: request governed audio asset")
+	paths := []string{
+		"assets/audio/kart_engine.wav",
+		"assets/audio/kart_boost.wav",
+		"assets/audio/kart_hit.wav",
+		"assets/audio/kart_skid.wav",
+		"assets/audio/kart_grass.wav",
 	}
-	game.EngineAudioAsset = uint64(handle.Index)
-	game.BoostAudioAsset = game.EngineAudioAsset
-	game.HitAudioAsset = game.EngineAudioAsset
-	game.SkidAudioAsset = game.EngineAudioAsset
-	game.GrassAudioAsset = game.EngineAudioAsset
+	handles := []uint64{}
+	for _, path := range paths {
+		handle, err := context.RequestAsset([]byte(path))
+		if err != nil || !handle.Valid() {
+			return errors.New("blockkart: request governed asset")
+		}
+		handles = append(handles, uint64(handle.Index))
+	}
+	game.EngineAudioAsset = handles[0]
+	game.BoostAudioAsset = handles[1]
+	game.HitAudioAsset = handles[2]
+	game.SkidAudioAsset = handles[3]
+	game.GrassAudioAsset = handles[4]
 	game.KartMeshAsset = 10001
 	game.Audio, _ = audio.NewControlState(8, 32, 64)
 	if game.Audio == nil {
@@ -217,17 +228,23 @@ func (game *BlockKart) startAssets(context voplay.StartContext) error {
 		return errors.New("blockkart: create engine audio source")
 	}
 	game.EngineAudioSource = audioCommit.CreatedSources[0]
-	bytes, readErr := os.ReadFile("assets/audio/kart_engine.wav")
-	if readErr != nil || len(bytes) == 0 {
-		return errors.New("blockkart: read governed audio asset")
+	audioHandles := []uint64{
+		game.EngineAudioAsset, game.BoostAudioAsset, game.HitAudioAsset,
+		game.SkidAudioAsset, game.GrassAudioAsset,
 	}
-	packet, encoded := audio.EncodeAssetPacket(game.Engine, 1, voplay.Handle{
-		Index: uint32(game.EngineAudioAsset), Generation: 1,
-	}, 1, game.Audio.Revision, 1, bytes)
-	if !encoded {
-		return errors.New("blockkart: encode audio asset")
+	for index, path := range paths {
+		bytes, readErr := os.ReadFile(path)
+		if readErr != nil || len(bytes) == 0 {
+			return errors.New("blockkart: read governed audio asset")
+		}
+		packet, encoded := audio.EncodeAssetPacket(game.Engine, 1, voplay.Handle{
+			Index: uint32(audioHandles[index]), Generation: 1,
+		}, 1, game.Audio.Revision, 1, bytes)
+		if !encoded {
+			return errors.New("blockkart: encode audio asset")
+		}
+		game.AudioAssetPackets = append(game.AudioAssetPackets, packet)
 	}
-	game.AudioAssetPackets = append(game.AudioAssetPackets, packet)
 	game.StaticRenderPackets = game.buildStaticRenderPackets()
 	if len(game.StaticRenderPackets) == 0 {
 		return errors.New("blockkart: build static render content")
@@ -237,11 +254,60 @@ func (game *BlockKart) startAssets(context voplay.StartContext) error {
 
 func (game *BlockKart) buildStaticRenderPackets() [][]byte {
 	packets := [][]byte{}
+	environment := render3d.EncodeEnvironment(render3d.Environment{
+		FogColor: [3]uint16{28000, 50000, 61000}, FogStartMilli: 220000, FogEndMilli: 1100000,
+		ExposureMilli: 180, ToneMap: render3d.ToneMapAces, BloomThreshold: 52000, BloomStrength: 7000,
+		AntiAlias: render3d.AntiAliasMsaa, MsaaSamples: 4,
+	})
+	sun := render3d.EncodeLight(render3d.RetainedLight{
+		Kind: render3d.LightDirectional, Color: [3]uint16{65535, 61000, 52000}, IntensityMilli: 1800,
+		CastsShadow: true,
+	})
+	if len(environment) == 0 || len(sun) == 0 {
+		return nil
+	}
+	packets = append(packets, blockKartStaticRenderObject(10, environment), blockKartStaticRenderObject(11, sun))
+	materials := []render3d.Material{
+		{Id: 100, BaseColor: [4]uint16{18000, 50000, 13000, 65535}, Roughness: 59000, Alpha: render3d.AlphaOpaque, Revision: 1},
+		{Id: 101, BaseColor: [4]uint16{4200, 5200, 5600, 65535}, Roughness: 57000, Alpha: render3d.AlphaOpaque, Revision: 1},
+		{Id: 102, BaseColor: [4]uint16{6000, 37000, 62000, 65535}, Metallic: 5000, Roughness: 30000, Alpha: render3d.AlphaOpaque, Revision: 1},
+		{Id: 103, BaseColor: [4]uint16{65535, 50000, 5000, 65535}, Metallic: 12000, Roughness: 18000, Emissive: [3]uint16{16000, 9000, 500}, Alpha: render3d.AlphaOpaque, Revision: 1},
+		{Id: 104, BaseColor: [4]uint16{5000, 42000, 65535, 65535}, Roughness: 22000, Emissive: [3]uint16{1000, 10000, 18000}, Alpha: render3d.AlphaOpaque, Revision: 1},
+		{Id: 105, BaseColor: [4]uint16{56000, 9000, 5000, 65535}, Roughness: 46000, Alpha: render3d.AlphaOpaque, Revision: 1},
+		{Id: 106, BaseColor: [4]uint16{1800, 2100, 2400, 65535}, Roughness: 62000, Alpha: render3d.AlphaOpaque, Revision: 1},
+		{Id: 107, BaseColor: [4]uint16{36000, 39000, 42000, 65535}, Metallic: 50000, Roughness: 18000, Alpha: render3d.AlphaOpaque, Revision: 1},
+		{Id: 108, BaseColor: [4]uint16{9000, 43000, 7000, 65535}, Roughness: 60000, Alpha: render3d.AlphaOpaque, Revision: 1},
+		{Id: 109, BaseColor: [4]uint16{24000, 12000, 4500, 65535}, Roughness: 62000, Alpha: render3d.AlphaOpaque, Revision: 1},
+		{Id: 110, BaseColor: [4]uint16{61000, 61000, 61000, 65535}, Roughness: 52000, Alpha: render3d.AlphaOpaque, Revision: 1},
+	}
+	for _, material := range materials {
+		descriptor := render3d.EncodeMaterial(material)
+		packet, ok := render.EncodeAssetPacket(
+			game.Engine, 1, render.AssetMaterial3d, material.Id, 1,
+			game.RenderControls.Revision, 1, descriptor,
+		)
+		if !ok || len(descriptor) == 0 {
+			return nil
+		}
+		game.RenderAssetPackets = append(game.RenderAssetPackets, packet)
+	}
+	meshBytes := blockKartCubeMeshArtifact(game.KartMeshAsset)
+	meshPacket, ok := render.EncodeAssetPacket(
+		game.Engine, 1, render.AssetMesh3d, game.KartMeshAsset, 1,
+		game.RenderControls.Revision, 1, meshBytes,
+	)
+	if !ok || len(meshBytes) == 0 {
+		return nil
+	}
+	game.RenderAssetPackets = append(game.RenderAssetPackets, meshPacket)
+	terrainTransform := Transform{Y: -1500}
+	terrain := game.staticMeshObject(terrainTransform, 100, 600000, 1000, 600000)
+	if len(terrain) == 0 {
+		return nil
+	}
+	packets = append(packets, terrain)
 	points := blockKartTrackPoints()
 	for index, from := range points {
-		if index % 4 != 0 {
-			continue
-		}
 		to := points[(index + 1) % len(points)]
 		deltaX := to[0] - from[0]
 		deltaZ := to[2] - from[2]
@@ -270,6 +336,41 @@ func (game *BlockKart) buildStaticRenderPackets() [][]byte {
 			return nil
 		}
 		packets = append(packets, object)
+		curbSide := int64(-1)
+		if index % 2 != 0 {
+			curbSide = 1
+		}
+		curbTransform := blockKartLocalTransform(transform, [3]int64{curbSide * 9400, 250, 0})
+		curb := game.staticMeshObject(curbTransform, 110, 700, 450, (length + 4000) / 2)
+		if len(curb) == 0 {
+			return nil
+		}
+		packets = append(packets, curb)
+		if index % 2 == 0 {
+			nextX := float64(to[0] - from[0])
+			nextZ := float64(to[2] - from[2])
+			segmentLength := math.Sqrt(nextX * nextX + nextZ * nextZ)
+			if segmentLength < 1 {
+				continue
+			}
+			side := int64(1)
+			if index % 4 != 0 {
+				side = -1
+			}
+			perpendicularX := int64(-nextZ / segmentLength * 30000) * side
+			perpendicularZ := int64(nextX / segmentLength * 30000) * side
+			base := Transform{X: from[0] + perpendicularX, Y: from[1] + 1800, Z: from[2] + perpendicularZ}
+			trunk := game.staticMeshObject(base, 109, 700, 2300, 700)
+			canopyTransform := base
+			canopyTransform.Y += 3200
+			canopy := game.staticMeshObject(canopyTransform, 108, 2400, 2800, 2400)
+			rock := Transform{X: from[0] - perpendicularX, Y: from[1] + 900, Z: from[2] - perpendicularZ}
+			rockObject := game.staticMeshObject(rock, 107, 1800, 1100, 1500)
+			if len(trunk) == 0 || len(canopy) == 0 || len(rockObject) == 0 {
+				return nil
+			}
+			packets = append(packets, trunk, canopy, rockObject)
+		}
 	}
 	return packets
 }
@@ -344,10 +445,7 @@ func blockKartStaticRenderObject(kind uint32, component []byte) []byte {
 
 func (game *BlockKart) gameplayRenderPackets(tick uint64) ([]render.SnapshotObject, bool) {
 	objects := []render.SnapshotObject{}
-	for index, pickup := range game.Pickups {
-		if index >= 2 {
-			break
-		}
+	for _, pickup := range game.Pickups {
 		value, ok := game.Collectibles.Get(pickup.Entity)
 		if !ok {
 			return nil, false
@@ -369,10 +467,7 @@ func (game *BlockKart) gameplayRenderPackets(tick uint64) ([]render.SnapshotObje
 			Entity: voplay.Handle{Index: uint32(2000 + pickup.Entity), Generation: 1}, Bytes: packet,
 		})
 	}
-	for index, pad := range game.PadEntities {
-		if index >= 1 {
-			break
-		}
+	for _, pad := range game.PadEntities {
 		transform, ok := game.Transforms.Get(pad.Entity)
 		if !ok {
 			return nil, false
@@ -385,10 +480,7 @@ func (game *BlockKart) gameplayRenderPackets(tick uint64) ([]render.SnapshotObje
 			Entity: voplay.Handle{Index: uint32(2000 + pad.Entity), Generation: 1}, Bytes: packet,
 		})
 	}
-	for index, obstacle := range game.ObstacleEntities {
-		if index >= 1 {
-			break
-		}
+	for _, obstacle := range game.ObstacleEntities {
 		transform, ok := game.Transforms.Get(obstacle.Entity)
 		if !ok {
 			return nil, false
@@ -469,7 +561,15 @@ func (game *BlockKart) kartRenderPackets(transform Transform, tick uint64) ([][]
 		Size [3]int64
 		Material uint64
 	}
-	parts := []part{{Local: [3]int64{0, 0, 0}, Size: [3]int64{1800, 600, 2600}, Material: 102}}
+	parts := []part{
+		{Local: [3]int64{0, 0, 0}, Size: [3]int64{1800, 600, 2600}, Material: 102},
+		{Local: [3]int64{0, 520, -150}, Size: [3]int64{1300, 700, 1200}, Material: 102},
+		{Local: [3]int64{-1050, -320, 850}, Size: [3]int64{520, 620, 760}, Material: 106},
+		{Local: [3]int64{1050, -320, 850}, Size: [3]int64{520, 620, 760}, Material: 106},
+		{Local: [3]int64{-1050, -320, -850}, Size: [3]int64{520, 620, 760}, Material: 106},
+		{Local: [3]int64{1050, -320, -850}, Size: [3]int64{520, 620, 760}, Material: 106},
+		{Local: [3]int64{0, -40, 1450}, Size: [3]int64{2100, 260, 320}, Material: 107},
+	}
 	packets := make([][]byte, 0, len(parts))
 	for _, value := range parts {
 		partTransform := blockKartLocalTransform(transform, value.Local)
