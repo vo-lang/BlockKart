@@ -3,7 +3,9 @@ package main
 import (
 	"errors"
 	"math"
+	"os"
 	"github.com/vo-lang/voplay"
+	"github.com/vo-lang/voplay/vo/audio"
 	"github.com/vo-lang/voplay/vo/physics3d"
 	"github.com/vo-lang/voplay/vo/render"
 	"github.com/vo-lang/voplay/vo/render3d"
@@ -182,7 +184,50 @@ func (game *BlockKart) applyGameplayContacts(state *KartState) error {
 }
 
 func (game *BlockKart) startAssets(context voplay.StartContext) error {
+	handle, err := context.RequestAsset([]byte("assets/audio/kart_engine.wav"))
+	if err != nil || !handle.Valid() {
+		return errors.New("blockkart: request governed audio asset")
+	}
+	game.EngineAudioAsset = uint64(handle.Index)
+	game.BoostAudioAsset = game.EngineAudioAsset
+	game.HitAudioAsset = game.EngineAudioAsset
+	game.SkidAudioAsset = game.EngineAudioAsset
+	game.GrassAudioAsset = game.EngineAudioAsset
 	game.KartMeshAsset = 10001
+	game.Audio, _ = audio.NewControlState(8, 32, 64)
+	if game.Audio == nil {
+		return errors.New("blockkart: create audio owner")
+	}
+	audioCommit, ok := game.Audio.Commit(audio.ControlTransaction{
+		ExpectedRevision: 1,
+		Operations: []audio.ControlOperation{
+			{
+				Kind: audio.ControlCreateSource,
+				SourceValue: audio.SourceDescriptor{
+					AssetIndex: uint32(game.EngineAudioAsset), AssetGeneration: 1, Bus: game.Audio.Master(),
+					GainMilli: 450, Looping: true, Playing: false, Recovery: audio.ResumeTimeline,
+					Spatial: &audio.SpatialSource{
+						PositionMilli: [3]int32{0, 1200, 367500}, MinDistanceMilli: 1000, MaxDistanceMilli: 80000,
+					},
+				},
+			},
+		},
+	})
+	if !ok || len(audioCommit.CreatedSources) != 1 {
+		return errors.New("blockkart: create engine audio source")
+	}
+	game.EngineAudioSource = audioCommit.CreatedSources[0]
+	bytes, readErr := os.ReadFile("assets/audio/kart_engine.wav")
+	if readErr != nil || len(bytes) == 0 {
+		return errors.New("blockkart: read governed audio asset")
+	}
+	packet, encoded := audio.EncodeAssetPacket(game.Engine, 1, voplay.Handle{
+		Index: uint32(game.EngineAudioAsset), Generation: 1,
+	}, 1, game.Audio.Revision, 1, bytes)
+	if !encoded {
+		return errors.New("blockkart: encode audio asset")
+	}
+	game.AudioAssetPackets = append(game.AudioAssetPackets, packet)
 	game.StaticRenderPackets = game.buildStaticRenderPackets()
 	if len(game.StaticRenderPackets) == 0 {
 		return errors.New("blockkart: build static render content")
