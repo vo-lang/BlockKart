@@ -1090,37 +1090,6 @@ func (game *BlockKart) hudPackets() []render.SnapshotObject {
 			Fill: [4]byte{20, 24, 32, 255}, Z: 142, Layers: 2,
 		})
 	}
-	if state.Countdown_ticks != 0 {
-		countdown := uint64((state.Countdown_ticks + 59) / 60)
-		shapes = blockKartAppendDigits(shapes, 500, countdown, 1, 622000, 266000, 1600, [4]byte{
-			255, 255, 255, 255,
-		}, 124)
-	}
-	lapValue := uint64(state.Lap + 1)
-	if lapValue > 3 {
-		lapValue = 3
-	}
-	shapes = blockKartAppendDigits(shapes, 100, lapValue, 1, 54000, 90000, 1000, [4]byte{
-		246, 184, 48, 255,
-	}, 108)
-	speedValue := uint64(speed / 1000)
-	shapes = blockKartAppendDigits(shapes, 200, speedValue, 2, 1090000, 598000, 1400, [4]byte{
-		255, 255, 255, 255,
-	}, 108)
-	elapsedSeconds := state.Elapsed_millis / 1000
-	if elapsedSeconds > 999 {
-		elapsedSeconds = 999
-	}
-	shapes = blockKartAppendDigits(shapes, 300, elapsedSeconds, 3, 590000, 30000, 1100, [4]byte{
-		255, 255, 255, 235,
-	}, 108)
-	score := uint64(state.Score)
-	if score > 9999 {
-		score = 9999
-	}
-	shapes = blockKartAppendDigits(shapes, 400, score, 4, 54000, 126000, 850, [4]byte{
-		84, 206, 122, 255,
-	}, 108)
 	if game.RenderWidth <= 1000 || game.RenderHeight > game.RenderWidth {
 		shapes = game.appendTouchHud(shapes)
 	}
@@ -1130,15 +1099,6 @@ func (game *BlockKart) hudPackets() []render.SnapshotObject {
 			RadiusMilli: 12000, Fill: [4]byte{4, 10, 18, 225}, StrokeMilli: 2000,
 			Stroke: [4]byte{32, 206, 255, 180}, Z: 170, Layers: 2,
 		})
-		shapes = blockKartAppendDigits(shapes, 710, uint64(len(game.StaticRenderPackets)), 3, 910000, 48000, 900, [4]byte{
-			255, 255, 255, 230,
-		}, 172)
-		shapes = blockKartAppendDigits(shapes, 750, uint64(len(game.RenderAssetAcks)), 2, 1060000, 48000, 900, [4]byte{
-			84, 206, 122, 255,
-		}, 172)
-		shapes = blockKartAppendDigits(shapes, 780, uint64(game.RenderDebugMode), 1, 1160000, 112000, 900, [4]byte{
-			246, 184, 48, 255,
-		}, 172)
 	}
 	objects := make([]render.SnapshotObject, 0, len(shapes))
 	for _, shape := range shapes {

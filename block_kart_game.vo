@@ -83,10 +83,8 @@ func __vo_entry_meta_v1_voplay_7605034866940721384_e8387614eb828a69d93812ecd5c05
 	engine := voplay.TargetEngine()
 	worldValue, ok := world.NewWorld(
 		world.WorldRef{
-			EngineIndex: engine.Engine.Index,
-			EngineGeneration: engine.Engine.Generation,
-			WorldIndex: 1,
-			WorldGeneration: 1,
+			EngineIndex: engine.Engine.Index, EngineGeneration: engine.Engine.Generation,
+			WorldIndex: 1, WorldGeneration: 1,
 		},
 		2048,
 		16384,

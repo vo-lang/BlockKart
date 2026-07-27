@@ -192,46 +192,11 @@ func (game *BlockKart) startAssets(context voplay.StartContext) error {
 
 func (game *BlockKart) buildStaticRenderPackets() [][]byte {
 	packets := [][]byte{}
-	environment := render3d.EncodeEnvironment(render3d.Environment{
-		FogColor: [3]uint16{28000, 42000, 56000}, FogStartMilli: 220000, FogEndMilli: 1100000,
-		ExposureMilli: 100, ToneMap: render3d.ToneMapAces, BloomThreshold: 52000, BloomStrength: 7000,
-		AntiAlias: render3d.AntiAliasMsaa, MsaaSamples: 4,
-	})
-	sun := render3d.EncodeLight(render3d.RetainedLight{
-		Kind: render3d.LightDirectional, Color: [3]uint16{65535, 61000, 52000}, IntensityMilli: 1800,
-		CastsShadow: true,
-	})
-	if len(environment) == 0 || len(sun) == 0 {
-		return nil
-	}
-	environmentObject := blockKartStaticRenderObject(10, environment)
-	sunObject := blockKartStaticRenderObject(11, sun)
-	if len(environmentObject) == 0 || len(sunObject) == 0 {
-		return nil
-	}
-	packets = append(packets, environmentObject, sunObject)
-	terrainInstance := render3d.EncodeMeshInstance(render3d.RetainedMeshInstance{
-		MaterialAsset: 100, Layers: 1, CastsShadow: false, ReceivesShadow: true,
-		Lods: []render3d.LodMesh{{MeshAsset: game.KartMeshAsset, MaxDistanceMilli: 1800000}},
-	})
-	terrainTransform := Transform{Y: -1500}
-	terrainMatrix := blockKartScaledPoseMatrix(terrainTransform, 1200000, 2000, 1200000)
-	terrainObject := render.EncodeRetainedObject(render.RetainedObject{
-		Layers: 1,
-		Transform: render.TransformSample{
-			PreviousTick: 1, CurrentTick: 1, Previous: terrainMatrix, Current: terrainMatrix,
-		},
-		Bounds: render.Bounds3{
-			Min: [3]int64{-600000, -40000, -600000}, Max: [3]int64{600000, 60000, 600000},
-		},
-		Components: []render.RenderComponent{{Kind: 1, SchemaHash: 1, Bytes: terrainInstance}},
-	})
-	if len(terrainInstance) == 0 || len(terrainObject) == 0 {
-		return nil
-	}
-	packets = append(packets, terrainObject)
 	points := blockKartTrackPoints()
 	for index, from := range points {
+		if index % 4 != 0 {
+			continue
+		}
 		to := points[(index + 1) % len(points)]
 		deltaX := to[0] - from[0]
 		deltaZ := to[2] - from[2]
@@ -334,7 +299,10 @@ func blockKartStaticRenderObject(kind uint32, component []byte) []byte {
 
 func (game *BlockKart) gameplayRenderPackets(tick uint64) ([]render.SnapshotObject, bool) {
 	objects := []render.SnapshotObject{}
-	for _, pickup := range game.Pickups {
+	for index, pickup := range game.Pickups {
+		if index >= 2 {
+			break
+		}
 		value, ok := game.Collectibles.Get(pickup.Entity)
 		if !ok {
 			return nil, false
@@ -356,7 +324,10 @@ func (game *BlockKart) gameplayRenderPackets(tick uint64) ([]render.SnapshotObje
 			Entity: voplay.Handle{Index: uint32(2000 + pickup.Entity), Generation: 1}, Bytes: packet,
 		})
 	}
-	for _, pad := range game.PadEntities {
+	for index, pad := range game.PadEntities {
+		if index >= 1 {
+			break
+		}
 		transform, ok := game.Transforms.Get(pad.Entity)
 		if !ok {
 			return nil, false
@@ -369,7 +340,10 @@ func (game *BlockKart) gameplayRenderPackets(tick uint64) ([]render.SnapshotObje
 			Entity: voplay.Handle{Index: uint32(2000 + pad.Entity), Generation: 1}, Bytes: packet,
 		})
 	}
-	for _, obstacle := range game.ObstacleEntities {
+	for index, obstacle := range game.ObstacleEntities {
+		if index >= 1 {
+			break
+		}
 		transform, ok := game.Transforms.Get(obstacle.Entity)
 		if !ok {
 			return nil, false
