@@ -117,6 +117,7 @@ type BlockKart struct {
 	GamepadBrake int32
 	GamepadDrift bool
 	GamepadBoost bool
+	Steering_milli int32
 	TouchPoints map[uint32]BlockKartTouchPoint
 	Paused bool
 	CameraMode uint32
@@ -696,6 +697,7 @@ func (game *BlockKart) drive(tick voplay.TickBatch) error {
 			return errors.New("blockkart: hold race state")
 		}
 		game.BoostPressed = false
+		game.Steering_milli = 0
 		return nil
 	}
 	game.OffRoad = blockKartDistanceFromRoad(transform) > 15000
@@ -706,7 +708,7 @@ func (game *BlockKart) drive(tick voplay.TickBatch) error {
 	brake := float64(control.Brake_milli) / 1000.0
 	engineAcceleration := 16000.0
 	if game.OffRoad {
-		engineAcceleration *= 0.58
+		engineAcceleration *= 0.60
 	}
 	acceleration := 0.0
 	if throttle > 0 {
@@ -738,7 +740,7 @@ func (game *BlockKart) drive(tick voplay.TickBatch) error {
 		acceleration -= speed * 0.10
 	}
 	if game.OffRoad {
-		acceleration -= speed * 1.35
+		acceleration -= speed * 0.70
 	}
 	nextSpeed := speed + acceleration * deltaSeconds
 	if throttle == 0 && brake == 0 &&
@@ -757,25 +759,36 @@ func (game *BlockKart) drive(tick voplay.TickBatch) error {
 	}
 	state.Speed_per_second = int64(nextSpeed)
 	absoluteSpeed = math.Abs(nextSpeed)
-	steeringAuthority := absoluteSpeed / 7000.0
-	if steeringAuthority > 1 {
-		steeringAuthority = 1
+	steeringStep := int32(180)
+	if control.Steer_milli == 0 {
+		steeringStep = 260
+	} else if game.Steering_milli != 0 &&
+		(game.Steering_milli < 0) != (control.Steer_milli < 0) {
+		steeringStep = 300
 	}
-	if absoluteSpeed > 24000 {
-		steeringAuthority *= 1.0 - (absoluteSpeed - 24000.0) / 72000.0
+	game.Steering_milli = blockKartApproachInt32(
+		game.Steering_milli, control.Steer_milli, steeringStep,
+	)
+	speedRatio := absoluteSpeed / 14000.0
+	if speedRatio > 1 {
+		speedRatio = 1
+	}
+	steeringAuthority := 0.24 + speedRatio * 0.76
+	if absoluteSpeed < 300 {
+		steeringAuthority = 0
 	}
 	game.Drifting = control.Drift && absoluteSpeed > 7500
-	maximumYawRate := 2050.0
-	steeringResponse := 10.0
+	maximumYawRate := 1350.0 - speedRatio * 300.0
+	steeringResponse := 4.2
 	if game.Drifting {
-		maximumYawRate = 2850.0
-		steeringResponse = 7.0
+		maximumYawRate = 1900.0 - speedRatio * 200.0
+		steeringResponse = 3.2
 	}
 	direction := 1.0
 	if nextSpeed < -250 {
 		direction = -1.0
 	}
-	desiredYawRate := float64(control.Steer_milli) / 1000.0 *
+	desiredYawRate := float64(game.Steering_milli) / 1000.0 *
 		maximumYawRate * steeringAuthority * direction
 	steeringBlend := steeringResponse * deltaSeconds
 	if steeringBlend > 1 {
@@ -783,7 +796,7 @@ func (game *BlockKart) drive(tick voplay.TickBatch) error {
 	}
 	yawRate := float64(velocity.Yaw_per_second)
 	yawRate += (desiredYawRate - yawRate) * steeringBlend
-	if control.Steer_milli == 0 && absoluteSpeed < 500 {
+	if game.Steering_milli == 0 && absoluteSpeed < 500 {
 		yawRate = 0
 	}
 	velocity.Yaw_per_second = int32(yawRate)
@@ -795,18 +808,28 @@ func (game *BlockKart) drive(tick voplay.TickBatch) error {
 	rightZ := -math.Sin(heading)
 	lateralSpeed := float64(velocity.X_per_second) * rightX +
 		float64(velocity.Z_per_second) * rightZ
-	grip := 11.5
+	grip := 5.2
 	if game.Drifting {
-		grip = 2.7
+		grip = 1.6
 	}
 	if game.OffRoad {
-		grip = 17.0
+		grip = 7.4
 	}
 	gripRetention := 1.0 - grip * deltaSeconds
 	if gripRetention < 0 {
 		gripRetention = 0
 	}
 	lateralSpeed *= gripRetention
+	maximumLateralSpeed := absoluteSpeed * 0.38
+	if game.Drifting {
+		maximumLateralSpeed = absoluteSpeed * 0.72
+	}
+	if lateralSpeed > maximumLateralSpeed {
+		lateralSpeed = maximumLateralSpeed
+	}
+	if lateralSpeed < -maximumLateralSpeed {
+		lateralSpeed = -maximumLateralSpeed
+	}
 	velocity.X_per_second = int64(forwardX * nextSpeed + rightX * lateralSpeed)
 	velocity.Z_per_second = int64(forwardZ * nextSpeed + rightZ * lateralSpeed)
 	transform.X += velocity.X_per_second * int64(tick.FixedTickNanos) / 1000000000
@@ -830,6 +853,23 @@ func (game *BlockKart) drive(tick voplay.TickBatch) error {
 	}
 	game.BoostPressed = control.Boost || state.Boost_ticks != 0
 	return nil
+}
+
+func blockKartApproachInt32(current int32, target int32, step int32) int32 {
+	if current < target {
+		current += step
+		if current > target {
+			return target
+		}
+		return current
+	}
+	if current > target {
+		current -= step
+		if current < target {
+			return target
+		}
+	}
+	return current
 }
 
 func (game *BlockKart) stepPhysics(tick voplay.TickBatch) error {

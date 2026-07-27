@@ -991,6 +991,7 @@ func (game *BlockKart) restartRace() error {
 	game.GamepadBrake = 0
 	game.GamepadDrift = false
 	game.GamepadBoost = false
+	game.Steering_milli = 0
 	game.TouchPoints = map[uint32]BlockKartTouchPoint{}
 	game.BoostPressed = false
 	game.OffRoad = false
@@ -1001,6 +1002,7 @@ func (game *BlockKart) restartRace() error {
 }
 
 func (game *BlockKart) respawn() error {
+	game.Steering_milli = 0
 	transform := Transform{X: 30000, Y: 1200, Z: 367500, Yaw_milliradians: 1571}
 	if !game.Transforms.Upsert(game.KartEntity, transform) ||
 		!game.Velocities.Upsert(game.KartEntity, Velocity{}) {
