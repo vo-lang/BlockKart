@@ -23,7 +23,7 @@ const (
 )
 
 const (
-	blockKartTicksPerSecond uint32 = 30
+	blockKartTicksPerSecond uint32 = 20
 	blockKartCountdownTicks uint32 = 3 * blockKartTicksPerSecond
 	blockKartBoostTicks uint32 = 9 * blockKartTicksPerSecond
 	blockKartBoostCooldownTicks uint32 = 18 * blockKartTicksPerSecond
@@ -157,7 +157,7 @@ func ConfigureBlockKart(game *BlockKart, builder voplay.Builder) {
 	if game == nil {
 		return
 	}
-	if err := builder.SetFixedTick(33333333, 3); err != nil {
+	if err := builder.SetFixedTick(50000000, 4); err != nil {
 		game.ConfigurationError = err
 		return
 	}
@@ -1077,7 +1077,7 @@ func (game *BlockKart) frame(tick voplay.TickBatch, pulse []byte) (voplay.TickOu
 		output.AudioPackets = append(output.AudioPackets, game.AudioAssetPackets...)
 		game.AudioAssetsPublished = true
 	}
-	if game.BoostPressed && tick.FirstTick >= game.LastBoostAudioTick + 30 {
+	if game.BoostPressed && tick.FirstTick >= game.LastBoostAudioTick + uint64(blockKartTicksPerSecond) {
 		packet, eventEncoded := game.audioOneShot(game.BoostAudioAsset, 700, tick.FirstTick, framePulse.DeadlineNanos /
 			1000000)
 		if !eventEncoded {
@@ -1099,7 +1099,7 @@ func (game *BlockKart) frame(tick voplay.TickBatch, pulse []byte) (voplay.TickOu
 			game.HitAudioPending = false
 		}
 	}
-	if game.Drifting && tick.FirstTick >= game.LastSkidAudioTick + 18 {
+	if game.Drifting && tick.FirstTick >= game.LastSkidAudioTick + uint64(blockKartTicksPerSecond * 3 / 5) {
 		packet, eventEncoded := game.audioOneShot(game.SkidAudioAsset, 520, tick.FirstTick, framePulse.DeadlineNanos /
 			1000000)
 		if !eventEncoded {
@@ -1110,7 +1110,7 @@ func (game *BlockKart) frame(tick voplay.TickBatch, pulse []byte) (voplay.TickOu
 			game.LastSkidAudioTick = tick.FirstTick
 		}
 	}
-	if game.OffRoad && tick.FirstTick >= game.LastGrassAudioTick + 24 {
+	if game.OffRoad && tick.FirstTick >= game.LastGrassAudioTick + uint64(blockKartTicksPerSecond * 4 / 5) {
 		packet, eventEncoded := game.audioOneShot(game.GrassAudioAsset, 430, tick.FirstTick, framePulse.DeadlineNanos /
 			1000000)
 		if !eventEncoded {
