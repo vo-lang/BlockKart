@@ -336,16 +336,22 @@ func (game *BlockKart) buildStaticRenderPackets() [][]byte {
 			return nil
 		}
 		packets = append(packets, object)
-		curbSide := int64(-1)
-		if index % 2 != 0 {
-			curbSide = 1
+		for _, curbSide := range []int64{-1, 1} {
+			curbMaterial := uint64(110)
+			curbParity := index
+			if curbSide > 0 {
+				curbParity++
+			}
+			if curbParity % 2 != 0 {
+				curbMaterial = 105
+			}
+			curbTransform := blockKartLocalTransform(transform, [3]int64{curbSide * 9400, 250, 0})
+			curb := game.staticMeshObject(curbTransform, curbMaterial, 700, 450, (length + 4000) / 2)
+			if len(curb) == 0 {
+				return nil
+			}
+			packets = append(packets, curb)
 		}
-		curbTransform := blockKartLocalTransform(transform, [3]int64{curbSide * 9400, 250, 0})
-		curb := game.staticMeshObject(curbTransform, 110, 700, 450, (length + 4000) / 2)
-		if len(curb) == 0 {
-			return nil
-		}
-		packets = append(packets, curb)
 		if index % 2 == 0 {
 			nextX := float64(to[0] - from[0])
 			nextZ := float64(to[2] - from[2])
