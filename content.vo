@@ -305,7 +305,8 @@ func (game *BlockKart) buildStaticRenderPackets() [][]byte {
 		Material uint64
 		Path string
 	}{
-		{11001, 100, "generated/render/lowpoly_terrain.vmg1"},
+		{11001, 100, "generated/render/lowpoly_terrain_a.vmg1"},
+		{11010, 100, "generated/render/lowpoly_terrain_b.vmg1"},
 		{11002, 101, "generated/render/road_asphalt.vmg1"},
 		{11003, 110, "generated/render/road_center_dashes.vmg1"},
 		{11004, 105, "generated/render/road_curbs.vmg1"},

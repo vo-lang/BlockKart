@@ -4,7 +4,8 @@ import { fileURLToPath } from 'node:url';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const sources = [
-  ['lowpoly_terrain_lod.glb', 11001n, 'lowpoly_terrain.vmg1', 2],
+  ['lowpoly_terrain_lod.glb', 11001n, 'lowpoly_terrain_a.vmg1', 2, 0],
+  ['lowpoly_terrain_lod.glb', 11010n, 'lowpoly_terrain_b.vmg1', 2, 1],
   ['road_asphalt.glb', 11002n],
   ['road_center_dashes.glb', 11003n],
   ['road_curbs.glb', 11004n],
@@ -18,11 +19,13 @@ const sourceDir = resolve(root, 'assets/maps/primitive_track');
 const outputDir = resolve(root, 'generated/render');
 
 await mkdir(outputDir, { recursive: true });
-for (const [name, id, outputName, triangleStride] of sources) {
+for (const [name, id, outputName, trianglePartitions, partitionIndex] of sources) {
   const source = await readFile(resolve(sourceDir, name));
   const decoded = decodeGlb(source);
   const artifact = encodeVmg1(
-    triangleStride === undefined ? decoded : decimateTriangles(decoded, triangleStride),
+    trianglePartitions === undefined
+      ? decoded
+      : partitionTriangles(decoded, trianglePartitions, partitionIndex),
     id,
   );
   const output = resolve(outputDir, outputName ?? `${name.slice(0, -4)}.vmg1`);
@@ -30,13 +33,13 @@ for (const [name, id, outputName, triangleStride] of sources) {
   console.log(`${basename(output)} ${artifact.byteLength} bytes`);
 }
 
-function decimateTriangles(mesh, stride) {
+function partitionTriangles(mesh, partitions, partitionIndex) {
   const remap = new Map();
   const positions = [];
   const normals = [];
   const texcoords = [];
   const indices = [];
-  for (let triangle = 0; triangle < mesh.indices.length / 3; triangle += stride) {
+  for (let triangle = partitionIndex; triangle < mesh.indices.length / 3; triangle += partitions) {
     for (let corner = 0; corner < 3; corner += 1) {
       const sourceIndex = mesh.indices[triangle * 3 + corner];
       let targetIndex = remap.get(sourceIndex);
