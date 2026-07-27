@@ -821,11 +821,15 @@ func (game *BlockKart) cameraPacket(kart Transform, tick uint64) []byte {
 	x := kart.X - int64(math.Sin(heading) * distance)
 	z := kart.Z - int64(math.Cos(heading) * distance)
 	transform := Transform{X: x, Y: kart.Y + height, Z: z, Yaw_milliradians: kart.Yaw_milliradians}
-	targetY := kart.Y + 900
+	targetX := kart.X + int64(math.Sin(heading) * 9000)
+	targetZ := kart.Z + int64(math.Cos(heading) * 9000)
+	targetY := kart.Y + 1600
 	if game.CameraMode == 2 {
+		targetX = kart.X
+		targetZ = kart.Z
 		targetY = kart.Y
 	}
-	matrix := blockKartLookAtMatrix(transform.X, transform.Y, transform.Z, kart.X, targetY, kart.Z)
+	matrix := blockKartLookAtMatrix(transform.X, transform.Y, transform.Z, targetX, targetY, targetZ)
 	return render.EncodeRetainedObject(render.RetainedObject{
 		Layers: 1,
 		Transform: render.TransformSample{
