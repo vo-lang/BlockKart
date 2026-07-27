@@ -1223,30 +1223,22 @@ func (game *BlockKart) hudPackets() []render.SnapshotObject {
 			Fill: [4]byte{20, 24, 32, 255}, Z: 142, Layers: 2,
 		})
 	}
+	countdown := uint64(0)
 	if state.Countdown_ticks != 0 {
-		countdown := uint64((state.Countdown_ticks + 9) / 10)
-		shapes = blockKartAppendDigits(shapes, 500, countdown, 1, 622000, 266000, 1600, [4]byte{
-			255, 255, 255, 255,
-		}, 124)
+		countdown = uint64((state.Countdown_ticks + 9) / 10)
 	}
 	lapValue := uint64(state.Lap + 1)
 	if lapValue > 3 {
 		lapValue = 3
 	}
-	shapes = blockKartAppendDigits(shapes, 100, lapValue, 1, 54000, 90000, 1000, [4]byte{
-		246, 184, 48, 255,
-	}, 108)
 	speedValue := uint64(speed / 1000)
-	shapes = blockKartAppendDigits(shapes, 200, speedValue, 2, 1090000, 598000, 1400, [4]byte{
-		255, 255, 255, 255,
-	}, 108)
+	if speedValue > 99 {
+		speedValue = 99
+	}
 	elapsedSeconds := state.Elapsed_millis / 1000
 	if elapsedSeconds > 999 {
 		elapsedSeconds = 999
 	}
-	shapes = blockKartAppendDigits(shapes, 300, elapsedSeconds, 3, 590000, 30000, 1100, [4]byte{
-		255, 255, 255, 235,
-	}, 108)
 	if game.RenderWidth <= 1000 || game.RenderHeight > game.RenderWidth {
 		shapes = game.appendTouchHud(shapes)
 	}
@@ -1274,6 +1266,15 @@ func (game *BlockKart) hudPackets() []render.SnapshotObject {
 		{Id: 4, Font: 1, Text: []byte("TIME"), Position: [2]int64{566000, 25000}, SizeMilli: 13000, Color: [4]byte{210, 225, 238, 255}, Z: 180, Layers: 2},
 		{Id: 5, Font: 1, Text: []byte("SPEED"), Position: [2]int64{1050000, 630000}, SizeMilli: 13000, Color: [4]byte{210, 225, 238, 255}, Z: 180, Layers: 2},
 		{Id: 6, Font: 1, Text: []byte("W/UP GAS   S/DOWN BRAKE   A/D STEER   SPACE DRIFT   R RESTART"), Position: [2]int64{30000, 700000}, SizeMilli: 13000, Color: [4]byte{235, 244, 250, 235}, Z: 180, Layers: 2},
+		{Id: 7, Font: 1, Text: blockKartDecimalText(lapValue, 1), Position: [2]int64{54000, 134000}, SizeMilli: 44000, Color: [4]byte{246, 184, 48, 255}, Z: 180, Layers: 2},
+		{Id: 8, Font: 1, Text: blockKartDecimalText(elapsedSeconds, 3), Position: [2]int64{590000, 76000}, SizeMilli: 47000, Color: [4]byte{255, 255, 255, 235}, Z: 180, Layers: 2},
+		{Id: 9, Font: 1, Text: blockKartDecimalText(speedValue, 2), Position: [2]int64{1090000, 690000}, SizeMilli: 56000, Color: [4]byte{255, 255, 255, 255}, Z: 180, Layers: 2},
+	}
+	if countdown != 0 {
+		texts = append(texts, render2d.TextRun{
+			Id: 10, Font: 1, Text: blockKartDecimalText(countdown, 1), Position: [2]int64{622000, 340000},
+			SizeMilli: 70000, Color: [4]byte{255, 255, 255, 255}, Z: 180, Layers: 2,
+		})
 	}
 	for _, text := range texts {
 		packet := render2d.EncodeText(text)
@@ -1346,45 +1347,20 @@ func (game *BlockKart) appendTouchHud(shapes []render2d.Shape) []render2d.Shape 
 	return shapes
 }
 
-func blockKartAppendDigits(shapes []render2d.Shape, baseId uint64, value uint64, digits uint32, x int64, y int64, scale int64, color [4]byte, z int64) []render2d.Shape {
+func blockKartDecimalText(value uint64, digits uint32) []byte {
+	text := make([]byte, 0, int(digits))
 	divisor := uint64(1)
 	for index := uint32(1); index < digits; index++ {
 		divisor *= 10
 	}
 	for digitIndex := uint32(0); digitIndex < digits; digitIndex++ {
-		digit := uint32(value / divisor % 10)
-		originX := x + int64(digitIndex) * 30 * scale
-		shapes = blockKartAppendDigit(shapes, baseId + uint64(digitIndex) * 10, digit, originX, y, scale, color, z)
+		digit := byte(value / divisor % 10)
+		text = append(text, byte(48) + digit)
 		if divisor > 1 {
 			divisor /= 10
 		}
 	}
-	return shapes
-}
-
-func blockKartAppendDigit(shapes []render2d.Shape, baseId uint64, digit uint32, x int64, y int64, scale int64, color [4]byte, z int64) []render2d.Shape {
-	masks := [10]uint8{119, 36, 93, 109, 46, 107, 123, 37, 127, 111}
-	if digit > 9 || scale <= 0 {
-		return shapes
-	}
-	mask := masks[digit]
-	bounds := [7][4]int64{
-		{x + 4 * scale, y, 16 * scale, 4 * scale}, {x + 20 * scale, y + 4 * scale, 4 * scale, 16 * scale},
-		{x + 20 * scale, y + 24 * scale, 4 * scale, 16 * scale},
-		{x + 4 * scale, y + 40 * scale, 16 * scale, 4 * scale},
-		{x, y + 24 * scale, 4 * scale, 16 * scale}, {x, y + 4 * scale, 4 * scale, 16 * scale},
-		{x + 4 * scale, y + 20 * scale, 16 * scale, 4 * scale},
-	}
-	for segment := uint32(0); segment < 7; segment++ {
-		if mask & (1 << segment) == 0 {
-			continue
-		}
-		shapes = append(shapes, render2d.Shape{
-			Id: baseId + uint64(segment) + 1, Kind: render2d.ShapeRoundedRect, Bounds: bounds[segment],
-			RadiusMilli: uint32(scale * 2), Fill: color, Z: z, Layers: 2,
-		})
-	}
-	return shapes
+	return text
 }
 
 func blockKartInputMagnitude(value int32) int32 {
