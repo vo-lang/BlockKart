@@ -275,6 +275,8 @@ func (game *BlockKart) buildStaticRenderPackets() [][]byte {
 		{12002, "assets/maps/primitive_track/dirt_texture.png"},
 		{12003, "assets/maps/primitive_track/meadow_texture.png"},
 		{12004, "assets/maps/primitive_track/rock_texture.png"},
+		{12005, "assets/maps/primitive_track/terrain_splat_large.png"},
+		{12006, "assets/effects/grass_card_atlas.png"},
 	}
 	for _, texture := range textures {
 		bytes, readErr := os.ReadFile(texture.Path)
@@ -291,7 +293,7 @@ func (game *BlockKart) buildStaticRenderPackets() [][]byte {
 		game.RenderAssetPackets = append(game.RenderAssetPackets, packet)
 	}
 	materials := []render3d.Material{
-		{Id: 100, BaseColor: [4]uint16{65535, 65535, 65535, 65535}, Roughness: 59000, Alpha: render3d.AlphaOpaque, Textures: [5]uint64{12001}, Revision: 1},
+		{Id: 100, BaseColor: [4]uint16{65535, 65535, 65535, 65535}, Roughness: 59000, Alpha: render3d.AlphaOpaque, Textures: [5]uint64{12005, 12001, 12003, 12002, 12004}, Revision: 1},
 		{Id: 101, BaseColor: [4]uint16{4200, 5200, 5600, 65535}, Roughness: 57000, Alpha: render3d.AlphaOpaque, Revision: 1},
 		{Id: 102, BaseColor: [4]uint16{6000, 37000, 62000, 65535}, Metallic: 5000, Roughness: 30000, Alpha: render3d.AlphaOpaque, Revision: 1},
 		{Id: 103, BaseColor: [4]uint16{65535, 50000, 5000, 65535}, Metallic: 12000, Roughness: 18000, Emissive: [3]uint16{16000, 9000, 500}, Alpha: render3d.AlphaOpaque, Revision: 1},
@@ -302,6 +304,19 @@ func (game *BlockKart) buildStaticRenderPackets() [][]byte {
 		{Id: 108, BaseColor: [4]uint16{9000, 43000, 7000, 65535}, Roughness: 60000, Alpha: render3d.AlphaOpaque, Revision: 1},
 		{Id: 109, BaseColor: [4]uint16{65535, 65535, 65535, 65535}, Roughness: 62000, Alpha: render3d.AlphaOpaque, Textures: [5]uint64{12002}, Revision: 1},
 		{Id: 110, BaseColor: [4]uint16{61000, 61000, 61000, 65535}, Roughness: 52000, Alpha: render3d.AlphaOpaque, Revision: 1},
+		{Id: 111, BaseColor: [4]uint16{65535, 65535, 65535, 65535}, Roughness: 61000, Alpha: render3d.AlphaMask, AlphaCutoff: 12000, DoubleSided: true, Textures: [5]uint64{12006}, Revision: 1},
+		{Id: 112, BaseColor: [4]uint16{48000, 30000, 15000, 65535}, Roughness: 64000, Alpha: render3d.AlphaOpaque, Revision: 1},
+		{Id: 113, BaseColor: [4]uint16{50000, 48000, 41000, 65535}, Roughness: 60000, Alpha: render3d.AlphaOpaque, Revision: 1},
+		{Id: 114, BaseColor: [4]uint16{39000, 37000, 32000, 65535}, Roughness: 62000, Alpha: render3d.AlphaOpaque, Revision: 1},
+		{Id: 115, BaseColor: [4]uint16{31000, 33000, 30000, 65535}, Roughness: 60000, Alpha: render3d.AlphaOpaque, Revision: 1},
+		{Id: 116, BaseColor: [4]uint16{12000, 42000, 9000, 65535}, Roughness: 61000, Alpha: render3d.AlphaOpaque, Revision: 1},
+		{Id: 117, BaseColor: [4]uint16{65535, 52000, 6000, 65535}, Roughness: 44000, Emissive: [3]uint16{5000, 2600, 0}, Alpha: render3d.AlphaOpaque, Revision: 1},
+		{Id: 118, BaseColor: [4]uint16{64000, 64000, 60000, 65535}, Roughness: 46000, Alpha: render3d.AlphaOpaque, Revision: 1},
+		{Id: 119, BaseColor: [4]uint16{26000, 13000, 5000, 65535}, Roughness: 62000, Alpha: render3d.AlphaOpaque, Revision: 1},
+		{Id: 120, BaseColor: [4]uint16{8000, 30000, 6000, 65535}, Roughness: 57000, Alpha: render3d.AlphaOpaque, Revision: 1},
+		{Id: 121, BaseColor: [4]uint16{39000, 21000, 8000, 65535}, Roughness: 60000, Alpha: render3d.AlphaOpaque, Revision: 1},
+		{Id: 122, BaseColor: [4]uint16{35000, 36000, 33000, 65535}, Roughness: 59000, Alpha: render3d.AlphaOpaque, Revision: 1},
+		{Id: 123, BaseColor: [4]uint16{65535, 49000, 2000, 65535}, Roughness: 41000, Emissive: [3]uint16{5000, 2800, 0}, Alpha: render3d.AlphaOpaque, Revision: 1},
 	}
 	for _, material := range materials {
 		descriptor := render3d.EncodeMaterial(material)
@@ -323,7 +338,28 @@ func (game *BlockKart) buildStaticRenderPackets() [][]byte {
 		return nil
 	}
 	game.RenderAssetPackets = append(game.RenderAssetPackets, meshPacket)
-	underlay := game.staticMeshObject(Transform{Y: -5000}, 100, 600000, 1000, 600000)
+	kartMeshes := []struct {
+		Id uint64
+		Path string
+	}{
+		{10002, "generated/render/kart_body.vmg1"},
+		{10003, "generated/render/kart_wheel.vmg1"},
+		{10004, "generated/render/kart_bumper.vmg1"},
+		{10005, "generated/render/kart_helmet.vmg1"},
+		{10006, "generated/render/kart_driver.vmg1"},
+	}
+	for _, kartMesh := range kartMeshes {
+		bytes, readErr := os.ReadFile(kartMesh.Path)
+		assetPacket, encoded := render.EncodeAssetPacket(
+			game.Engine, 1, render.AssetMesh3d, kartMesh.Id, 1,
+			game.RenderControls.Revision, 1, bytes,
+		)
+		if readErr != nil || len(bytes) == 0 || !encoded {
+			return nil
+		}
+		game.RenderAssetPackets = append(game.RenderAssetPackets, assetPacket)
+	}
+	underlay := game.staticMeshObject(Transform{Y: -5000}, 108, 600000, 1000, 600000)
 	if len(underlay) == 0 {
 		return nil
 	}
@@ -343,6 +379,22 @@ func (game *BlockKart) buildStaticRenderPackets() [][]byte {
 		{11007, 106, "generated/render/road_edge_grime.vmg1"},
 		{11008, 106, "generated/render/road_tire_grime.vmg1"},
 		{11009, 104, "generated/render/hero_creek_ribbon.vmg1"},
+		{11100, 111, "generated/render/roadside_s0_c0.vmg1"},
+		{11101, 111, "generated/render/roadside_s0_c1.vmg1"},
+		{11102, 111, "generated/render/roadside_s0_c2.vmg1"},
+		{11103, 111, "generated/render/roadside_s0_c3.vmg1"},
+		{11120, 112, "generated/render/roadside_s1_c0.vmg1"},
+		{11140, 113, "generated/render/roadside_s2_c0.vmg1"},
+		{11160, 114, "generated/render/roadside_s3_c0.vmg1"},
+		{11180, 115, "generated/render/roadside_s4_c0.vmg1"},
+		{11200, 116, "generated/render/roadside_s5_c0.vmg1"},
+		{11220, 117, "generated/render/roadside_s6_c0.vmg1"},
+		{11240, 118, "generated/render/roadside_s7_c0.vmg1"},
+		{11300, 119, "generated/render/scenery_tree_trunks.vmg1"},
+		{11301, 120, "generated/render/scenery_tree_crowns.vmg1"},
+		{11302, 121, "generated/render/scenery_fences.vmg1"},
+		{11303, 122, "generated/render/scenery_rocks.vmg1"},
+		{11304, 123, "generated/render/scenery_signs.vmg1"},
 	}
 	for _, mesh := range meshes {
 		bytes, readErr := os.ReadFile(mesh.Path)
@@ -548,16 +600,23 @@ func (game *BlockKart) checkpointRenderObjects(state KartState) ([]render.Snapsh
 }
 
 func (game *BlockKart) retainedGameplayObject(transform Transform, tick uint64, material uint64, halfX int64, halfY int64, halfZ int64) []byte {
-	mesh := game.MeshInstancePackets[material]
+	return game.retainedGameplayMeshObject(
+		transform, tick, game.KartMeshAsset, material, halfX, halfY, halfZ,
+	)
+}
+
+func (game *BlockKart) retainedGameplayMeshObject(transform Transform, tick uint64, meshAsset uint64, material uint64, halfX int64, halfY int64, halfZ int64) []byte {
+	cacheKey := meshAsset * 1000 + material
+	mesh := game.MeshInstancePackets[cacheKey]
 	if len(mesh) == 0 {
 		mesh = render3d.EncodeMeshInstance(render3d.RetainedMeshInstance{
 			MaterialAsset: material, Layers: 1, CastsShadow: true, ReceivesShadow: true,
-			Lods: []render3d.LodMesh{{MeshAsset: game.KartMeshAsset, MaxDistanceMilli: 600000}},
+			Lods: []render3d.LodMesh{{MeshAsset: meshAsset, MaxDistanceMilli: 600000}},
 		})
 		if len(mesh) == 0 {
 			return nil
 		}
-		game.MeshInstancePackets[material] = mesh
+		game.MeshInstancePackets[cacheKey] = mesh
 	}
 	matrix := blockKartScaledPoseMatrix(transform, halfX * 2, halfY * 2, halfZ * 2)
 	return render.EncodeRetainedObject(render.RetainedObject{
@@ -578,23 +637,24 @@ func (game *BlockKart) kartRenderPackets(transform Transform, tick uint64) ([][]
 		Local [3]int64
 		Size [3]int64
 		Material uint64
+		Mesh uint64
 	}
 	parts := []part{
-		{Local: [3]int64{0, 0, 0}, Size: [3]int64{1800, 600, 2600}, Material: 102},
-		{Local: [3]int64{0, 520, -150}, Size: [3]int64{1300, 700, 1200}, Material: 102},
-		{Local: [3]int64{-1050, -320, 850}, Size: [3]int64{520, 620, 760}, Material: 106},
-		{Local: [3]int64{1050, -320, 850}, Size: [3]int64{520, 620, 760}, Material: 106},
-		{Local: [3]int64{-1050, -320, -850}, Size: [3]int64{520, 620, 760}, Material: 106},
-		{Local: [3]int64{1050, -320, -850}, Size: [3]int64{520, 620, 760}, Material: 106},
-		{Local: [3]int64{0, -40, 1450}, Size: [3]int64{2100, 260, 320}, Material: 107},
-		{Local: [3]int64{0, 1050, -350}, Size: [3]int64{620, 620, 620}, Material: 103},
-		{Local: [3]int64{0, 650, -250}, Size: [3]int64{760, 720, 560}, Material: 102},
+		{Local: [3]int64{0, 0, 0}, Size: [3]int64{1900, 700, 2800}, Material: 102, Mesh: 10002},
+		{Local: [3]int64{0, 540, -180}, Size: [3]int64{1350, 820, 1250}, Material: 102, Mesh: 10002},
+		{Local: [3]int64{-1050, -320, 850}, Size: [3]int64{520, 720, 720}, Material: 106, Mesh: 10003},
+		{Local: [3]int64{1050, -320, 850}, Size: [3]int64{520, 720, 720}, Material: 106, Mesh: 10003},
+		{Local: [3]int64{-1050, -320, -850}, Size: [3]int64{520, 720, 720}, Material: 106, Mesh: 10003},
+		{Local: [3]int64{1050, -320, -850}, Size: [3]int64{520, 720, 720}, Material: 106, Mesh: 10003},
+		{Local: [3]int64{0, -40, 1450}, Size: [3]int64{2200, 280, 340}, Material: 107, Mesh: 10004},
+		{Local: [3]int64{0, 1100, -350}, Size: [3]int64{720, 720, 720}, Material: 103, Mesh: 10005},
+		{Local: [3]int64{0, 650, -250}, Size: [3]int64{820, 820, 620}, Material: 102, Mesh: 10006},
 	}
 	packets := make([][]byte, 0, len(parts))
 	for _, value := range parts {
 		partTransform := blockKartLocalTransform(transform, value.Local)
-		packet := game.retainedGameplayObject(partTransform, tick, value.Material, value.Size[0] / 2, value.Size[1] /
-			2, value.Size[2] / 2)
+		packet := game.retainedGameplayMeshObject(partTransform, tick, value.Mesh, value.Material, value.Size[0] /
+			2, value.Size[1] / 2, value.Size[2] / 2)
 		if len(packet) == 0 {
 			return nil, false
 		}

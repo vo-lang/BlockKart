@@ -80,7 +80,6 @@ type BlockKart struct {
 	RenderAssetsPublished bool
 	RenderAssetAcks map[uint64]uint64
 	RenderRevision uint64
-	LastRenderNanos uint64
 	KartMeshAsset uint64
 	BoostAudioAsset uint64
 	EngineAudioAsset uint64
@@ -837,11 +836,6 @@ func (game *BlockKart) frame(tick voplay.TickBatch, pulse []byte) (voplay.TickOu
 	if err := game.updateRenderMetrics(framePulse.Metrics); err != nil {
 		return voplay.TickOutput{}, err
 	}
-	if game.LastRenderNanos != 0 &&
-		framePulse.MonotonicNanos < game.LastRenderNanos + 50000000 {
-		return voplay.TickOutput{AssetPackets: assetPackets}, nil
-	}
-	game.LastRenderNanos = framePulse.MonotonicNanos
 	transform, ok := game.Transforms.Get(game.KartEntity)
 	if !ok {
 		return voplay.TickOutput{}, errors.New("blockkart: extract transform")
