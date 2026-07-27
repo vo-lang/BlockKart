@@ -135,6 +135,7 @@ type BlockKart struct {
 	LastGrassAudioTick uint64
 	LastAudioControlTick uint64
 	LastAudioSnapshotRevision uint64
+	LastRenderDeadlineNanos uint64
 	ConfigurationError error
 }
 
@@ -930,6 +931,13 @@ func (game *BlockKart) frame(tick voplay.TickBatch, pulse []byte) (voplay.TickOu
 	if err := game.updateRenderMetrics(framePulse.Metrics); err != nil {
 		return voplay.TickOutput{}, err
 	}
+	if game.RenderWorldPublished && game.RenderAssetsPublished &&
+		game.LastRenderDeadlineNanos != 0 &&
+		framePulse.DeadlineNanos > game.LastRenderDeadlineNanos &&
+		framePulse.DeadlineNanos - game.LastRenderDeadlineNanos < 50000000 {
+		return voplay.TickOutput{AssetPackets: assetPackets}, nil
+	}
+	game.LastRenderDeadlineNanos = framePulse.DeadlineNanos
 	transform, ok := game.Transforms.Get(game.KartEntity)
 	if !ok {
 		return voplay.TickOutput{}, errors.New("blockkart: extract transform")
