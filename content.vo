@@ -300,6 +300,11 @@ func (game *BlockKart) buildStaticRenderPackets() [][]byte {
 		return nil
 	}
 	game.RenderAssetPackets = append(game.RenderAssetPackets, meshPacket)
+	underlay := game.staticMeshObject(Transform{Y: -5000}, 100, 600000, 1000, 600000)
+	if len(underlay) == 0 {
+		return nil
+	}
+	packets = append(packets, underlay)
 	meshes := []struct {
 		Id uint64
 		Material uint64
