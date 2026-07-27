@@ -901,62 +901,6 @@ func (game *BlockKart) frame(tick voplay.TickBatch, pulse []byte) (voplay.TickOu
 		game.RenderAssetsPublished = true
 	}
 	output.RenderPackets = append(output.RenderPackets, snapshot)
-	if err := game.updateAudio(transform, tick.FirstTick); err != nil {
-		return voplay.TickOutput{}, err
-	}
-	audioSnapshot, encoded := game.Audio.EncodeSnapshotPacket(game.Engine, 1)
-	if !encoded {
-		return voplay.TickOutput{}, errors.New("blockkart: encode audio state")
-	}
-	output.AudioPackets = append(output.AudioPackets, audioSnapshot)
-	if !game.AudioAssetsPublished {
-		output.AudioPackets = append(output.AudioPackets, game.AudioAssetPackets...)
-		game.AudioAssetsPublished = true
-	}
-	if game.BoostPressed && tick.FirstTick >= game.LastBoostAudioTick + 30 {
-		packet, eventEncoded := game.audioOneShot(game.BoostAudioAsset, 700, tick.FirstTick, framePulse.DeadlineNanos /
-			1000000)
-		if !eventEncoded {
-			return voplay.TickOutput{}, errors.New("blockkart: encode boost audio event")
-		}
-		if len(packet) != 0 {
-			output.AudioPackets = append(output.AudioPackets, packet)
-			game.LastBoostAudioTick = tick.FirstTick
-		}
-	}
-	if game.HitAudioPending {
-		packet, eventEncoded := game.audioOneShot(game.HitAudioAsset, 820, tick.FirstTick, framePulse.DeadlineNanos /
-			1000000)
-		if !eventEncoded {
-			return voplay.TickOutput{}, errors.New("blockkart: encode collision audio event")
-		}
-		if len(packet) != 0 {
-			output.AudioPackets = append(output.AudioPackets, packet)
-			game.HitAudioPending = false
-		}
-	}
-	if game.Drifting && tick.FirstTick >= game.LastSkidAudioTick + 18 {
-		packet, eventEncoded := game.audioOneShot(game.SkidAudioAsset, 520, tick.FirstTick, framePulse.DeadlineNanos /
-			1000000)
-		if !eventEncoded {
-			return voplay.TickOutput{}, errors.New("blockkart: encode skid audio event")
-		}
-		if len(packet) != 0 {
-			output.AudioPackets = append(output.AudioPackets, packet)
-			game.LastSkidAudioTick = tick.FirstTick
-		}
-	}
-	if game.OffRoad && tick.FirstTick >= game.LastGrassAudioTick + 24 {
-		packet, eventEncoded := game.audioOneShot(game.GrassAudioAsset, 430, tick.FirstTick, framePulse.DeadlineNanos /
-			1000000)
-		if !eventEncoded {
-			return voplay.TickOutput{}, errors.New("blockkart: encode grass audio event")
-		}
-		if len(packet) != 0 {
-			output.AudioPackets = append(output.AudioPackets, packet)
-			game.LastGrassAudioTick = tick.FirstTick
-		}
-	}
 	return output, nil
 }
 
@@ -1011,9 +955,6 @@ func (game *BlockKart) processEndpointReturns(tick voplay.TickBatch) error {
 	if game.RenderAssetAcks == nil {
 		game.RenderAssetAcks = map[uint64]uint64{}
 	}
-	if game.AudioAssetAcks == nil {
-		game.AudioAssetAcks = map[uint64]uint64{}
-	}
 	for _, packet := range tick.RenderReturns {
 		ack, ok := render.DecodeAssetAck(game.Engine, packet)
 		if !ok {
@@ -1022,33 +963,6 @@ func (game *BlockKart) processEndpointReturns(tick voplay.TickBatch) error {
 		key := ack.Asset | uint64(ack.Kind) << 56
 		if current, found := game.RenderAssetAcks[key]; !found || current < ack.Revision {
 			game.RenderAssetAcks[key] = ack.Revision
-		}
-	}
-	for _, packet := range tick.AudioReturns {
-		ack, ok := audio.DecodeAssetAck(game.Engine, packet)
-		if !ok {
-			continue
-		}
-		key := uint64(ack.Asset.Index) | uint64(ack.Asset.Generation) << 32
-		if current, found := game.AudioAssetAcks[key]; !found || current < ack.Revision {
-			game.AudioAssetAcks[key] = ack.Revision
-		}
-		if ack.Asset.Index == uint32(game.EngineAudioAsset) {
-			source, found := game.Audio.Source(game.EngineAudioSource)
-			if !found {
-				return errors.New("blockkart: activate resident engine audio")
-			}
-			if !source.Playing {
-				source.Playing = true
-				if _, committed := game.Audio.Commit(audio.ControlTransaction{
-					ExpectedRevision: game.Audio.Revision,
-					Operations: []audio.ControlOperation{
-						{Kind: audio.ControlUpdateSource, Source: game.EngineAudioSource, SourceValue: source},
-					},
-				}); !committed {
-					return errors.New("blockkart: start resident engine audio")
-				}
-			}
 		}
 	}
 	return nil
