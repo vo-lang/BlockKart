@@ -39,21 +39,8 @@ func (game *BlockKart) startTrack(context voplay.StartContext) error {
 			}) {
 			return errors.New("blockkart: initialize checkpoint")
 		}
-		body, ok := game.Physics.CreateBody(physics3d.BodyDesc{
-			Kind: physics3d.BodyStatic, Position: position,
-		})
-		if !ok {
-			return errors.New("blockkart: create checkpoint body")
-		}
-		collider, ok := game.Physics.CreateCollider(physics3d.ColliderDesc{
-			Body: body, HalfExtent: [3]uint32{12000, 4000, 3000}, Layer: blockKartLayerTrigger,
-			Mask: blockKartLayerKart, Sensor: true,
-		})
-		if !ok {
-			return errors.New("blockkart: create checkpoint collider")
-		}
 		game.TrackGates = append(game.TrackGates, BlockKartGate{
-			Entity: entityId, Order: uint32(index + 1), Body: body, Collider: collider, Position: position,
+			Entity: entityId, Order: uint32(index + 1), Position: position,
 		})
 	}
 	return nil
@@ -73,21 +60,8 @@ func (game *BlockKart) startGameplay(context voplay.StartContext) error {
 			!game.Collectibles.Upsert(entityId, Collectible{Value: 100}) {
 			return errors.New("blockkart: initialize collectible")
 		}
-		body, ok := game.Physics.CreateBody(physics3d.BodyDesc{
-			Kind: physics3d.BodyStatic, Position: position,
-		})
-		if !ok {
-			return errors.New("blockkart: collectible body")
-		}
-		collider, ok := game.Physics.CreateCollider(physics3d.ColliderDesc{
-			Body: body, HalfExtent: [3]uint32{900, 1800, 900}, Layer: blockKartLayerTrigger,
-			Mask: blockKartLayerKart, Sensor: true,
-		})
-		if !ok {
-			return errors.New("blockkart: collectible collider")
-		}
 		game.Pickups = append(game.Pickups, BlockKartPhysicsEntity{
-			Entity: entityId, Body: body, Collider: collider,
+			Entity: entityId,
 		})
 	}
 	for index := 2; index < len(points); index += 4 {
@@ -101,21 +75,8 @@ func (game *BlockKart) startGameplay(context voplay.StartContext) error {
 			!game.BoostPads.Upsert(entityId, BoostPad{Strength: 12000}) {
 			return errors.New("blockkart: initialize boost pad")
 		}
-		body, ok := game.Physics.CreateBody(physics3d.BodyDesc{
-			Kind: physics3d.BodyStatic, Position: position,
-		})
-		if !ok {
-			return errors.New("blockkart: boost pad body")
-		}
-		collider, ok := game.Physics.CreateCollider(physics3d.ColliderDesc{
-			Body: body, HalfExtent: [3]uint32{5000, 700, 3000}, Layer: blockKartLayerTrigger,
-			Mask: blockKartLayerKart, Sensor: true,
-		})
-		if !ok {
-			return errors.New("blockkart: boost pad collider")
-		}
 		game.PadEntities = append(game.PadEntities, BlockKartPhysicsEntity{
-			Entity: entityId, Body: body, Collider: collider,
+			Entity: entityId,
 		})
 	}
 	for index := 3; index < len(points); index += 5 {
@@ -135,22 +96,8 @@ func (game *BlockKart) startGameplay(context voplay.StartContext) error {
 			!game.MovingObstacles.Upsert(entityId, obstacle) {
 			return errors.New("blockkart: initialize moving obstacle")
 		}
-		body, ok := game.Physics.CreateBody(physics3d.BodyDesc{
-			Kind: physics3d.BodyKinematic,
-			Position: [3]int64{obstacle.Origin_x, obstacle.Origin_y, obstacle.Origin_z},
-		})
-		if !ok {
-			return errors.New("blockkart: moving obstacle body")
-		}
-		collider, ok := game.Physics.CreateCollider(physics3d.ColliderDesc{
-			Body: body, HalfExtent: [3]uint32{1800, 1400, 1800}, Layer: blockKartLayerWorld,
-			Mask: blockKartLayerKart,
-		})
-		if !ok {
-			return errors.New("blockkart: moving obstacle collider")
-		}
 		game.ObstacleEntities = append(game.ObstacleEntities, BlockKartPhysicsEntity{
-			Entity: entityId, Body: body, Collider: collider,
+			Entity: entityId,
 		})
 	}
 	return nil

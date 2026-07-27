@@ -155,23 +155,6 @@ func ConfigureBlockKart(game *BlockKart, builder voplay.Builder) {
 			SimulationWrites: []uint64{blockKartComponentVelocity, blockKartComponentKartState},
 		},
 		{
-			Id: blockKartSystemDynamics, Stage: voplay.StagePrePhysics,
-			Descriptor: []byte("blockkart.dynamics.v1"), Deterministic: true,
-			SimulationReads: []uint64{blockKartComponentMovingObstacle},
-			SimulationWrites: []uint64{blockKartComponentTransform, blockKartComponentBoostPad},
-		},
-		{
-			Id: blockKartSystemPhysics, Stage: voplay.StagePhysics,
-			Descriptor: []byte("blockkart.physics.v1"), Deterministic: true,
-			SimulationReads: []uint64{blockKartComponentVelocity},
-			SimulationWrites: []uint64{blockKartComponentTransform},
-		},
-		{
-			Id: blockKartSystemSync, Stage: voplay.StagePostPhysics, Descriptor: []byte("blockkart.sync.v1"),
-			Deterministic: true, SimulationReads: []uint64{blockKartComponentTransform},
-			SimulationWrites: []uint64{blockKartComponentKartState},
-		},
-		{
 			Id: blockKartSystemFrame, Stage: voplay.StageFrame, Descriptor: []byte("blockkart.frame.v1"),
 			Deterministic: false, SimulationReads: []uint64{blockKartComponentTransform},
 			PresentationWrites: []uint64{blockKartComponentRenderPose},
@@ -237,10 +220,6 @@ func StartBlockKart(game *BlockKart, init BlockKartInit, context voplay.StartCon
 	if !ok {
 		return errors.New("blockkart: moving obstacle store")
 	}
-	game.Physics, ok = physics3d.NewRuntime(512, 1024, 4096, 4096)
-	if !ok {
-		return errors.New("blockkart: physics owner")
-	}
 	if err := game.startWorld(context); err != nil {
 		return err
 	}
@@ -298,29 +277,6 @@ func (game *BlockKart) startWorld(context voplay.StartContext) error {
 		!game.Controls.Upsert(game.KartEntity, KartControl{}) ||
 		!game.KartStates.Upsert(game.KartEntity, KartState{Countdown_ticks: 180}) {
 		return errors.New("blockkart: initialize kart components")
-	}
-	game.KartBody, _ = game.Physics.CreateBody(physics3d.BodyDesc{
-		Kind: physics3d.BodyDynamic, Position: [3]int64{0, 1200, 367500},
-	})
-	if !game.KartBody.Valid() {
-		return errors.New("blockkart: create kart body")
-	}
-	game.KartCollider, _ = game.Physics.CreateCollider(physics3d.ColliderDesc{
-		Body: game.KartBody, HalfExtent: [3]uint32{700, 400, 1100}, Layer: blockKartLayerKart,
-		Mask: blockKartLayerWorld | blockKartLayerTrigger,
-	})
-	if game.KartCollider.Index == 0 {
-		return errors.New("blockkart: create kart collider")
-	}
-	game.TrackBody, _ = game.Physics.CreateBody(physics3d.BodyDesc{
-		Kind: physics3d.BodyStatic, Position: [3]int64{0, 0, 0},
-	})
-	game.TrackCollider, _ = game.Physics.CreateCollider(physics3d.ColliderDesc{
-		Body: game.TrackBody, HalfExtent: [3]uint32{600000, 500, 600000}, Layer: blockKartLayerWorld,
-		Mask: blockKartLayerKart,
-	})
-	if !game.TrackBody.Valid() || game.TrackCollider.Index == 0 {
-		return errors.New("blockkart: create track collision")
 	}
 	if err = game.startTrack(context); err != nil {
 		return err
@@ -724,6 +680,12 @@ func (game *BlockKart) drive(tick voplay.TickBatch) error {
 	forward := state.Speed_per_second
 	velocity.X_per_second = int64(math.Sin(heading) * float64(forward))
 	velocity.Z_per_second = int64(math.Cos(heading) * float64(forward))
+	transform.X += velocity.X_per_second * int64(tick.FixedTickNanos) / 1000000000
+	transform.Z += velocity.Z_per_second * int64(tick.FixedTickNanos) / 1000000000
+	if transform.X < -650000 || transform.X > 650000 ||
+		transform.Z < -650000 || transform.Z > 650000 {
+		return game.respawn()
+	}
 	if !game.Transforms.Upsert(game.KartEntity, transform) {
 		return errors.New("blockkart: update drive transform")
 	}
