@@ -404,6 +404,10 @@ func (game *BlockKart) readInput(tick voplay.TickBatch) error {
 	if !ok {
 		return errors.New("blockkart: missing control component")
 	}
+	leftTapped := false
+	rightTapped := false
+	throttleTapped := false
+	brakeTapped := false
 	for _, packet := range tick.InputFrames {
 		event, decoded := input.DecodePlatformEvent(packet)
 		if !decoded || event.ConsumedByUi || event.Sequence <= game.InputSequence {
@@ -471,12 +475,24 @@ func (game *BlockKart) readInput(tick voplay.TickBatch) error {
 		switch event.Code {
 			case 4, 37, 65, 80:
 				game.LeftPressed = pressed
+				if pressed {
+					leftTapped = true
+				}
 			case 7, 39, 68, 79:
 				game.RightPressed = pressed
+				if pressed {
+					rightTapped = true
+				}
 			case 26, 38, 82, 87:
 				game.ThrottlePressed = pressed
+				if pressed {
+					throttleTapped = true
+				}
 			case 22, 40, 81, 83:
 				game.BrakePressed = pressed
+				if pressed {
+					brakeTapped = true
+				}
 			case 32, 44:
 				game.DriftPressed = pressed
 			case 16, 225:
@@ -484,19 +500,21 @@ func (game *BlockKart) readInput(tick voplay.TickBatch) error {
 		}
 	}
 	control = KartControl{}
-	if game.LeftPressed == game.RightPressed {
+	leftActive := game.LeftPressed || leftTapped
+	rightActive := game.RightPressed || rightTapped
+	if leftActive == rightActive {
 		control.Steer_milli = game.GamepadSteer
-	} else if game.LeftPressed {
+	} else if leftActive {
 		control.Steer_milli = -1000
 	} else {
 		control.Steer_milli = 1000
 	}
-	if game.ThrottlePressed {
+	if game.ThrottlePressed || throttleTapped {
 		control.Throttle_milli = 1000
 	} else {
 		control.Throttle_milli = game.GamepadThrottle
 	}
-	if game.BrakePressed {
+	if game.BrakePressed || brakeTapped {
 		control.Brake_milli = 1000
 	} else {
 		control.Brake_milli = game.GamepadBrake
