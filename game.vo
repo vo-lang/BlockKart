@@ -70,6 +70,7 @@ type BlockKart struct {
 	RenderControlPublished bool
 	StaticRenderPackets [][]byte
 	RenderAssetPackets [][]byte
+	RenderAssetCursor uint32
 	RenderAssetsPublished bool
 	RenderAssetAcks map[uint64]uint64
 	RenderRevision uint64
@@ -897,8 +898,16 @@ func (game *BlockKart) frame(tick voplay.TickBatch, pulse []byte) (voplay.TickOu
 		game.RenderControlPublished = true
 	}
 	if !game.RenderAssetsPublished {
-		output.RenderPackets = append(output.RenderPackets, game.RenderAssetPackets...)
-		game.RenderAssetsPublished = true
+		if int(game.RenderAssetCursor) < len(game.RenderAssetPackets) {
+			output.RenderPackets = append(
+				output.RenderPackets,
+				game.RenderAssetPackets[game.RenderAssetCursor],
+			)
+			game.RenderAssetCursor++
+		}
+		if int(game.RenderAssetCursor) == len(game.RenderAssetPackets) {
+			game.RenderAssetsPublished = true
+		}
 	}
 	output.RenderPackets = append(output.RenderPackets, snapshot)
 	if err := game.updateAudio(transform, tick.FirstTick); err != nil {
