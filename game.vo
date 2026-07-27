@@ -271,7 +271,7 @@ func (game *BlockKart) startWorld(context voplay.StartContext) error {
 	}
 	game.KartEntity = uint64(kart.Index)
 	if !game.Transforms.Upsert(game.KartEntity, Transform{
-		X: 0, Y: 1200, Z: 367500, Yaw_milliradians: 1571,
+		X: 19600, Y: 1200, Z: 367500, Yaw_milliradians: 1571,
 	}) ||
 		!game.Velocities.Upsert(game.KartEntity, Velocity{}) ||
 		!game.Controls.Upsert(game.KartEntity, KartControl{}) ||
