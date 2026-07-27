@@ -985,7 +985,7 @@ func (game *BlockKart) frame(tick voplay.TickBatch, pulse []byte) (voplay.TickOu
 	if len(camera) == 0 {
 		return voplay.TickOutput{}, errors.New("blockkart: encode camera")
 	}
-	hud := game.hudPackets()
+	hud := game.hudPackets(false)
 	if len(hud) == 0 {
 		return voplay.TickOutput{}, errors.New("blockkart: encode HUD")
 	}
@@ -1328,7 +1328,7 @@ func (game *BlockKart) updateAudio(transform Transform, tick uint64) error {
 	return nil
 }
 
-func (game *BlockKart) hudPackets() []render.SnapshotObject {
+func (game *BlockKart) hudPackets(includeStatic bool) []render.SnapshotObject {
 	state, ok := game.KartStates.Get(game.KartEntity)
 	if !ok || len(game.TrackGates) == 0 {
 		return nil
@@ -1454,6 +1454,9 @@ func (game *BlockKart) hudPackets() []render.SnapshotObject {
 	}
 	objects := make([]render.SnapshotObject, 0, len(shapes))
 	for _, shape := range shapes {
+		if blockKartStaticHudShape(shape.Id) && !includeStatic {
+			continue
+		}
 		packet := []byte{}
 		if blockKartStaticHudShape(shape.Id) {
 			packet = game.HudStaticPackets[shape.Id]
@@ -1489,12 +1492,23 @@ func (game *BlockKart) hudPackets() []render.SnapshotObject {
 		})
 	}
 	for _, text := range texts {
-		packet := game.HudStaticPackets[1000 + text.Id]
-		if text.Id > 6 || len(packet) == 0 {
+		if text.Id <= 6 && !includeStatic {
+			continue
+		}
+		cacheKey := uint64(1000 + text.Id)
+		if text.Id == 7 {
+			cacheKey = 100000 + text.Id * 1000 + lapValue
+		} else if text.Id == 8 {
+			cacheKey = 200000 + text.Id * 1000 + elapsedSeconds
+		} else if text.Id == 9 {
+			cacheKey = 300000 + text.Id * 1000 + speedValue
+		} else if text.Id == 10 {
+			cacheKey = 400000 + text.Id * 1000 + countdown
+		}
+		packet := game.HudStaticPackets[cacheKey]
+		if len(packet) == 0 {
 			packet = render2d.EncodeText(text)
-			if text.Id <= 6 {
-				game.HudStaticPackets[1000 + text.Id] = packet
-			}
+			game.HudStaticPackets[cacheKey] = packet
 		}
 		if len(packet) == 0 {
 			return nil

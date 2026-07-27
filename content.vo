@@ -449,6 +449,17 @@ func (game *BlockKart) buildStaticRenderPackets() [][]byte {
 		game.RenderAssetPackets = append(game.RenderAssetPackets, assetPacket)
 		packets = append(packets, object)
 	}
+	hud := game.hudPackets(true)
+	if len(hud) == 0 {
+		return nil
+	}
+	for _, object := range hud {
+		index := object.Entity.Index
+		if index == 910001 || index == 910002 || index == 910006 || index == 910018 ||
+			index >= 920001 && index <= 920006 {
+			packets = append(packets, object.Bytes)
+		}
+	}
 	return packets
 }
 
@@ -552,15 +563,18 @@ func (game *BlockKart) gameplayRenderPackets(tick uint64) ([]render.SnapshotObje
 		if value.Collected {
 			continue
 		}
-		transform, ok := game.Transforms.Get(pickup.Entity)
-		if !ok {
-			return nil, false
-		}
-		transform.Y += int64(math.Sin(float64(tick + pickup.Entity * 17) * 0.08) * 650)
-		transform.Yaw_milliradians = int32((tick * 45 + pickup.Entity * 113) % 6283)
-		packet := game.retainedGameplayObject(transform, tick, 103, 650, 900, 650)
+		packet := game.GameplayStaticPackets[pickup.Entity]
 		if len(packet) == 0 {
-			return nil, false
+			transform, found := game.Transforms.Get(pickup.Entity)
+			if !found {
+				return nil, false
+			}
+			transform.Yaw_milliradians = int32((pickup.Entity * 113) % 6283)
+			packet = game.retainedGameplayObject(transform, 1, 103, 650, 900, 650)
+			if len(packet) == 0 {
+				return nil, false
+			}
+			game.GameplayStaticPackets[pickup.Entity] = packet
 		}
 		objects = append(objects, render.SnapshotObject{
 			Entity: voplay.Handle{Index: uint32(2000 + pickup.Entity), Generation: 1}, Bytes: packet,
@@ -622,10 +636,17 @@ func (game *BlockKart) checkpointRenderObjects(state KartState) ([]render.Snapsh
 			{Local: [3]int64{0, 6100, 0}, Half: [3]int64{9450, 450, 450}},
 		}
 		for partIndex, part := range parts {
-			transform := blockKartLocalTransform(base, part.Local)
-			packet := game.retainedGameplayObject(transform, 1, material, part.Half[0], part.Half[1], part.Half[2])
+			cacheKey := uint64(1000000 + gate.Order * 3 + uint32(partIndex))
+			packet := game.GameplayStaticPackets[cacheKey]
 			if len(packet) == 0 {
-				return nil, false
+				transform := blockKartLocalTransform(base, part.Local)
+				packet = game.retainedGameplayObject(
+					transform, 1, material, part.Half[0], part.Half[1], part.Half[2],
+				)
+				if len(packet) == 0 {
+					return nil, false
+				}
+				game.GameplayStaticPackets[cacheKey] = packet
 			}
 			objects = append(objects, render.SnapshotObject{
 				Entity: voplay.Handle{Index: uint32(100000 + gate.Order * 3 + uint32(partIndex)), Generation: 1},
