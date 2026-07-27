@@ -592,59 +592,6 @@ func (game *BlockKart) buildStaticRenderPackets() [][]byte {
 			return nil
 		}
 		packets = append(packets, object)
-		for _, side := range []int64{-1, 1} {
-			curbTransform := blockKartLocalTransform(
-				transform, [3]int64{side * 9400, 250, 0},
-			)
-			curb := game.staticMeshObject(
-				curbTransform, 110, 700, 450, (length+4000)/2,
-			)
-			if len(curb) == 0 {
-				return nil
-			}
-			packets = append(packets, curb)
-		}
-	}
-	for index, point := range points {
-		next := points[(index+1)%len(points)]
-		deltaX := float64(next[0] - point[0])
-		deltaZ := float64(next[2] - point[2])
-		length := math.Sqrt(deltaX*deltaX + deltaZ*deltaZ)
-		if length < 1 {
-			continue
-		}
-		perpendicularX := int64(-deltaZ / length * 30000)
-		perpendicularZ := int64(deltaX / length * 30000)
-		side := int64(1)
-		if index%2 != 0 {
-			side = -1
-		}
-		base := Transform{
-			X: point[0] + perpendicularX*side,
-			Y: point[1] + 1800,
-			Z: point[2] + perpendicularZ*side,
-		}
-		trunk := game.staticMeshObject(base, 109, 700, 2300, 700)
-		canopyTransform := base
-		canopyTransform.Y += 3200
-		canopy := game.staticMeshObject(
-			canopyTransform, 108,
-			2200+int64(index%3)*350, 2600, 2200+int64(index%3)*350,
-		)
-		rock := Transform{
-			X: point[0] - perpendicularX*side,
-			Y: point[1] + 900,
-			Z: point[2] - perpendicularZ*side,
-			Yaw_milliradians: int32(index * 271),
-		}
-		rockObject := game.staticMeshObject(
-			rock, 107, 1400+int64(index%4)*300,
-			900+int64(index%3)*220, 1200+int64(index%2)*450,
-		)
-		if len(trunk) == 0 || len(canopy) == 0 || len(rockObject) == 0 {
-			return nil
-		}
-		packets = append(packets, trunk, canopy, rockObject)
 	}
 	return packets
 }
