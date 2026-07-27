@@ -764,7 +764,7 @@ func (game *BlockKart) drive(tick voplay.TickBatch) error {
 		steeringStep = 260
 	} else if game.Steering_milli != 0 &&
 		(game.Steering_milli < 0) != (control.Steer_milli < 0) {
-		steeringStep = 300
+		steeringStep = 450
 	}
 	game.Steering_milli = blockKartApproachInt32(
 		game.Steering_milli, control.Steer_milli, steeringStep,
@@ -777,12 +777,19 @@ func (game *BlockKart) drive(tick voplay.TickBatch) error {
 	if absoluteSpeed < 300 {
 		steeringAuthority = 0
 	}
+	highSpeedRatio := (absoluteSpeed - 14000.0) / 18000.0
+	if highSpeedRatio < 0 {
+		highSpeedRatio = 0
+	}
+	if highSpeedRatio > 1 {
+		highSpeedRatio = 1
+	}
 	game.Drifting = control.Drift && absoluteSpeed > 7500
-	maximumYawRate := 1350.0 - speedRatio * 300.0
-	steeringResponse := 4.2
+	maximumYawRate := 1050.0 - highSpeedRatio * 300.0
+	steeringResponse := 5.0
 	if game.Drifting {
-		maximumYawRate = 1900.0 - speedRatio * 200.0
-		steeringResponse = 3.2
+		maximumYawRate = 1700.0 - highSpeedRatio * 250.0
+		steeringResponse = 3.6
 	}
 	direction := 1.0
 	if nextSpeed < -250 {
