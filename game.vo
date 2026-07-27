@@ -72,6 +72,8 @@ type BlockKart struct {
 	RenderLiveDynamicEntities map[uint32]bool
 	StaticRenderPackets [][]byte
 	MeshInstancePackets map[uint64][]byte
+	HudStaticPackets map[uint64][]byte
+	GameplayStaticPackets map[uint64][]byte
 	RenderAssetPackets [][]byte
 	RenderAssetCursor uint32
 	RenderAssetsPublished bool
@@ -123,6 +125,8 @@ type BlockKart struct {
 	LastBoostAudioTick uint64
 	LastSkidAudioTick uint64
 	LastGrassAudioTick uint64
+	LastAudioControlTick uint64
+	LastAudioSnapshotRevision uint64
 	ConfigurationError error
 }
 
@@ -189,6 +193,8 @@ func StartBlockKart(game *BlockKart, init BlockKartInit, context voplay.StartCon
 	game.Engine = context.Engine()
 	game.RenderLiveDynamicEntities = map[uint32]bool{}
 	game.MeshInstancePackets = map[uint64][]byte{}
+	game.HudStaticPackets = map[uint64][]byte{}
+	game.GameplayStaticPackets = map[uint64][]byte{}
 	var ok bool
 	game.Transforms, ok = NewTransformStore(512, 4096)
 	if !ok {
@@ -935,14 +941,20 @@ func (game *BlockKart) frame(tick voplay.TickBatch, pulse []byte) (voplay.TickOu
 		}
 	}
 	output.RenderPackets = append(output.RenderPackets, renderPacket)
-	if err := game.updateAudio(transform, tick.FirstTick); err != nil {
-		return voplay.TickOutput{}, err
+	if game.LastAudioControlTick == 0 || tick.FirstTick >= game.LastAudioControlTick + 5 {
+		if err := game.updateAudio(transform, tick.FirstTick); err != nil {
+			return voplay.TickOutput{}, err
+		}
+		game.LastAudioControlTick = tick.FirstTick
 	}
-	audioSnapshot, encoded := game.Audio.EncodeSnapshotPacket(game.Engine, 1)
-	if !encoded {
-		return voplay.TickOutput{}, errors.New("blockkart: encode audio state")
+	if game.LastAudioSnapshotRevision != game.Audio.Revision {
+		audioSnapshot, encoded := game.Audio.EncodeSnapshotPacket(game.Engine, 1)
+		if !encoded {
+			return voplay.TickOutput{}, errors.New("blockkart: encode audio state")
+		}
+		output.AudioPackets = append(output.AudioPackets, audioSnapshot)
+		game.LastAudioSnapshotRevision = game.Audio.Revision
 	}
-	output.AudioPackets = append(output.AudioPackets, audioSnapshot)
 	if !game.AudioAssetsPublished {
 		output.AudioPackets = append(output.AudioPackets, game.AudioAssetPackets...)
 		game.AudioAssetsPublished = true
@@ -1308,7 +1320,16 @@ func (game *BlockKart) hudPackets() []render.SnapshotObject {
 	}
 	objects := make([]render.SnapshotObject, 0, len(shapes))
 	for _, shape := range shapes {
-		packet := render2d.EncodeShape(shape)
+		packet := []byte{}
+		if blockKartStaticHudShape(shape.Id) {
+			packet = game.HudStaticPackets[shape.Id]
+		}
+		if len(packet) == 0 {
+			packet = render2d.EncodeShape(shape)
+			if blockKartStaticHudShape(shape.Id) {
+				game.HudStaticPackets[shape.Id] = packet
+			}
+		}
 		if len(packet) == 0 {
 			return nil
 		}
@@ -1334,7 +1355,13 @@ func (game *BlockKart) hudPackets() []render.SnapshotObject {
 		})
 	}
 	for _, text := range texts {
-		packet := render2d.EncodeText(text)
+		packet := game.HudStaticPackets[1000 + text.Id]
+		if text.Id > 6 || len(packet) == 0 {
+			packet = render2d.EncodeText(text)
+			if text.Id <= 6 {
+				game.HudStaticPackets[1000 + text.Id] = packet
+			}
+		}
 		if len(packet) == 0 {
 			return nil
 		}
@@ -1343,6 +1370,10 @@ func (game *BlockKart) hudPackets() []render.SnapshotObject {
 		})
 	}
 	return objects
+}
+
+func blockKartStaticHudShape(id uint64) bool {
+	return id == 1 || id == 2 || id == 4 || id == 6
 }
 
 func (game *BlockKart) appendTouchHud(shapes []render2d.Shape) []render2d.Shape {

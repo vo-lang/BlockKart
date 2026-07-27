@@ -478,13 +478,17 @@ func (game *BlockKart) gameplayRenderPackets(tick uint64) ([]render.SnapshotObje
 		})
 	}
 	for _, pad := range game.PadEntities {
-		transform, ok := game.Transforms.Get(pad.Entity)
-		if !ok {
-			return nil, false
-		}
-		packet := game.retainedGameplayObject(transform, tick, 104, 4200, 250, 2400)
+		packet := game.GameplayStaticPackets[pad.Entity]
 		if len(packet) == 0 {
-			return nil, false
+			transform, ok := game.Transforms.Get(pad.Entity)
+			if !ok {
+				return nil, false
+			}
+			packet = game.retainedGameplayObject(transform, 1, 104, 4200, 250, 2400)
+			if len(packet) == 0 {
+				return nil, false
+			}
+			game.GameplayStaticPackets[pad.Entity] = packet
 		}
 		objects = append(objects, render.SnapshotObject{
 			Entity: voplay.Handle{Index: uint32(2000 + pad.Entity), Generation: 1}, Bytes: packet,
