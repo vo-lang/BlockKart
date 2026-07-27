@@ -450,52 +450,52 @@ func (game *BlockKart) readInput(tick voplay.TickBatch) error {
 		pressed := event.Value != 0
 		if pressed {
 			switch event.Code {
-				case 19:
+				case 19, 1026227156:
 					game.Paused = !game.Paused
-				case 21:
+				case 21, 1059782394:
 					if err := game.restartRace(); err != nil {
 						return err
 					}
-				case 60, 114:
+				case 60, 114, 332577688:
 					game.DebugOverlayVisible = !game.DebugOverlayVisible
-				case 61, 115:
+				case 61, 115, 382910545:
 					game.RenderDebugMode = (game.RenderDebugMode + 1) % 8
-				case 62, 116:
+				case 62, 116, 366132926:
 					if game.CameraMode == 1 {
 						game.CameraMode = 0
 					} else {
 						game.CameraMode = 1
 					}
-				case 63, 117:
+				case 63, 117, 416465783:
 					game.CameraMode = (game.CameraMode + 1) % 3
-				case 64, 118:
+				case 64, 118, 399688164:
 					game.StressMode = !game.StressMode
 			}
 		}
 		switch event.Code {
-			case 4, 37, 65, 80:
+			case 4, 37, 65, 80, 774562871, 3199684067:
 				game.LeftPressed = pressed
 				if pressed {
 					leftTapped = true
 				}
-			case 7, 39, 68, 79:
+			case 7, 39, 68, 79, 690674776, 1371226220:
 				game.RightPressed = pressed
 				if pressed {
 					rightTapped = true
 				}
-			case 26, 38, 82, 87:
+			case 26, 38, 82, 87, 154847355, 1009449537:
 				game.ThrottlePressed = pressed
 				if pressed {
 					throttleTapped = true
 				}
-			case 22, 40, 81, 83:
+			case 22, 40, 81, 83, 1076560013, 2494835758:
 				game.BrakePressed = pressed
 				if pressed {
 					brakeTapped = true
 				}
-			case 32, 44:
+			case 32, 44, 3250860581:
 				game.DriftPressed = pressed
-			case 16, 225:
+			case 16, 225, 2431419694:
 				game.BoostKeyPressed = pressed
 		}
 	}
