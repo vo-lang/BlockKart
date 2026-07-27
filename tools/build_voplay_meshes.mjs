@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const sources = [
-  ['lowpoly_terrain_lod.glb', 11001n, 'lowpoly_terrain.vmg1'],
+  ['lowpoly_terrain_lod.glb', 11001n, 'lowpoly_terrain.vmg1', 2],
   ['road_asphalt.glb', 11002n],
   ['road_center_dashes.glb', 11003n],
   ['road_curbs.glb', 11004n],
@@ -18,12 +18,48 @@ const sourceDir = resolve(root, 'assets/maps/primitive_track');
 const outputDir = resolve(root, 'generated/render');
 
 await mkdir(outputDir, { recursive: true });
-for (const [name, id, outputName] of sources) {
+for (const [name, id, outputName, triangleStride] of sources) {
   const source = await readFile(resolve(sourceDir, name));
-  const artifact = encodeVmg1(decodeGlb(source), id);
+  const decoded = decodeGlb(source);
+  const artifact = encodeVmg1(
+    triangleStride === undefined ? decoded : decimateTriangles(decoded, triangleStride),
+    id,
+  );
   const output = resolve(outputDir, outputName ?? `${name.slice(0, -4)}.vmg1`);
   await writeFile(output, artifact);
   console.log(`${basename(output)} ${artifact.byteLength} bytes`);
+}
+
+function decimateTriangles(mesh, stride) {
+  const remap = new Map();
+  const positions = [];
+  const normals = [];
+  const texcoords = [];
+  const indices = [];
+  for (let triangle = 0; triangle < mesh.indices.length / 3; triangle += stride) {
+    for (let corner = 0; corner < 3; corner += 1) {
+      const sourceIndex = mesh.indices[triangle * 3 + corner];
+      let targetIndex = remap.get(sourceIndex);
+      if (targetIndex === undefined) {
+        targetIndex = remap.size;
+        remap.set(sourceIndex, targetIndex);
+        for (let component = 0; component < 3; component += 1) {
+          positions.push(mesh.positions[sourceIndex * 3 + component]);
+          normals.push(mesh.normals[sourceIndex * 3 + component]);
+        }
+        for (let component = 0; component < 2; component += 1) {
+          texcoords.push(mesh.texcoords[sourceIndex * 2 + component]);
+        }
+      }
+      indices.push(targetIndex);
+    }
+  }
+  return {
+    positions: new Float32Array(positions),
+    normals: new Float32Array(normals),
+    texcoords: new Float32Array(texcoords),
+    indices: new Uint32Array(indices),
+  };
 }
 
 function decodeGlb(bytes) {
