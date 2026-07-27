@@ -15,10 +15,7 @@ import (
 const (
 	blockKartSystemInput uint64 = 100
 	blockKartSystemDrive uint64 = 200
-	blockKartSystemDynamics uint64 = 250
 	blockKartSystemPhysics uint64 = 300
-	blockKartSystemSync uint64 = 400
-	blockKartSystemJournal uint64 = 450
 	blockKartSystemFrame uint64 = 500
 )
 
@@ -168,29 +165,20 @@ func ConfigureBlockKart(game *BlockKart, builder voplay.Builder) {
 			Deterministic: true, SimulationWrites: []uint64{blockKartComponentControl},
 		},
 		{
-			Id: blockKartSystemDrive, Stage: voplay.StageGameplay, Descriptor: []byte("blockkart.drive.v1"),
-			Deterministic: true, SimulationReads: []uint64{blockKartComponentControl},
-			SimulationWrites: []uint64{blockKartComponentVelocity, blockKartComponentKartState},
-		},
-		{
-			Id: blockKartSystemDynamics, Stage: voplay.StagePrePhysics,
-			Descriptor: []byte("blockkart.dynamics.v2"), Deterministic: true,
-			SimulationReads: []uint64{blockKartComponentMovingObstacle},
-			SimulationWrites: []uint64{blockKartComponentTransform, blockKartComponentBoostPad},
-		},
-		{
-			Id: blockKartSystemSync, Stage: voplay.StagePostPhysics, Descriptor: []byte("blockkart.sync.v2"),
-			Deterministic: true, SimulationReads: []uint64{blockKartComponentTransform},
-			SimulationWrites: []uint64{blockKartComponentKartState},
+			Id: blockKartSystemDrive, Stage: voplay.StageGameplay, Descriptor: []byte("blockkart.gameplay.v2"),
+			Deterministic: true,
+			SimulationReads: []uint64{
+				blockKartComponentControl, blockKartComponentMovingObstacle,
+			},
+			SimulationWrites: []uint64{
+				blockKartComponentVelocity, blockKartComponentKartState,
+				blockKartComponentTransform, blockKartComponentBoostPad,
+			},
 		},
 		{
 			Id: blockKartSystemFrame, Stage: voplay.StageFrame, Descriptor: []byte("blockkart.frame.v1"),
 			Deterministic: false, SimulationReads: []uint64{blockKartComponentTransform},
 			PresentationWrites: []uint64{blockKartComponentRenderPose},
-		},
-		{
-			Id: blockKartSystemJournal, Stage: voplay.StagePostTick,
-			Descriptor: []byte("blockkart.journal.v1"), Deterministic: true,
 		},
 	}
 	for _, system := range systems {
@@ -269,20 +257,27 @@ func ExecuteBlockKart(game *BlockKart, invocation voplay.SystemInvocation) (vopl
 		case blockKartSystemInput:
 			return voplay.TickOutput{}, game.readInput(invocation.Tick)
 		case blockKartSystemDrive:
-			return voplay.TickOutput{}, game.drive(invocation.Tick)
-		case blockKartSystemDynamics:
-			return voplay.TickOutput{}, game.updateDynamics(invocation.Tick)
+			return voplay.TickOutput{}, game.updateGameplay(invocation.Tick)
 		case blockKartSystemPhysics:
 			return voplay.TickOutput{}, game.stepPhysics(invocation.Tick)
-		case blockKartSystemSync:
-			return voplay.TickOutput{}, game.syncRace(invocation.Tick)
-		case blockKartSystemJournal:
-			return voplay.TickOutput{}, game.drainJournals()
 		case blockKartSystemFrame:
 			return game.frame(invocation.Tick, invocation.PresentationPulse)
 		default:
 			return voplay.TickOutput{}, errors.New("blockkart: unknown scheduled system")
 	}
+}
+
+func (game *BlockKart) updateGameplay(tick voplay.TickBatch) error {
+	if err := game.drive(tick); err != nil {
+		return err
+	}
+	if err := game.updateDynamics(tick); err != nil {
+		return err
+	}
+	if err := game.syncRace(tick); err != nil {
+		return err
+	}
+	return game.drainJournals()
 }
 
 func (game *BlockKart) drainJournals() error {
@@ -1500,20 +1495,16 @@ func (game *BlockKart) hudPackets(includeStatic bool) []render.SnapshotObject {
 		if text.Id <= 6 && !includeStatic {
 			continue
 		}
-		cacheKey := uint64(1000 + text.Id)
-		if text.Id == 7 {
-			cacheKey = 100000 + text.Id * 1000 + lapValue
-		} else if text.Id == 8 {
-			cacheKey = 200000 + text.Id * 1000 + elapsedSeconds
-		} else if text.Id == 9 {
-			cacheKey = 300000 + text.Id * 1000 + speedValue
-		} else if text.Id == 10 {
-			cacheKey = 400000 + text.Id * 1000 + countdown
-		}
-		packet := game.HudStaticPackets[cacheKey]
-		if len(packet) == 0 {
+		packet := []byte{}
+		if text.Id <= 6 {
+			cacheKey := uint64(1000 + text.Id)
+			packet = game.HudStaticPackets[cacheKey]
+			if len(packet) == 0 {
+				packet = render2d.EncodeText(text)
+				game.HudStaticPackets[cacheKey] = packet
+			}
+		} else {
 			packet = render2d.EncodeText(text)
-			game.HudStaticPackets[cacheKey] = packet
 		}
 		if len(packet) == 0 {
 			return nil
