@@ -1,4 +1,4 @@
-// governed:voplay-codegen game_factory_id=7605034866940721384
+// governed:voplay-codegen game_factory_id=4962268210745581410
 package main
 
 import (
@@ -70,14 +70,14 @@ func BlockKartReadU64(input []byte, offset int) uint64 {
 
 func NewBlockKartEntryDescriptor() voplay.GameEntryDescriptor {
 	return voplay.GameEntryDescriptor{
-		ArtifactId: [32]byte{232, 56, 118, 20, 235, 130, 138, 105, 217, 56, 18, 236, 213, 192, 87, 44, 179, 17, 40, 119, 45, 5, 201, 216, 48, 237, 246, 31, 93, 5, 103, 77},
-		FactoryId: 7605034866940721384,
-		SchemaFingerprint: [32]byte{248, 119, 205, 194, 157, 139, 24, 179, 215, 176, 124, 201, 8, 35, 83, 102, 229, 85, 142, 101, 137, 164, 77, 225, 158, 184, 246, 127, 247, 94, 156, 80},
+		ArtifactId: [32]byte{98, 31, 180, 125, 165, 132, 221, 68, 63, 253, 34, 123, 99, 90, 146, 254, 166, 49, 132, 119, 212, 62, 208, 37, 162, 92, 119, 206, 238, 108, 105, 168},
+		FactoryId: 4962268210745581410,
+		SchemaFingerprint: [32]byte{155, 38, 199, 130, 17, 65, 74, 9, 40, 64, 88, 134, 44, 100, 86, 76, 60, 164, 240, 58, 249, 37, 63, 68, 51, 188, 84, 107, 19, 76, 232, 71},
 		RoleArtifactSetFingerprint: [32]byte{204, 133, 208, 203, 215, 184, 203, 24, 117, 201, 65, 63, 87, 220, 104, 243, 97, 18, 7, 175, 45, 199, 24, 135, 168, 47, 250, 132, 49, 212, 197, 83},
 	}
 }
 
-func __vo_entry_meta_v1_voplay_7605034866940721384_e8387614eb828a69d93812ecd5c0572cb31128772d05c9d830edf61f5d05674d_f877cdc29d8b18b3d7b07cc908235366e5558e6589a44de19eb8f67ff75e9c50_cc85d0cbd7b8cb1875c9413f57dc68f3611207af2dc71887a82ffa8431d4c553(initBytes []byte) {
+func __vo_entry_meta_v1_voplay_4962268210745581410_621fb47da584dd443ffd227b635a92fea6318477d43ed025a25c77ceee6c69a8_9b26c78211414a09284058862c64564c3ca4f03af9253f4433bc546b134ce847_cc85d0cbd7b8cb1875c9413f57dc68f3611207af2dc71887a82ffa8431d4c553(initBytes []byte) {
 	init, ok := BlockKartDecodeInit(initBytes)
 	if !ok { panic("generated Voplay init codec rejected target-island payload") }
 	engine := voplay.TargetEngine()

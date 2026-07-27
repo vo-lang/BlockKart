@@ -74,7 +74,8 @@ func (game *BlockKart) startGameplay(context voplay.StartContext) error {
 		entityId := uint64(40 + index / 5)
 		obstacle := MovingObstacle{
 			Origin_x: position[0], Origin_y: position[1] + 1400, Origin_z: position[2], Axis_x: 1000,
-			Axis_z: 0, Amplitude_milli: 9000, Period_ticks: 180, Phase_ticks: uint32(index * 19),
+			Axis_z: 0, Amplitude_milli: 9000,
+			Period_ticks: 18 * blockKartTicksPerSecond, Phase_ticks: uint32(index * 57),
 		}
 		if !game.Transforms.Upsert(entityId, Transform{
 			X: obstacle.Origin_x, Y: obstacle.Origin_y, Z: obstacle.Origin_z,
@@ -109,10 +110,9 @@ func (game *BlockKart) updateDynamics(tick voplay.TickBatch) error {
 			obstacle.Origin_x + signed * int64(obstacle.Axis_x) / 1000, obstacle.Origin_y,
 			obstacle.Origin_z + signed * int64(obstacle.Axis_z) / 1000,
 		}
-		if !game.Physics.Submit(physics3d.Command{
-			Kind: physics3d.CommandKinematicTarget, Body: entity.Body, Value: position,
-		}) ||
-			!game.Transforms.Upsert(entity.Entity, Transform{X: position[0], Y: position[1], Z: position[2]}) {
+		if !game.Transforms.Upsert(entity.Entity, Transform{
+			X: position[0], Y: position[1], Z: position[2],
+		}) {
 			return errors.New("blockkart: move obstacle")
 		}
 	}
@@ -132,55 +132,61 @@ func (game *BlockKart) updateDynamics(tick voplay.TickBatch) error {
 }
 
 func (game *BlockKart) applyGameplayContacts(state *KartState) error {
-	for _, contact := range game.Contacts {
-		var other physics3d.BodyRef
-		if contact.A == game.KartBody {
-			other = contact.B
-		} else if contact.B == game.KartBody {
-			other = contact.A
-		} else {
-			continue
+	if state == nil {
+		return errors.New("blockkart: missing gameplay state")
+	}
+	kart, ok := game.Transforms.Get(game.KartEntity)
+	if !ok {
+		return errors.New("blockkart: gameplay transform")
+	}
+	for _, pickup := range game.Pickups {
+		position, found := game.Transforms.Get(pickup.Entity)
+		value, valueFound := game.Collectibles.Get(pickup.Entity)
+		if !found || !valueFound {
+			return errors.New("blockkart: collectible proximity state")
 		}
-		for _, pickup := range game.Pickups {
-			if pickup.Body != other {
-				continue
-			}
-			value, ok := game.Collectibles.Get(pickup.Entity)
-			if !ok {
-				return errors.New("blockkart: collectible contact")
-			}
-			if !value.Collected {
-				value.Collected = true
-				state.Score += value.Value
-				if !game.Collectibles.Upsert(pickup.Entity, value) {
-					return errors.New("blockkart: collect pickup")
-				}
-			}
-		}
-		for _, padEntity := range game.PadEntities {
-			if padEntity.Body != other {
-				continue
-			}
-			pad, ok := game.BoostPads.Get(padEntity.Entity)
-			if !ok {
-				return errors.New("blockkart: boost pad contact")
-			}
-			if pad.Cooldown_ticks == 0 {
-				state.Boost_ticks = 90
-				pad.Cooldown_ticks = 180
-				if !game.BoostPads.Upsert(padEntity.Entity, pad) {
-					return errors.New("blockkart: activate boost pad")
-				}
-			}
-		}
-		for _, obstacle := range game.ObstacleEntities {
-			if obstacle.Body == other {
-				game.HitAudioPending = true
-				return game.respawn()
+		if !value.Collected && blockKartHorizontalDistanceSquared(kart, position) <= 4500 * 4500 {
+			value.Collected = true
+			state.Score += value.Value
+			if !game.Collectibles.Upsert(pickup.Entity, value) {
+				return errors.New("blockkart: collect pickup")
 			}
 		}
 	}
+	for _, padEntity := range game.PadEntities {
+		position, found := game.Transforms.Get(padEntity.Entity)
+		pad, padFound := game.BoostPads.Get(padEntity.Entity)
+		if !found || !padFound {
+			return errors.New("blockkart: boost pad proximity state")
+		}
+		if pad.Cooldown_ticks == 0 &&
+			blockKartHorizontalDistanceSquared(kart, position) <= 7500 * 7500 {
+			state.Boost_ticks = blockKartBoostTicks
+			pad.Cooldown_ticks = blockKartBoostCooldownTicks
+			if !game.BoostPads.Upsert(padEntity.Entity, pad) {
+				return errors.New("blockkart: activate boost pad")
+			}
+		}
+	}
+	for _, obstacle := range game.ObstacleEntities {
+		position, found := game.Transforms.Get(obstacle.Entity)
+		if !found {
+			return errors.New("blockkart: obstacle proximity state")
+		}
+		if blockKartHorizontalDistanceSquared(kart, position) <= 3800 * 3800 {
+			game.HitAudioPending = true
+			state.Speed_per_second = 0
+			state.Boost_ticks = 0
+			return game.respawn()
+		}
+	}
 	return nil
+}
+
+func blockKartHorizontalDistanceSquared(left Transform, right Transform) int64 {
+	x := left.X - right.X
+	z := left.Z - right.Z
+	return x * x + z * z
 }
 
 func (game *BlockKart) startAssets(context voplay.StartContext) error {
@@ -277,6 +283,10 @@ func (game *BlockKart) buildStaticRenderPackets() [][]byte {
 		{12004, "assets/maps/primitive_track/rock_texture.png"},
 		{12005, "assets/maps/primitive_track/terrain_splat_large.png"},
 		{12006, "assets/effects/grass_card_atlas.png"},
+		{12007, "assets/maps/primitive_track/dirt_normal.png"},
+		{12008, "assets/maps/primitive_track/dirt_mr.png"},
+		{12009, "assets/maps/primitive_track/rock_normal.png"},
+		{12010, "assets/maps/primitive_track/rock_mr.png"},
 	}
 	for _, texture := range textures {
 		bytes, readErr := os.ReadFile(texture.Path)
@@ -294,7 +304,7 @@ func (game *BlockKart) buildStaticRenderPackets() [][]byte {
 	}
 	materials := []render3d.Material{
 		{Id: 100, BaseColor: [4]uint16{65535, 65535, 65535, 65535}, Roughness: 59000, Alpha: render3d.AlphaOpaque, Textures: [5]uint64{12005, 12001, 12003, 12002, 12004}, Revision: 1},
-		{Id: 101, BaseColor: [4]uint16{4200, 5200, 5600, 65535}, Roughness: 57000, Alpha: render3d.AlphaOpaque, Revision: 1},
+		{Id: 101, BaseColor: [4]uint16{15000, 15500, 16000, 65535}, Roughness: 57000, Alpha: render3d.AlphaOpaque, Textures: [5]uint64{12004, 12009, 12010}, Revision: 1},
 		{Id: 102, BaseColor: [4]uint16{6000, 37000, 62000, 65535}, Metallic: 5000, Roughness: 30000, Alpha: render3d.AlphaOpaque, Revision: 1},
 		{Id: 103, BaseColor: [4]uint16{65535, 50000, 5000, 65535}, Metallic: 12000, Roughness: 18000, Emissive: [3]uint16{16000, 9000, 500}, Alpha: render3d.AlphaOpaque, Revision: 1},
 		{Id: 104, BaseColor: [4]uint16{5000, 42000, 65535, 65535}, Roughness: 22000, Emissive: [3]uint16{1000, 10000, 18000}, Alpha: render3d.AlphaOpaque, Revision: 1},
@@ -302,7 +312,7 @@ func (game *BlockKart) buildStaticRenderPackets() [][]byte {
 		{Id: 106, BaseColor: [4]uint16{1800, 2100, 2400, 65535}, Roughness: 62000, Alpha: render3d.AlphaOpaque, Revision: 1},
 		{Id: 107, BaseColor: [4]uint16{36000, 39000, 42000, 65535}, Metallic: 50000, Roughness: 18000, Alpha: render3d.AlphaOpaque, Revision: 1},
 		{Id: 108, BaseColor: [4]uint16{9000, 43000, 7000, 65535}, Roughness: 60000, Alpha: render3d.AlphaOpaque, Revision: 1},
-		{Id: 109, BaseColor: [4]uint16{65535, 65535, 65535, 65535}, Roughness: 62000, Alpha: render3d.AlphaOpaque, Textures: [5]uint64{12002}, Revision: 1},
+		{Id: 109, BaseColor: [4]uint16{65535, 65535, 65535, 65535}, Roughness: 62000, Alpha: render3d.AlphaOpaque, Textures: [5]uint64{12002, 12007, 12008}, Revision: 1},
 		{Id: 110, BaseColor: [4]uint16{61000, 61000, 61000, 65535}, Roughness: 52000, Alpha: render3d.AlphaOpaque, Revision: 1},
 		{Id: 111, BaseColor: [4]uint16{65535, 65535, 65535, 65535}, Roughness: 61000, Alpha: render3d.AlphaMask, AlphaCutoff: 12000, DoubleSided: true, Textures: [5]uint64{12006}, Revision: 1},
 		{Id: 112, BaseColor: [4]uint16{48000, 30000, 15000, 65535}, Roughness: 64000, Alpha: render3d.AlphaOpaque, Revision: 1},
@@ -317,6 +327,7 @@ func (game *BlockKart) buildStaticRenderPackets() [][]byte {
 		{Id: 121, BaseColor: [4]uint16{39000, 21000, 8000, 65535}, Roughness: 60000, Alpha: render3d.AlphaOpaque, Revision: 1},
 		{Id: 122, BaseColor: [4]uint16{35000, 36000, 33000, 65535}, Roughness: 59000, Alpha: render3d.AlphaOpaque, Revision: 1},
 		{Id: 123, BaseColor: [4]uint16{65535, 49000, 2000, 65535}, Roughness: 41000, Emissive: [3]uint16{5000, 2800, 0}, Alpha: render3d.AlphaOpaque, Revision: 1},
+		{Id: 124, BaseColor: [4]uint16{2200, 8500, 14500, 65535}, Roughness: 12000, Emissive: [3]uint16{0, 1200, 2600}, Alpha: render3d.AlphaOpaque, Revision: 1},
 	}
 	for _, material := range materials {
 		descriptor := render3d.EncodeMaterial(material)
@@ -342,11 +353,17 @@ func (game *BlockKart) buildStaticRenderPackets() [][]byte {
 		Id uint64
 		Path string
 	}{
-		{10002, "generated/render/kart_body.vmg1"},
-		{10003, "generated/render/kart_wheel.vmg1"},
-		{10004, "generated/render/kart_bumper.vmg1"},
-		{10005, "generated/render/kart_helmet.vmg1"},
-		{10006, "generated/render/kart_driver.vmg1"},
+		{10002, "generated/render/kart_body_p0.vmg1"},
+		{10003, "generated/render/kart_body_p1.vmg1"},
+		{10004, "generated/render/kart_body_p2.vmg1"},
+		{10005, "generated/render/kart_body_p3.vmg1"},
+		{10006, "generated/render/kart_body_p4.vmg1"},
+		{10007, "generated/render/kart_body_p5.vmg1"},
+		{10008, "generated/render/kart_wheel_p0.vmg1"},
+		{10009, "generated/render/kart_wheel_p1.vmg1"},
+		{10010, "generated/render/kart_wheel_p2.vmg1"},
+		{10011, "generated/render/kart_wheel_p3.vmg1"},
+		{10012, "generated/render/kart_wheel_p4.vmg1"},
 	}
 	for _, kartMesh := range kartMeshes {
 		bytes, readErr := os.ReadFile(kartMesh.Path)
@@ -659,19 +676,30 @@ func (game *BlockKart) kartRenderPackets(transform Transform, tick uint64) ([][]
 		Material uint64
 		Mesh uint64
 	}
-	parts := []part{
-		{Local: [3]int64{0, 0, 0}, Size: [3]int64{1900, 700, 2800}, Material: 102, Mesh: 10002},
-		{Local: [3]int64{0, 540, -180}, Size: [3]int64{1350, 820, 1250}, Material: 102, Mesh: 10002},
-		{Local: [3]int64{-1050, -320, 850}, Size: [3]int64{520, 720, 720}, Material: 106, Mesh: 10003},
-		{Local: [3]int64{1050, -320, 850}, Size: [3]int64{520, 720, 720}, Material: 106, Mesh: 10003},
-		{Local: [3]int64{-1050, -320, -850}, Size: [3]int64{520, 720, 720}, Material: 106, Mesh: 10003},
-		{Local: [3]int64{1050, -320, -850}, Size: [3]int64{520, 720, 720}, Material: 106, Mesh: 10003},
-		{Local: [3]int64{0, -40, 1450}, Size: [3]int64{2200, 280, 340}, Material: 107, Mesh: 10004},
-		{Local: [3]int64{0, 1100, -350}, Size: [3]int64{720, 720, 720}, Material: 103, Mesh: 10005},
-		{Local: [3]int64{0, 650, -250}, Size: [3]int64{820, 820, 620}, Material: 102, Mesh: 10006},
+	bodyParts := []part{
+		{Size: [3]int64{1000, 1000, 1000}, Material: 102, Mesh: 10002},
+		{Size: [3]int64{1000, 1000, 1000}, Material: 106, Mesh: 10003},
+		{Size: [3]int64{1000, 1000, 1000}, Material: 103, Mesh: 10004},
+		{Size: [3]int64{1000, 1000, 1000}, Material: 118, Mesh: 10005},
+		{Size: [3]int64{1000, 1000, 1000}, Material: 124, Mesh: 10006},
+		{Size: [3]int64{1000, 1000, 1000}, Material: 107, Mesh: 10007},
 	}
-	packets := make([][]byte, 0, len(parts))
-	for _, value := range parts {
+	wheelMeshes := []struct {
+		Mesh uint64
+		Material uint64
+	}{
+		{Mesh: 10008, Material: 106},
+		{Mesh: 10009, Material: 122},
+		{Mesh: 10010, Material: 103},
+		{Mesh: 10011, Material: 107},
+		{Mesh: 10012, Material: 118},
+	}
+	wheelLocations := [][3]int64{
+		{-1050, -320, 850}, {1050, -320, 850},
+		{-1050, -320, -850}, {1050, -320, -850},
+	}
+	packets := make([][]byte, 0, len(bodyParts) + len(wheelMeshes) * len(wheelLocations))
+	for _, value := range bodyParts {
 		partTransform := blockKartLocalTransform(transform, value.Local)
 		packet := game.retainedGameplayMeshObject(partTransform, tick, value.Mesh, value.Material, value.Size[0] /
 			2, value.Size[1] / 2, value.Size[2] / 2)
@@ -679,6 +707,18 @@ func (game *BlockKart) kartRenderPackets(transform Transform, tick uint64) ([][]
 			return nil, false
 		}
 		packets = append(packets, packet)
+	}
+	for _, location := range wheelLocations {
+		for _, wheel := range wheelMeshes {
+			partTransform := blockKartLocalTransform(transform, location)
+			packet := game.retainedGameplayMeshObject(
+				partTransform, tick, wheel.Mesh, wheel.Material, 500, 500, 500,
+			)
+			if len(packet) == 0 {
+				return nil, false
+			}
+			packets = append(packets, packet)
+		}
 	}
 	return packets, true
 }
@@ -877,7 +917,10 @@ func (game *BlockKart) restartRace() error {
 	if !ok {
 		return errors.New("blockkart: restart state")
 	}
-	next := KartState{Checkpoint: 1, Countdown_ticks: 30, Best_millis: previous.Best_millis}
+	next := KartState{
+		Checkpoint: 1, Countdown_ticks: blockKartCountdownTicks,
+		Best_millis: previous.Best_millis,
+	}
 	if !game.KartStates.Upsert(game.KartEntity, next) {
 		return errors.New("blockkart: reset race state")
 	}
@@ -926,11 +969,7 @@ func (game *BlockKart) restartRace() error {
 
 func (game *BlockKart) respawn() error {
 	transform := Transform{X: 30000, Y: 1200, Z: 367500, Yaw_milliradians: 1571}
-	if !game.Physics.Submit(physics3d.Command{
-		Kind: physics3d.CommandTeleport, Body: game.KartBody,
-		Value: [3]int64{transform.X, transform.Y, transform.Z},
-	}) ||
-		!game.Transforms.Upsert(game.KartEntity, transform) ||
+	if !game.Transforms.Upsert(game.KartEntity, transform) ||
 		!game.Velocities.Upsert(game.KartEntity, Velocity{}) {
 		return errors.New("blockkart: respawn")
 	}

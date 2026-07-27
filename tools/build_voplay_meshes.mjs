@@ -44,18 +44,19 @@ for (const chunk of buildRoadsideMeshes(roadside)) {
   await writeFile(output, artifact);
   console.log(`${basename(output)} ${artifact.byteLength} bytes`);
 }
-const kartMeshes = [
-  ['kart_body.vmg1', 10002n, kartBodyTemplate()],
-  ['kart_wheel.vmg1', 10003n, wheelTemplate(12)],
-  ['kart_bumper.vmg1', 10004n, beveledBoxTemplate(0.28)],
-  ['kart_helmet.vmg1', 10005n, icosahedronTemplate()],
-  ['kart_driver.vmg1', 10006n, driverTorsoTemplate()],
+const authoredKartSources = [
+  ['kart_body', resolve(root, 'assets/models/kart/kart_body.glb'), 10002n],
+  ['kart_wheel', resolve(root, 'assets/models/kart/kart_wheel.glb'), 10008n],
 ];
-for (const [name, id, template] of kartMeshes) {
-  const artifact = encodeVmg1(templateToMesh(template), id);
-  const output = resolve(outputDir, name);
-  await writeFile(output, artifact);
-  console.log(`${basename(output)} ${artifact.byteLength} bytes`);
+for (const [name, sourcePath, firstId] of authoredKartSources) {
+  const primitives = decodeGlbPrimitives(await readFile(sourcePath));
+  for (let index = 0; index < primitives.length; index += 1) {
+    const id = firstId + BigInt(index);
+    const artifact = encodeVmg1(primitives[index], id);
+    const output = resolve(outputDir, `${name}_p${index}.vmg1`);
+    await writeFile(output, artifact);
+    console.log(`${basename(output)} ${artifact.byteLength} bytes`);
+  }
 }
 for (const scenery of buildSceneryMeshes()) {
   const artifact = encodeVmg1(scenery.mesh, scenery.id);
@@ -514,6 +515,34 @@ function partitionTriangles(mesh, partitions, partitionIndex) {
 }
 
 function decodeGlb(bytes) {
+  const { json, binary } = decodeGlbDocument(bytes);
+  const primitives = decodeGlbPrimitiveRecords(json, binary);
+  const positions = [];
+  const normals = [];
+  const texcoords = [];
+  const indices = [];
+  for (const primitive of primitives) {
+    const base = positions.length / 3;
+    for (const value of primitive.positions) positions.push(value);
+    for (const value of primitive.normals) normals.push(value);
+    for (const value of primitive.texcoords) texcoords.push(value);
+    for (const index of primitive.indices) indices.push(base + index);
+  }
+  if (positions.length === 0 || indices.length === 0) throw new Error('GLB contains no triangles');
+  return {
+    positions: new Float32Array(positions),
+    normals: new Float32Array(normals),
+    texcoords: new Float32Array(texcoords),
+    indices: new Uint32Array(indices),
+  };
+}
+
+function decodeGlbPrimitives(bytes) {
+  const { json, binary } = decodeGlbDocument(bytes);
+  return decodeGlbPrimitiveRecords(json, binary);
+}
+
+function decodeGlbDocument(bytes) {
   if (
     bytes.byteLength < 20
     || bytes.readUInt32LE(0) !== 0x46546c67
@@ -538,10 +567,11 @@ function decodeGlb(bytes) {
     }
   }
   if (json === null || binary === null) throw new Error('GLB is missing JSON or BIN');
-  const positions = [];
-  const normals = [];
-  const texcoords = [];
-  const indices = [];
+  return { json, binary };
+}
+
+function decodeGlbPrimitiveRecords(json, binary) {
+  const primitives = [];
   for (const mesh of json.meshes ?? []) {
     for (const primitive of mesh.primitives ?? []) {
       if ((primitive.mode ?? 4) !== 4) throw new Error('only triangle GLB primitives are supported');
@@ -553,20 +583,16 @@ function decodeGlb(bytes) {
         ? new Float32Array(primitivePositions.length / 3 * 2)
         : readAccessor(json, binary, primitive.attributes.TEXCOORD_0, 2);
       const primitiveIndices = readIndices(json, binary, primitive.indices);
-      const base = positions.length / 3;
-      for (const value of primitivePositions) positions.push(value);
-      for (const value of primitiveNormals) normals.push(value);
-      for (const value of primitiveTexcoords) texcoords.push(value);
-      for (const index of primitiveIndices) indices.push(base + index);
+      primitives.push({
+        positions: primitivePositions,
+        normals: primitiveNormals,
+        texcoords: primitiveTexcoords,
+        indices: primitiveIndices,
+      });
     }
   }
-  if (positions.length === 0 || indices.length === 0) throw new Error('GLB contains no triangles');
-  return {
-    positions: new Float32Array(positions),
-    normals: new Float32Array(normals),
-    texcoords: new Float32Array(texcoords),
-    indices: new Uint32Array(indices),
-  };
+  if (primitives.length === 0) throw new Error('GLB contains no triangles');
+  return primitives;
 }
 
 function readAccessor(json, binary, accessorIndex, width) {

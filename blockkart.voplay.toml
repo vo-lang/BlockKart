@@ -9,6 +9,10 @@ configure = "ConfigureBlockKart"
 start = "StartBlockKart"
 execute = "ExecuteBlockKart"
 max_init_bytes = 4096
+max_world_entities = 2048
+max_world_commands = 16384
+max_world_changes = 4096
+max_world_component_bytes = 4194304
 roles = ["logic", "asset", "render", "audio"]
 
 [[game.init_field]]

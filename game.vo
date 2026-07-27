@@ -23,6 +23,13 @@ const (
 )
 
 const (
+	blockKartTicksPerSecond uint32 = 30
+	blockKartCountdownTicks uint32 = 3 * blockKartTicksPerSecond
+	blockKartBoostTicks uint32 = 9 * blockKartTicksPerSecond
+	blockKartBoostCooldownTicks uint32 = 18 * blockKartTicksPerSecond
+)
+
+const (
 	blockKartComponentTransform uint64 = 1001
 	blockKartComponentVelocity uint64 = 1002
 	blockKartComponentControl uint64 = 1003
@@ -149,7 +156,7 @@ func ConfigureBlockKart(game *BlockKart, builder voplay.Builder) {
 	if game == nil {
 		return
 	}
-	if err := builder.SetFixedTick(100000000, 1); err != nil {
+	if err := builder.SetFixedTick(33333333, 3); err != nil {
 		game.ConfigurationError = err
 		return
 	}
@@ -162,6 +169,17 @@ func ConfigureBlockKart(game *BlockKart, builder voplay.Builder) {
 			Id: blockKartSystemDrive, Stage: voplay.StageGameplay, Descriptor: []byte("blockkart.drive.v1"),
 			Deterministic: true, SimulationReads: []uint64{blockKartComponentControl},
 			SimulationWrites: []uint64{blockKartComponentVelocity, blockKartComponentKartState},
+		},
+		{
+			Id: blockKartSystemDynamics, Stage: voplay.StagePrePhysics,
+			Descriptor: []byte("blockkart.dynamics.v2"), Deterministic: true,
+			SimulationReads: []uint64{blockKartComponentMovingObstacle},
+			SimulationWrites: []uint64{blockKartComponentTransform, blockKartComponentBoostPad},
+		},
+		{
+			Id: blockKartSystemSync, Stage: voplay.StagePostPhysics, Descriptor: []byte("blockkart.sync.v2"),
+			Deterministic: true, SimulationReads: []uint64{blockKartComponentTransform},
+			SimulationWrites: []uint64{blockKartComponentKartState},
 		},
 		{
 			Id: blockKartSystemFrame, Stage: voplay.StageFrame, Descriptor: []byte("blockkart.frame.v1"),
@@ -289,7 +307,9 @@ func (game *BlockKart) startWorld(context voplay.StartContext) error {
 	}) ||
 		!game.Velocities.Upsert(game.KartEntity, Velocity{}) ||
 		!game.Controls.Upsert(game.KartEntity, KartControl{}) ||
-		!game.KartStates.Upsert(game.KartEntity, KartState{Checkpoint: 1, Countdown_ticks: 30}) {
+		!game.KartStates.Upsert(game.KartEntity, KartState{
+			Checkpoint: 1, Countdown_ticks: blockKartCountdownTicks,
+		}) {
 		return errors.New("blockkart: initialize kart components")
 	}
 	if err = game.startTrack(context); err != nil {
@@ -681,37 +701,117 @@ func (game *BlockKart) drive(tick voplay.TickBatch) error {
 		game.BoostPressed = false
 		return nil
 	}
-	target := int64(control.Throttle_milli - control.Brake_milli) * 24
-	if control.Boost || state.Boost_ticks != 0 {
-		target += 8000
-	}
-	if control.Throttle_milli == 0 && control.Brake_milli == 0 {
-		target = 0
-	}
 	game.OffRoad = blockKartDistanceFromRoad(transform) > 15000
+	deltaSeconds := float64(tick.FixedTickNanos) / 1000000000.0
+	speed := float64(state.Speed_per_second)
+	absoluteSpeed := math.Abs(speed)
+	throttle := float64(control.Throttle_milli) / 1000.0
+	brake := float64(control.Brake_milli) / 1000.0
+	engineAcceleration := 16000.0
 	if game.OffRoad {
-		target = target * 55 / 100
+		engineAcceleration *= 0.58
 	}
-	state.Speed_per_second += (target - state.Speed_per_second) / 8
-	if state.Speed_per_second > 34000 {
-		state.Speed_per_second = 34000
+	acceleration := 0.0
+	if throttle > 0 {
+		if speed < -500 {
+			acceleration += 30000.0 * throttle
+		} else {
+			acceleration += engineAcceleration * throttle
+		}
 	}
-	if state.Speed_per_second < -10000 {
-		state.Speed_per_second = -10000
+	if brake > 0 {
+		if speed > 500 {
+			acceleration -= 30000.0 * brake
+		} else {
+			acceleration -= 10500.0 * brake
+		}
 	}
-	velocity.Yaw_per_second = control.Steer_milli * 2
-	turnScale := int64(1)
-	if control.Drift {
-		turnScale = 2
+	boosting := control.Boost || state.Boost_ticks != 0
+	if boosting && speed >= 0 {
+		acceleration += 9000.0
 	}
-	game.Drifting = control.Drift && (state.Speed_per_second > 8000 || state.Speed_per_second < -8000)
-	transform.Yaw_milliradians += int32(int64(velocity.Yaw_per_second) * turnScale *
-		int64(tick.FixedTickNanos) /
-		1000000000)
+	if throttle == 0 && brake == 0 {
+		resistance := 850.0 + absoluteSpeed * 0.72
+		if speed > 0 {
+			acceleration -= resistance
+		} else if speed < 0 {
+			acceleration += resistance
+		}
+	} else {
+		acceleration -= speed * 0.10
+	}
+	if game.OffRoad {
+		acceleration -= speed * 1.35
+	}
+	nextSpeed := speed + acceleration * deltaSeconds
+	if throttle == 0 && brake == 0 &&
+		(speed > 0 && nextSpeed < 0 || speed < 0 && nextSpeed > 0) {
+		nextSpeed = 0
+	}
+	maximumSpeed := 32000.0
+	if boosting {
+		maximumSpeed = 42000.0
+	}
+	if nextSpeed > maximumSpeed {
+		nextSpeed = maximumSpeed
+	}
+	if nextSpeed < -10500 {
+		nextSpeed = -10500
+	}
+	state.Speed_per_second = int64(nextSpeed)
+	absoluteSpeed = math.Abs(nextSpeed)
+	steeringAuthority := absoluteSpeed / 7000.0
+	if steeringAuthority > 1 {
+		steeringAuthority = 1
+	}
+	if absoluteSpeed > 24000 {
+		steeringAuthority *= 1.0 - (absoluteSpeed - 24000.0) / 72000.0
+	}
+	game.Drifting = control.Drift && absoluteSpeed > 7500
+	maximumYawRate := 2050.0
+	steeringResponse := 10.0
+	if game.Drifting {
+		maximumYawRate = 2850.0
+		steeringResponse = 7.0
+	}
+	direction := 1.0
+	if nextSpeed < -250 {
+		direction = -1.0
+	}
+	desiredYawRate := float64(control.Steer_milli) / 1000.0 *
+		maximumYawRate * steeringAuthority * direction
+	steeringBlend := steeringResponse * deltaSeconds
+	if steeringBlend > 1 {
+		steeringBlend = 1
+	}
+	yawRate := float64(velocity.Yaw_per_second)
+	yawRate += (desiredYawRate - yawRate) * steeringBlend
+	if control.Steer_milli == 0 && absoluteSpeed < 500 {
+		yawRate = 0
+	}
+	velocity.Yaw_per_second = int32(yawRate)
+	transform.Yaw_milliradians += int32(yawRate * deltaSeconds)
 	heading := float64(transform.Yaw_milliradians) / 1000.0
-	forward := state.Speed_per_second
-	velocity.X_per_second = int64(math.Sin(heading) * float64(forward))
-	velocity.Z_per_second = int64(math.Cos(heading) * float64(forward))
+	forwardX := math.Sin(heading)
+	forwardZ := math.Cos(heading)
+	rightX := math.Cos(heading)
+	rightZ := -math.Sin(heading)
+	lateralSpeed := float64(velocity.X_per_second) * rightX +
+		float64(velocity.Z_per_second) * rightZ
+	grip := 11.5
+	if game.Drifting {
+		grip = 2.7
+	}
+	if game.OffRoad {
+		grip = 17.0
+	}
+	gripRetention := 1.0 - grip * deltaSeconds
+	if gripRetention < 0 {
+		gripRetention = 0
+	}
+	lateralSpeed *= gripRetention
+	velocity.X_per_second = int64(forwardX * nextSpeed + rightX * lateralSpeed)
+	velocity.Z_per_second = int64(forwardZ * nextSpeed + rightZ * lateralSpeed)
 	transform.X += velocity.X_per_second * int64(tick.FixedTickNanos) / 1000000000
 	transform.Z += velocity.Z_per_second * int64(tick.FixedTickNanos) / 1000000000
 	if transform.X < -650000 || transform.X > 650000 ||
@@ -782,20 +882,14 @@ func (game *BlockKart) syncRace(tick voplay.TickBatch) error {
 	if !ok {
 		return errors.New("blockkart: race state")
 	}
-	for _, contact := range game.Contacts {
-		var other physics3d.BodyRef
-		if contact.A == game.KartBody {
-			other = contact.B
-		} else if contact.B == game.KartBody {
-			other = contact.A
-		} else {
+	for _, gate := range game.TrackGates {
+		if gate.Order != state.Checkpoint + 1 {
 			continue
 		}
-		for _, gate := range game.TrackGates {
-			if gate.Body == other && gate.Order == state.Checkpoint + 1 {
-				state.Checkpoint++
-				break
-			}
+		gateTransform := Transform{X: gate.Position[0], Y: gate.Position[1], Z: gate.Position[2]}
+		if blockKartHorizontalDistanceSquared(transform, gateTransform) <= 24000 * 24000 {
+			state.Checkpoint++
+			break
 		}
 	}
 	if err := game.applyGameplayContacts(&state); err != nil {
@@ -1267,10 +1361,10 @@ func (game *BlockKart) hudPackets() []render.SnapshotObject {
 	}
 	if state.Countdown_ticks != 0 {
 		color := [4]byte{246, 84, 54, 240}
-		if state.Countdown_ticks <= 20 {
+		if state.Countdown_ticks <= 2 * blockKartTicksPerSecond {
 			color = [4]byte{246, 184, 48, 240}
 		}
-		if state.Countdown_ticks <= 10 {
+		if state.Countdown_ticks <= blockKartTicksPerSecond {
 			color = [4]byte{84, 220, 116, 240}
 		}
 		shapes = append(shapes, render2d.Shape{
@@ -1312,7 +1406,10 @@ func (game *BlockKart) hudPackets() []render.SnapshotObject {
 	}
 	countdown := uint64(0)
 	if state.Countdown_ticks != 0 {
-		countdown = uint64((state.Countdown_ticks + 9) / 10)
+		countdown = uint64(
+			(state.Countdown_ticks + blockKartTicksPerSecond - 1) /
+				blockKartTicksPerSecond,
+		)
 	}
 	lapValue := uint64(state.Lap + 1)
 	if lapValue > 3 {
