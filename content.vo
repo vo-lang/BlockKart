@@ -13,21 +13,10 @@ import (
 
 func blockKartTrackPoints() [][3]int64 {
 	return [][3]int64{
-		{19600, 1200, 367500},
-		{254800, 1250, 367500},
-		{411600, 1540, 313600},
-		{465500, 1890, 220500},
-		{313600, 2080, 107800},
-		{450800, 2430, -58800},
-		{396900, 2720, -254800},
-		{200900, 2860, -333200},
-		{-44100, 2770, -333200},
-		{-284200, 2520, -323400},
-		{-450800, 2230, -215600},
-		{-387100, 1890, -83300},
-		{-303800, 1690, 9800},
-		{-436100, 1400, 151900},
-		{-411600, 1250, 289100},
+		{19600, 1200, 367500}, {254800, 1250, 367500}, {411600, 1540, 313600}, {465500, 1890, 220500},
+		{313600, 2080, 107800}, {450800, 2430, -58800}, {396900, 2720, -254800}, {200900, 2860, -333200},
+		{-44100, 2770, -333200}, {-284200, 2520, -323400}, {-450800, 2230, -215600},
+		{-387100, 1890, -83300}, {-303800, 1690, 9800}, {-436100, 1400, 151900}, {-411600, 1250, 289100},
 		{-230300, 1200, 367500},
 	}
 }
@@ -46,36 +35,27 @@ func (game *BlockKart) startTrack(context voplay.StartContext) error {
 			return errors.New("blockkart: spawn checkpoint")
 		}
 		entityId := uint64(entity.Index)
-		if !game.Transforms.Upsert(entityId, Transform{
-			X: position[0], Y: position[1], Z: position[2],
-		}) || !game.TrackMarkers.Upsert(entityId, TrackMarker{
-			Kind: 1, Order: uint32(index + 1), Radius_milli: 12000,
-		}) {
+		if !game.Transforms.Upsert(entityId, Transform{X: position[0], Y: position[1], Z: position[2]}) ||
+			!game.TrackMarkers.Upsert(entityId, TrackMarker{
+				Kind: 1, Order: uint32(index + 1), Radius_milli: 12000,
+			}) {
 			return errors.New("blockkart: initialize checkpoint")
 		}
 		body, ok := game.Physics.CreateBody(physics3d.BodyDesc{
-			Kind: physics3d.BodyStatic,
-			Position: position,
+			Kind: physics3d.BodyStatic, Position: position,
 		})
 		if !ok {
 			return errors.New("blockkart: create checkpoint body")
 		}
 		collider, ok := game.Physics.CreateCollider(physics3d.ColliderDesc{
-			Body: body,
-			HalfExtent: [3]uint32{12000, 4000, 3000},
-			Layer: blockKartLayerTrigger,
-			Mask: blockKartLayerKart,
-			Sensor: true,
+			Body: body, HalfExtent: [3]uint32{12000, 4000, 3000}, Layer: blockKartLayerTrigger,
+			Mask: blockKartLayerKart, Sensor: true,
 		})
 		if !ok {
 			return errors.New("blockkart: create checkpoint collider")
 		}
 		game.TrackGates = append(game.TrackGates, BlockKartGate{
-			Entity: entityId,
-			Order: uint32(index + 1),
-			Body: body,
-			Collider: collider,
-			Position: position,
+			Entity: entityId, Order: uint32(index + 1), Body: body, Collider: collider, Position: position,
 		})
 	}
 	return nil
@@ -91,24 +71,19 @@ func (game *BlockKart) startGameplay(context voplay.StartContext) error {
 		}
 		entityId := uint64(entity.Index)
 		position[1] += 1800
-		if !game.Transforms.Upsert(entityId, Transform{
-			X: position[0], Y: position[1], Z: position[2],
-		}) || !game.Collectibles.Upsert(entityId, Collectible{Value: 100}) {
+		if !game.Transforms.Upsert(entityId, Transform{X: position[0], Y: position[1], Z: position[2]}) ||
+			!game.Collectibles.Upsert(entityId, Collectible{Value: 100}) {
 			return errors.New("blockkart: initialize collectible")
 		}
 		body, ok := game.Physics.CreateBody(physics3d.BodyDesc{
-			Kind: physics3d.BodyStatic,
-			Position: position,
+			Kind: physics3d.BodyStatic, Position: position,
 		})
 		if !ok {
 			return errors.New("blockkart: collectible body")
 		}
 		collider, ok := game.Physics.CreateCollider(physics3d.ColliderDesc{
-			Body: body,
-			HalfExtent: [3]uint32{900, 1800, 900},
-			Layer: blockKartLayerTrigger,
-			Mask: blockKartLayerKart,
-			Sensor: true,
+			Body: body, HalfExtent: [3]uint32{900, 1800, 900}, Layer: blockKartLayerTrigger,
+			Mask: blockKartLayerKart, Sensor: true,
 		})
 		if !ok {
 			return errors.New("blockkart: collectible collider")
@@ -124,24 +99,19 @@ func (game *BlockKart) startGameplay(context voplay.StartContext) error {
 			return errors.New("blockkart: spawn boost pad")
 		}
 		entityId := uint64(entity.Index)
-		if !game.Transforms.Upsert(entityId, Transform{
-			X: position[0], Y: position[1], Z: position[2],
-		}) || !game.BoostPads.Upsert(entityId, BoostPad{Strength: 12000}) {
+		if !game.Transforms.Upsert(entityId, Transform{X: position[0], Y: position[1], Z: position[2]}) ||
+			!game.BoostPads.Upsert(entityId, BoostPad{Strength: 12000}) {
 			return errors.New("blockkart: initialize boost pad")
 		}
 		body, ok := game.Physics.CreateBody(physics3d.BodyDesc{
-			Kind: physics3d.BodyStatic,
-			Position: position,
+			Kind: physics3d.BodyStatic, Position: position,
 		})
 		if !ok {
 			return errors.New("blockkart: boost pad body")
 		}
 		collider, ok := game.Physics.CreateCollider(physics3d.ColliderDesc{
-			Body: body,
-			HalfExtent: [3]uint32{5000, 700, 3000},
-			Layer: blockKartLayerTrigger,
-			Mask: blockKartLayerKart,
-			Sensor: true,
+			Body: body, HalfExtent: [3]uint32{5000, 700, 3000}, Layer: blockKartLayerTrigger,
+			Mask: blockKartLayerKart, Sensor: true,
 		})
 		if !ok {
 			return errors.New("blockkart: boost pad collider")
@@ -158,18 +128,13 @@ func (game *BlockKart) startGameplay(context voplay.StartContext) error {
 		}
 		entityId := uint64(entity.Index)
 		obstacle := MovingObstacle{
-			Origin_x: position[0],
-			Origin_y: position[1] + 1400,
-			Origin_z: position[2],
-			Axis_x: 1000,
-			Axis_z: 0,
-			Amplitude_milli: 9000,
-			Period_ticks: 180,
-			Phase_ticks: uint32(index * 19),
+			Origin_x: position[0], Origin_y: position[1] + 1400, Origin_z: position[2], Axis_x: 1000,
+			Axis_z: 0, Amplitude_milli: 9000, Period_ticks: 180, Phase_ticks: uint32(index * 19),
 		}
 		if !game.Transforms.Upsert(entityId, Transform{
 			X: obstacle.Origin_x, Y: obstacle.Origin_y, Z: obstacle.Origin_z,
-		}) || !game.MovingObstacles.Upsert(entityId, obstacle) {
+		}) ||
+			!game.MovingObstacles.Upsert(entityId, obstacle) {
 			return errors.New("blockkart: initialize moving obstacle")
 		}
 		body, ok := game.Physics.CreateBody(physics3d.BodyDesc{
@@ -180,9 +145,7 @@ func (game *BlockKart) startGameplay(context voplay.StartContext) error {
 			return errors.New("blockkart: moving obstacle body")
 		}
 		collider, ok := game.Physics.CreateCollider(physics3d.ColliderDesc{
-			Body: body,
-			HalfExtent: [3]uint32{1800, 1400, 1800},
-			Layer: blockKartLayerWorld,
+			Body: body, HalfExtent: [3]uint32{1800, 1400, 1800}, Layer: blockKartLayerWorld,
 			Mask: blockKartLayerKart,
 		})
 		if !ok {
@@ -201,28 +164,24 @@ func (game *BlockKart) updateDynamics(tick voplay.TickBatch) error {
 		if !ok || obstacle.Period_ticks < 4 {
 			return errors.New("blockkart: moving obstacle state")
 		}
-		phase := uint32(tick.FirstTick+uint64(obstacle.Phase_ticks)) % obstacle.Period_ticks
+		phase := uint32(tick.FirstTick + uint64(obstacle.Phase_ticks)) % obstacle.Period_ticks
 		half := obstacle.Period_ticks / 2
 		var signed int64
 		if phase <= half {
-			signed = int64(phase)*2*int64(obstacle.Amplitude_milli)/int64(half) -
+			signed = int64(phase) * 2 * int64(obstacle.Amplitude_milli) / int64(half) -
 				int64(obstacle.Amplitude_milli)
 		} else {
 			signed = int64(obstacle.Amplitude_milli) -
-				int64(phase-half)*2*int64(obstacle.Amplitude_milli)/int64(half)
+				int64(phase - half) * 2 * int64(obstacle.Amplitude_milli) / int64(half)
 		}
 		position := [3]int64{
-			obstacle.Origin_x + signed*int64(obstacle.Axis_x)/1000,
-			obstacle.Origin_y,
-			obstacle.Origin_z + signed*int64(obstacle.Axis_z)/1000,
+			obstacle.Origin_x + signed * int64(obstacle.Axis_x) / 1000, obstacle.Origin_y,
+			obstacle.Origin_z + signed * int64(obstacle.Axis_z) / 1000,
 		}
 		if !game.Physics.Submit(physics3d.Command{
-			Kind: physics3d.CommandKinematicTarget,
-			Body: entity.Body,
-			Value: position,
-		}) || !game.Transforms.Upsert(entity.Entity, Transform{
-			X: position[0], Y: position[1], Z: position[2],
-		}) {
+			Kind: physics3d.CommandKinematicTarget, Body: entity.Body, Value: position,
+		}) ||
+			!game.Transforms.Upsert(entity.Entity, Transform{X: position[0], Y: position[1], Z: position[2]}) {
 			return errors.New("blockkart: move obstacle")
 		}
 	}
@@ -294,9 +253,7 @@ func (game *BlockKart) applyGameplayContacts(state *KartState) error {
 }
 
 func (game *BlockKart) startAssets(context voplay.StartContext) error {
-	paths := []string{
-		"assets/audio/kart_engine.wav",
-	}
+	paths := []string{"assets/audio/kart_engine.wav"}
 	handles := []uint64{}
 	for _, path := range paths {
 		handle, err := context.RequestAsset([]byte(path))
@@ -321,17 +278,10 @@ func (game *BlockKart) startAssets(context voplay.StartContext) error {
 			{
 				Kind: audio.ControlCreateSource,
 				SourceValue: audio.SourceDescriptor{
-					AssetIndex: uint32(game.EngineAudioAsset),
-					AssetGeneration: 1,
-					Bus: game.Audio.Master(),
-					GainMilli: 450,
-					Looping: true,
-					Playing: false,
-					Recovery: audio.ResumeTimeline,
+					AssetIndex: uint32(game.EngineAudioAsset), AssetGeneration: 1, Bus: game.Audio.Master(),
+					GainMilli: 450, Looping: true, Playing: false, Recovery: audio.ResumeTimeline,
 					Spatial: &audio.SpatialSource{
-						PositionMilli: [3]int32{0, 1200, 367500},
-						MinDistanceMilli: 1000,
-						MaxDistanceMilli: 80000,
+						PositionMilli: [3]int32{0, 1200, 367500}, MinDistanceMilli: 1000, MaxDistanceMilli: 80000,
 					},
 				},
 			},
@@ -341,22 +291,16 @@ func (game *BlockKart) startAssets(context voplay.StartContext) error {
 		return errors.New("blockkart: create engine audio source")
 	}
 	game.EngineAudioSource = audioCommit.CreatedSources[0]
-	audioPaths := []string{
-		"assets/audio/kart_engine.wav",
-	}
-	audioHandles := []uint64{
-		game.EngineAudioAsset,
-	}
+	audioPaths := []string{"assets/audio/kart_engine.wav"}
+	audioHandles := []uint64{game.EngineAudioAsset}
 	for index, path := range audioPaths {
 		bytes, readErr := os.ReadFile(path)
 		if readErr != nil || len(bytes) == 0 {
 			return errors.New("blockkart: read governed audio asset")
 		}
-		packet, encoded := audio.EncodeAssetPacket(
-			game.Engine, 1,
-			voplay.Handle{Index: uint32(audioHandles[index]), Generation: 1},
-			1, game.Audio.Revision, 1, bytes,
-		)
+		packet, encoded := audio.EncodeAssetPacket(game.Engine, 1, voplay.Handle{
+			Index: uint32(audioHandles[index]), Generation: 1,
+		}, 1, game.Audio.Revision, 1, bytes)
 		if !encoded {
 			return errors.New("blockkart: encode audio asset")
 		}
@@ -372,20 +316,12 @@ func (game *BlockKart) startAssets(context voplay.StartContext) error {
 func (game *BlockKart) buildStaticRenderPackets() [][]byte {
 	packets := [][]byte{}
 	environment := render3d.EncodeEnvironment(render3d.Environment{
-		FogColor: [3]uint16{28000, 42000, 56000},
-		FogStartMilli: 220000,
-		FogEndMilli: 1100000,
-		ExposureMilli: 100,
-		ToneMap: render3d.ToneMapAces,
-		BloomThreshold: 52000,
-		BloomStrength: 7000,
-		AntiAlias: render3d.AntiAliasMsaa,
-		MsaaSamples: 4,
+		FogColor: [3]uint16{28000, 42000, 56000}, FogStartMilli: 220000, FogEndMilli: 1100000,
+		ExposureMilli: 100, ToneMap: render3d.ToneMapAces, BloomThreshold: 52000, BloomStrength: 7000,
+		AntiAlias: render3d.AntiAliasMsaa, MsaaSamples: 4,
 	})
 	sun := render3d.EncodeLight(render3d.RetainedLight{
-		Kind: render3d.LightDirectional,
-		Color: [3]uint16{65535, 61000, 52000},
-		IntensityMilli: 1800,
+		Kind: render3d.LightDirectional, Color: [3]uint16{65535, 61000, 52000}, IntensityMilli: 1800,
 		CastsShadow: true,
 	})
 	if len(environment) == 0 || len(sun) == 0 {
@@ -398,33 +334,20 @@ func (game *BlockKart) buildStaticRenderPackets() [][]byte {
 	}
 	packets = append(packets, environmentObject, sunObject)
 	terrainInstance := render3d.EncodeMeshInstance(render3d.RetainedMeshInstance{
-		MaterialAsset: 100,
-		Layers: 1,
-		CastsShadow: false,
-		ReceivesShadow: true,
-		Lods: []render3d.LodMesh{
-			{MeshAsset: game.KartMeshAsset, MaxDistanceMilli: 1800000},
-		},
+		MaterialAsset: 100, Layers: 1, CastsShadow: false, ReceivesShadow: true,
+		Lods: []render3d.LodMesh{{MeshAsset: game.KartMeshAsset, MaxDistanceMilli: 1800000}},
 	})
 	terrainTransform := Transform{Y: -1500}
-	terrainMatrix := blockKartScaledPoseMatrix(
-		terrainTransform, 1200000, 2000, 1200000,
-	)
+	terrainMatrix := blockKartScaledPoseMatrix(terrainTransform, 1200000, 2000, 1200000)
 	terrainObject := render.EncodeRetainedObject(render.RetainedObject{
 		Layers: 1,
 		Transform: render.TransformSample{
-			PreviousTick: 1,
-			CurrentTick: 1,
-			Previous: terrainMatrix,
-			Current: terrainMatrix,
+			PreviousTick: 1, CurrentTick: 1, Previous: terrainMatrix, Current: terrainMatrix,
 		},
 		Bounds: render.Bounds3{
-			Min: [3]int64{-600000, -40000, -600000},
-			Max: [3]int64{600000, 60000, 600000},
+			Min: [3]int64{-600000, -40000, -600000}, Max: [3]int64{600000, 60000, 600000},
 		},
-		Components: []render.RenderComponent{
-			{Kind: 1, SchemaHash: 1, Bytes: terrainInstance},
-		},
+		Components: []render.RenderComponent{{Kind: 1, SchemaHash: 1, Bytes: terrainInstance}},
 	})
 	if len(terrainInstance) == 0 || len(terrainObject) == 0 {
 		return nil
@@ -432,45 +355,29 @@ func (game *BlockKart) buildStaticRenderPackets() [][]byte {
 	packets = append(packets, terrainObject)
 	points := blockKartTrackPoints()
 	for index, from := range points {
-		to := points[(index+1)%len(points)]
+		to := points[(index + 1) % len(points)]
 		deltaX := to[0] - from[0]
 		deltaZ := to[2] - from[2]
-		length := int64(math.Sqrt(float64(deltaX*deltaX + deltaZ*deltaZ)))
+		length := int64(math.Sqrt(float64(deltaX * deltaX + deltaZ * deltaZ)))
 		transform := Transform{
-			X: (from[0] + to[0]) / 2,
-			Y: (from[1] + to[1]) / 2 - 450,
-			Z: (from[2] + to[2]) / 2,
+			X: (from[0] + to[0]) / 2, Y: (from[1] + to[1]) / 2 - 450, Z: (from[2] + to[2]) / 2,
 			Yaw_milliradians: int32(math.Atan2(float64(deltaX), float64(deltaZ)) * 1000),
 		}
-		matrix := blockKartScaledPoseMatrix(transform, 18000, 800, length+4000)
+		matrix := blockKartScaledPoseMatrix(transform, 18000, 800, length + 4000)
 		instance := render3d.EncodeMeshInstance(render3d.RetainedMeshInstance{
-			MaterialAsset: 101,
-			Layers: 1,
-			CastsShadow: false,
-			ReceivesShadow: true,
-			Lods: []render3d.LodMesh{
-				{MeshAsset: game.KartMeshAsset, MaxDistanceMilli: 1400000},
-			},
+			MaterialAsset: 101, Layers: 1, CastsShadow: false, ReceivesShadow: true,
+			Lods: []render3d.LodMesh{{MeshAsset: game.KartMeshAsset, MaxDistanceMilli: 1400000}},
 		})
 		object := render.EncodeRetainedObject(render.RetainedObject{
 			Layers: 1,
 			Transform: render.TransformSample{
-				PreviousTick: 1,
-				CurrentTick: 1,
-				Previous: matrix,
-				Current: matrix,
+				PreviousTick: 1, CurrentTick: 1, Previous: matrix, Current: matrix,
 			},
 			Bounds: render.Bounds3{
-				Min: [3]int64{
-					transform.X - 20000, transform.Y - 1000, transform.Z - length/2 - 20000,
-				},
-				Max: [3]int64{
-					transform.X + 20000, transform.Y + 1000, transform.Z + length/2 + 20000,
-				},
+				Min: [3]int64{transform.X - 20000, transform.Y - 1000, transform.Z - length / 2 - 20000},
+				Max: [3]int64{transform.X + 20000, transform.Y + 1000, transform.Z + length / 2 + 20000},
 			},
-			Components: []render.RenderComponent{
-				{Kind: 1, SchemaHash: 1, Bytes: instance},
-			},
+			Components: []render.RenderComponent{{Kind: 1, SchemaHash: 1, Bytes: instance}},
 		})
 		if len(instance) == 0 || len(object) == 0 {
 			return nil
@@ -480,73 +387,54 @@ func (game *BlockKart) buildStaticRenderPackets() [][]byte {
 	return packets
 }
 
-func (game *BlockKart) staticMeshObject(transform Transform, material uint64,
-	halfX int64, halfY int64, halfZ int64) []byte {
+func (game *BlockKart) staticMeshObject(transform Transform, material uint64, halfX int64, halfY int64, halfZ int64) []byte {
 	mesh := render3d.EncodeMeshInstance(render3d.RetainedMeshInstance{
-		MaterialAsset: material, Layers: 1,
-		CastsShadow: true, ReceivesShadow: true,
-		Lods: []render3d.LodMesh{
-			{MeshAsset: game.KartMeshAsset, MaxDistanceMilli: 1600000},
-		},
+		MaterialAsset: material, Layers: 1, CastsShadow: true, ReceivesShadow: true,
+		Lods: []render3d.LodMesh{{MeshAsset: game.KartMeshAsset, MaxDistanceMilli: 1600000}},
 	})
 	if len(mesh) == 0 {
 		return nil
 	}
-	matrix := blockKartScaledPoseMatrix(
-		transform, halfX*2, halfY*2, halfZ*2,
-	)
+	matrix := blockKartScaledPoseMatrix(transform, halfX * 2, halfY * 2, halfZ * 2)
 	return render.EncodeRetainedObject(render.RetainedObject{
 		Layers: 1,
 		Transform: render.TransformSample{
-			PreviousTick: 1, CurrentTick: 1,
-			Previous: matrix, Current: matrix,
+			PreviousTick: 1, CurrentTick: 1, Previous: matrix, Current: matrix,
 		},
 		Bounds: render.Bounds3{
-			Min: [3]int64{
-				transform.X-halfX, transform.Y-halfY, transform.Z-halfZ,
-			},
-			Max: [3]int64{
-				transform.X+halfX, transform.Y+halfY, transform.Z+halfZ,
-			},
+			Min: [3]int64{transform.X - halfX, transform.Y - halfY, transform.Z - halfZ},
+			Max: [3]int64{transform.X + halfX, transform.Y + halfY, transform.Z + halfZ},
 		},
-		Components: []render.RenderComponent{
-			{Kind: 1, SchemaHash: 1, Bytes: mesh},
-		},
+		Components: []render.RenderComponent{{Kind: 1, SchemaHash: 1, Bytes: mesh}},
 	})
 }
 
 func blockKartCubeMeshArtifact(id uint64) []byte {
 	positions := [][3]float32{
-		{-0.5, -0.5, 0.5}, {0.5, -0.5, 0.5}, {0.5, 0.5, 0.5}, {-0.5, 0.5, 0.5},
-		{0.5, -0.5, -0.5}, {-0.5, -0.5, -0.5}, {-0.5, 0.5, -0.5}, {0.5, 0.5, -0.5},
-		{-0.5, -0.5, -0.5}, {-0.5, -0.5, 0.5}, {-0.5, 0.5, 0.5}, {-0.5, 0.5, -0.5},
-		{0.5, -0.5, 0.5}, {0.5, -0.5, -0.5}, {0.5, 0.5, -0.5}, {0.5, 0.5, 0.5},
-		{-0.5, 0.5, 0.5}, {0.5, 0.5, 0.5}, {0.5, 0.5, -0.5}, {-0.5, 0.5, -0.5},
+		{-0.5, -0.5, 0.5}, {0.5, -0.5, 0.5}, {0.5, 0.5, 0.5}, {-0.5, 0.5, 0.5}, {0.5, -0.5, -0.5},
+		{-0.5, -0.5, -0.5}, {-0.5, 0.5, -0.5}, {0.5, 0.5, -0.5}, {-0.5, -0.5, -0.5}, {-0.5, -0.5, 0.5},
+		{-0.5, 0.5, 0.5}, {-0.5, 0.5, -0.5}, {0.5, -0.5, 0.5}, {0.5, -0.5, -0.5}, {0.5, 0.5, -0.5},
+		{0.5, 0.5, 0.5}, {-0.5, 0.5, 0.5}, {0.5, 0.5, 0.5}, {0.5, 0.5, -0.5}, {-0.5, 0.5, -0.5},
 		{-0.5, -0.5, -0.5}, {0.5, -0.5, -0.5}, {0.5, -0.5, 0.5}, {-0.5, -0.5, 0.5},
 	}
 	normals := [][3]float32{
-		{0, 0, 1}, {0, 0, 1}, {0, 0, 1}, {0, 0, 1},
-		{0, 0, -1}, {0, 0, -1}, {0, 0, -1}, {0, 0, -1},
-		{-1, 0, 0}, {-1, 0, 0}, {-1, 0, 0}, {-1, 0, 0},
-		{1, 0, 0}, {1, 0, 0}, {1, 0, 0}, {1, 0, 0},
-		{0, 1, 0}, {0, 1, 0}, {0, 1, 0}, {0, 1, 0},
-		{0, -1, 0}, {0, -1, 0}, {0, -1, 0}, {0, -1, 0},
+		{0, 0, 1}, {0, 0, 1}, {0, 0, 1}, {0, 0, 1}, {0, 0, -1}, {0, 0, -1}, {0, 0, -1}, {0, 0, -1},
+		{-1, 0, 0}, {-1, 0, 0}, {-1, 0, 0}, {-1, 0, 0}, {1, 0, 0}, {1, 0, 0}, {1, 0, 0}, {1, 0, 0},
+		{0, 1, 0}, {0, 1, 0}, {0, 1, 0}, {0, 1, 0}, {0, -1, 0}, {0, -1, 0}, {0, -1, 0}, {0, -1, 0},
 	}
 	texcoords := [][2]float32{}
 	for face := 0; face < 6; face++ {
-		texcoords = append(texcoords,
-			[2]float32{0, 0}, [2]float32{1, 0},
-			[2]float32{1, 1}, [2]float32{0, 1},
-		)
+		texcoords = append(texcoords, [2]float32{0, 0}, [2]float32{1, 0}, [2]float32{1, 1}, [2]float32{
+			0, 1,
+		})
 	}
 	indices := []uint32{}
 	for face := uint32(0); face < 6; face++ {
 		base := face * 4
-		indices = append(indices, base, base+1, base+2, base, base+2, base+3)
+		indices = append(indices, base, base + 1, base + 2, base, base + 2, base + 3)
 	}
 	return render3d.EncodeMeshArtifact(render3d.MeshArtifact{
-		Id: id, Positions: positions, Normals: normals,
-		Texcoords: texcoords, Indices: indices,
+		Id: id, Positions: positions, Normals: normals, Texcoords: texcoords, Indices: indices,
 	})
 }
 
@@ -558,32 +446,17 @@ func blockKartStaticRenderObject(kind uint32, component []byte) []byte {
 	return render.EncodeRetainedObject(render.RetainedObject{
 		Layers: 1,
 		Transform: render.TransformSample{
-			PreviousTick: 1,
-			CurrentTick: 1,
-			Previous: identity,
-			Current: identity,
+			PreviousTick: 1, CurrentTick: 1, Previous: identity, Current: identity,
 		},
 		Bounds: render.Bounds3{
-			Min: [3]int64{-1000000, -1000000, -1000000},
-			Max: [3]int64{1000000, 1000000, 1000000},
+			Min: [3]int64{-1000000, -1000000, -1000000}, Max: [3]int64{1000000, 1000000, 1000000},
 		},
-		Components: []render.RenderComponent{
-			{Kind: kind, SchemaHash: uint64(kind), Bytes: component},
-		},
+		Components: []render.RenderComponent{{Kind: kind, SchemaHash: uint64(kind), Bytes: component}},
 	})
 }
 
 func (game *BlockKart) gameplayRenderPackets(tick uint64) ([]render.SnapshotObject, bool) {
 	objects := []render.SnapshotObject{}
-	state, ok := game.KartStates.Get(game.KartEntity)
-	if !ok {
-		return nil, false
-	}
-	gates, encoded := game.checkpointRenderObjects(state, tick)
-	if !encoded {
-		return nil, false
-	}
-	objects = append(objects, gates...)
 	for _, pickup := range game.Pickups {
 		value, ok := game.Collectibles.Get(pickup.Entity)
 		if !ok {
@@ -596,19 +469,14 @@ func (game *BlockKart) gameplayRenderPackets(tick uint64) ([]render.SnapshotObje
 		if !ok {
 			return nil, false
 		}
-		transform.Y += int64(math.Sin(
-			float64(tick+pickup.Entity*17) * 0.08,
-		) * 650)
-		transform.Yaw_milliradians = int32(
-			(tick*45 + pickup.Entity*113) % 6283,
-		)
+		transform.Y += int64(math.Sin(float64(tick + pickup.Entity * 17) * 0.08) * 650)
+		transform.Yaw_milliradians = int32((tick * 45 + pickup.Entity * 113) % 6283)
 		packet := game.retainedGameplayObject(transform, tick, 103, 650, 900, 650)
 		if len(packet) == 0 {
 			return nil, false
 		}
 		objects = append(objects, render.SnapshotObject{
-			Entity: voplay.Handle{Index: uint32(2000 + pickup.Entity), Generation: 1},
-			Bytes: packet,
+			Entity: voplay.Handle{Index: uint32(2000 + pickup.Entity), Generation: 1}, Bytes: packet,
 		})
 	}
 	for _, pad := range game.PadEntities {
@@ -621,8 +489,7 @@ func (game *BlockKart) gameplayRenderPackets(tick uint64) ([]render.SnapshotObje
 			return nil, false
 		}
 		objects = append(objects, render.SnapshotObject{
-			Entity: voplay.Handle{Index: uint32(2000 + pad.Entity), Generation: 1},
-			Bytes: packet,
+			Entity: voplay.Handle{Index: uint32(2000 + pad.Entity), Generation: 1}, Bytes: packet,
 		})
 	}
 	for _, obstacle := range game.ObstacleEntities {
@@ -635,28 +502,24 @@ func (game *BlockKart) gameplayRenderPackets(tick uint64) ([]render.SnapshotObje
 			return nil, false
 		}
 		objects = append(objects, render.SnapshotObject{
-			Entity: voplay.Handle{Index: uint32(2000 + obstacle.Entity), Generation: 1},
-			Bytes: packet,
+			Entity: voplay.Handle{Index: uint32(2000 + obstacle.Entity), Generation: 1}, Bytes: packet,
 		})
 	}
 	return objects, true
 }
 
-func (game *BlockKart) checkpointRenderObjects(state KartState,
-	tick uint64) ([]render.SnapshotObject, bool) {
-	objects := make([]render.SnapshotObject, 0, len(game.TrackGates)*3)
+func (game *BlockKart) checkpointRenderObjects(state KartState, tick uint64) ([]render.SnapshotObject, bool) {
+	objects := make([]render.SnapshotObject, 0, len(game.TrackGates) * 3)
 	for index, gate := range game.TrackGates {
-		next := game.TrackGates[(index+1)%len(game.TrackGates)]
+		next := game.TrackGates[(index + 1) % len(game.TrackGates)]
 		deltaX := next.Position[0] - gate.Position[0]
 		deltaZ := next.Position[2] - gate.Position[2]
 		base := Transform{
 			X: gate.Position[0], Y: gate.Position[1], Z: gate.Position[2],
-			Yaw_milliradians: int32(
-				math.Atan2(float64(deltaX), float64(deltaZ)) * 1000,
-			),
+			Yaw_milliradians: int32(math.Atan2(float64(deltaX), float64(deltaZ)) * 1000),
 		}
 		material := uint64(107)
-		if gate.Order == state.Checkpoint+1 {
+		if gate.Order == state.Checkpoint + 1 {
 			material = 104
 		}
 		parts := [3]struct {
@@ -669,18 +532,12 @@ func (game *BlockKart) checkpointRenderObjects(state KartState,
 		}
 		for partIndex, part := range parts {
 			transform := blockKartLocalTransform(base, part.Local)
-			packet := game.retainedGameplayObject(
-				transform, tick, material,
-				part.Half[0], part.Half[1], part.Half[2],
-			)
+			packet := game.retainedGameplayObject(transform, tick, material, part.Half[0], part.Half[1], part.Half[2])
 			if len(packet) == 0 {
 				return nil, false
 			}
 			objects = append(objects, render.SnapshotObject{
-				Entity: voplay.Handle{
-					Index: uint32(100000 + gate.Order*3 + uint32(partIndex)),
-					Generation: 1,
-				},
+				Entity: voplay.Handle{Index: uint32(100000 + gate.Order * 3 + uint32(partIndex)), Generation: 1},
 				Bytes: packet,
 			})
 		}
@@ -688,40 +545,25 @@ func (game *BlockKart) checkpointRenderObjects(state KartState,
 	return objects, true
 }
 
-func (game *BlockKart) retainedGameplayObject(transform Transform, tick uint64,
-	material uint64, halfX int64, halfY int64, halfZ int64) []byte {
+func (game *BlockKart) retainedGameplayObject(transform Transform, tick uint64, material uint64, halfX int64, halfY int64, halfZ int64) []byte {
 	mesh := render3d.EncodeMeshInstance(render3d.RetainedMeshInstance{
-		MaterialAsset: material,
-		Layers: 1,
-		CastsShadow: true,
-		ReceivesShadow: true,
-		Lods: []render3d.LodMesh{
-			{MeshAsset: game.KartMeshAsset, MaxDistanceMilli: 600000},
-		},
+		MaterialAsset: material, Layers: 1, CastsShadow: true, ReceivesShadow: true,
+		Lods: []render3d.LodMesh{{MeshAsset: game.KartMeshAsset, MaxDistanceMilli: 600000}},
 	})
 	if len(mesh) == 0 {
 		return nil
 	}
-	matrix := blockKartScaledPoseMatrix(transform, halfX*2, halfY*2, halfZ*2)
+	matrix := blockKartScaledPoseMatrix(transform, halfX * 2, halfY * 2, halfZ * 2)
 	return render.EncodeRetainedObject(render.RetainedObject{
 		Layers: 1,
 		Transform: render.TransformSample{
-			PreviousTick: tick - 1,
-			CurrentTick: tick,
-			Previous: matrix,
-			Current: matrix,
+			PreviousTick: tick - 1, CurrentTick: tick, Previous: matrix, Current: matrix,
 		},
 		Bounds: render.Bounds3{
-			Min: [3]int64{
-				transform.X - halfX, transform.Y - halfY, transform.Z - halfZ,
-			},
-			Max: [3]int64{
-				transform.X + halfX, transform.Y + halfY, transform.Z + halfZ,
-			},
+			Min: [3]int64{transform.X - halfX, transform.Y - halfY, transform.Z - halfZ},
+			Max: [3]int64{transform.X + halfX, transform.Y + halfY, transform.Z + halfZ},
 		},
-		Components: []render.RenderComponent{
-			{Kind: 1, SchemaHash: 1, Bytes: mesh},
-		},
+		Components: []render.RenderComponent{{Kind: 1, SchemaHash: 1, Bytes: mesh}},
 	})
 }
 
@@ -731,22 +573,12 @@ func (game *BlockKart) kartRenderPackets(transform Transform, tick uint64) ([][]
 		Size [3]int64
 		Material uint64
 	}
-	parts := []part{
-		{Local: [3]int64{0, 0, 0}, Size: [3]int64{1800, 600, 2600}, Material: 102},
-		{Local: [3]int64{0, 520, -150}, Size: [3]int64{1300, 700, 1200}, Material: 102},
-		{Local: [3]int64{-1050, -320, 850}, Size: [3]int64{520, 620, 760}, Material: 106},
-		{Local: [3]int64{1050, -320, 850}, Size: [3]int64{520, 620, 760}, Material: 106},
-		{Local: [3]int64{-1050, -320, -850}, Size: [3]int64{520, 620, 760}, Material: 106},
-		{Local: [3]int64{1050, -320, -850}, Size: [3]int64{520, 620, 760}, Material: 106},
-		{Local: [3]int64{0, -40, 1450}, Size: [3]int64{2100, 260, 320}, Material: 107},
-	}
+	parts := []part{{Local: [3]int64{0, 0, 0}, Size: [3]int64{1800, 600, 2600}, Material: 102}}
 	packets := make([][]byte, 0, len(parts))
 	for _, value := range parts {
 		partTransform := blockKartLocalTransform(transform, value.Local)
-		packet := game.retainedGameplayObject(
-			partTransform, tick, value.Material,
-			value.Size[0]/2, value.Size[1]/2, value.Size[2]/2,
-		)
+		packet := game.retainedGameplayObject(partTransform, tick, value.Material, value.Size[0] / 2, value.Size[1] /
+			2, value.Size[2] / 2)
 		if len(packet) == 0 {
 			return nil, false
 		}
@@ -755,17 +587,14 @@ func (game *BlockKart) kartRenderPackets(transform Transform, tick uint64) ([][]
 	return packets, true
 }
 
-func (game *BlockKart) effectRenderObjects(transform Transform,
-	tick uint64) ([]render.SnapshotObject, bool) {
+func (game *BlockKart) effectRenderObjects(transform Transform, tick uint64) ([]render.SnapshotObject, bool) {
 	objects := []render.SnapshotObject{}
 	if game.OffRoad || game.Drifting {
 		dust := render3d.EncodeParticleEmitter(render3d.ParticleEmitter3d{
-			Id: 800001, Seed: tick + 7001,
-			Mesh: game.KartMeshAsset, Material: 100,
-			MaxParticles: 160, SpawnPerTick: 5, LifetimeTicks: 28,
+			Id: 800001, Seed: tick + 7001, Mesh: game.KartMeshAsset, Material: 100, MaxParticles: 160,
+			SpawnPerTick: 5, LifetimeTicks: 28,
 			Position: [3]int64{transform.X, transform.Y - 400, transform.Z},
-			VelocityMin: [3]int64{-2800, 400, -2800},
-			VelocityMax: [3]int64{2800, 3200, 2800},
+			VelocityMin: [3]int64{-2800, 400, -2800}, VelocityMax: [3]int64{2800, 3200, 2800},
 			StartScaleMilli: 160, EndScaleMilli: 20, Layers: 1,
 		})
 		object := blockKartEffectObject(dust, transform, tick)
@@ -779,17 +608,13 @@ func (game *BlockKart) effectRenderObjects(transform Transform,
 	if game.BoostPressed {
 		heading := float64(transform.Yaw_milliradians) / 1000.0
 		boostPosition := [3]int64{
-			transform.X - int64(math.Sin(heading)*1700),
-			transform.Y,
-			transform.Z - int64(math.Cos(heading)*1700),
+			transform.X - int64(math.Sin(heading) * 1700), transform.Y,
+			transform.Z - int64(math.Cos(heading) * 1700),
 		}
 		boost := render3d.EncodeParticleEmitter(render3d.ParticleEmitter3d{
-			Id: 800002, Seed: tick + 9001,
-			Mesh: game.KartMeshAsset, Material: 104,
-			MaxParticles: 96, SpawnPerTick: 8, LifetimeTicks: 16,
-			Position: boostPosition,
-			VelocityMin: [3]int64{-900, -300, -900},
-			VelocityMax: [3]int64{900, 1200, 900},
+			Id: 800002, Seed: tick + 9001, Mesh: game.KartMeshAsset, Material: 104, MaxParticles: 96,
+			SpawnPerTick: 8, LifetimeTicks: 16, Position: boostPosition,
+			VelocityMin: [3]int64{-900, -300, -900}, VelocityMax: [3]int64{900, 1200, 900},
 			StartScaleMilli: 110, EndScaleMilli: 15, Layers: 1,
 		})
 		object := blockKartEffectObject(boost, transform, tick)
@@ -811,16 +636,13 @@ func blockKartEffectObject(component []byte, transform Transform, tick uint64) [
 	return render.EncodeRetainedObject(render.RetainedObject{
 		Layers: 1,
 		Transform: render.TransformSample{
-			PreviousTick: tick - 1, CurrentTick: tick,
-			Previous: identity, Current: identity,
+			PreviousTick: tick - 1, CurrentTick: tick, Previous: identity, Current: identity,
 		},
 		Bounds: render.Bounds3{
 			Min: [3]int64{transform.X - 20000, transform.Y - 5000, transform.Z - 20000},
 			Max: [3]int64{transform.X + 20000, transform.Y + 20000, transform.Z + 20000},
 		},
-		Components: []render.RenderComponent{
-			{Kind: 20, SchemaHash: 20, Bytes: component},
-		},
+		Components: []render.RenderComponent{{Kind: 20, SchemaHash: 20, Bytes: component}},
 	})
 }
 
@@ -828,13 +650,10 @@ func (game *BlockKart) stressRenderObjects(tick uint64) ([]render.SnapshotObject
 	if !game.StressMode {
 		return []render.SnapshotObject{}, true
 	}
-	material := uint64(102 + game.RenderDebugMode%6)
+	material := uint64(102 + game.RenderDebugMode % 6)
 	mesh := render3d.EncodeMeshInstance(render3d.RetainedMeshInstance{
-		MaterialAsset: material, Layers: 1,
-		CastsShadow: false, ReceivesShadow: true,
-		Lods: []render3d.LodMesh{
-			{MeshAsset: game.KartMeshAsset, MaxDistanceMilli: 900000},
-		},
+		MaterialAsset: material, Layers: 1, CastsShadow: false, ReceivesShadow: true,
+		Lods: []render3d.LodMesh{{MeshAsset: game.KartMeshAsset, MaxDistanceMilli: 900000}},
 	})
 	if len(mesh) == 0 {
 		return nil, false
@@ -844,32 +663,26 @@ func (game *BlockKart) stressRenderObjects(tick uint64) ([]render.SnapshotObject
 		column := int64(index % 100)
 		row := int64(index / 100)
 		transform := Transform{
-			X: (column - 50) * 4200,
-			Y: 2500 + int64((index*37+uint32(tick))%7)*320,
-			Z: (row - 50) * 4200,
-			Yaw_milliradians: int32((uint64(index)*97 + tick*11) % 6283),
+			X: (column - 50) * 4200, Y: 2500 + int64((index * 37 + uint32(tick)) % 7) * 320,
+			Z: (row - 50) * 4200, Yaw_milliradians: int32((uint64(index) * 97 + tick * 11) % 6283),
 		}
 		matrix := blockKartScaledPoseMatrix(transform, 900, 900, 900)
 		packet := render.EncodeRetainedObject(render.RetainedObject{
 			Layers: 1,
 			Transform: render.TransformSample{
-				PreviousTick: tick - 1, CurrentTick: tick,
-				Previous: matrix, Current: matrix,
+				PreviousTick: tick - 1, CurrentTick: tick, Previous: matrix, Current: matrix,
 			},
 			Bounds: render.Bounds3{
-				Min: [3]int64{transform.X-500, transform.Y-500, transform.Z-500},
-				Max: [3]int64{transform.X+500, transform.Y+500, transform.Z+500},
+				Min: [3]int64{transform.X - 500, transform.Y - 500, transform.Z - 500},
+				Max: [3]int64{transform.X + 500, transform.Y + 500, transform.Z + 500},
 			},
-			Components: []render.RenderComponent{
-				{Kind: 1, SchemaHash: 1, Bytes: mesh},
-			},
+			Components: []render.RenderComponent{{Kind: 1, SchemaHash: 1, Bytes: mesh}},
 		})
 		if len(packet) == 0 {
 			return nil, false
 		}
 		objects = append(objects, render.SnapshotObject{
-			Entity: voplay.Handle{Index: 300000 + index, Generation: 1},
-			Bytes: packet,
+			Entity: voplay.Handle{Index: 300000 + index, Generation: 1}, Bytes: packet,
 		})
 	}
 	return objects, true
@@ -880,9 +693,9 @@ func blockKartLocalTransform(parent Transform, local [3]int64) Transform {
 	sine := math.Sin(heading)
 	cosine := math.Cos(heading)
 	return Transform{
-		X: parent.X + int64(cosine*float64(local[0])+sine*float64(local[2])),
+		X: parent.X + int64(cosine * float64(local[0]) + sine * float64(local[2])),
 		Y: parent.Y + local[1],
-		Z: parent.Z + int64(-sine*float64(local[0])+cosine*float64(local[2])),
+		Z: parent.Z + int64(-sine * float64(local[0]) + cosine * float64(local[2])),
 		Yaw_milliradians: parent.Yaw_milliradians,
 	}
 }
@@ -890,9 +703,7 @@ func blockKartLocalTransform(parent Transform, local [3]int64) Transform {
 func (game *BlockKart) cameraPacket(kart Transform, tick uint64) []byte {
 	camera := render3d.EncodeCamera(render3d.Camera3d{
 		Projection: render3d.CameraProjection{
-			Kind: render3d.CameraPerspective,
-			VerticalFovMillidegrees: 62000,
-			NearMilli: 100,
+			Kind: render3d.CameraPerspective, VerticalFovMillidegrees: 62000, NearMilli: 100,
 			FarMilli: 1600000,
 		},
 		ExposureMilli: 100,
@@ -911,46 +722,31 @@ func (game *BlockKart) cameraPacket(kart Transform, tick uint64) []byte {
 		distance = 30000
 		height = 26000
 	}
-	x := kart.X - int64(math.Sin(heading)*distance)
-	z := kart.Z - int64(math.Cos(heading)*distance)
-	transform := Transform{
-		X: x,
-		Y: kart.Y + height,
-		Z: z,
-		Yaw_milliradians: kart.Yaw_milliradians,
-	}
+	x := kart.X - int64(math.Sin(heading) * distance)
+	z := kart.Z - int64(math.Cos(heading) * distance)
+	transform := Transform{X: x, Y: kart.Y + height, Z: z, Yaw_milliradians: kart.Yaw_milliradians}
 	targetY := kart.Y + 900
 	if game.CameraMode == 2 {
 		targetY = kart.Y
 	}
-	matrix := blockKartLookAtMatrix(
-		transform.X, transform.Y, transform.Z,
-		kart.X, targetY, kart.Z,
-	)
+	matrix := blockKartLookAtMatrix(transform.X, transform.Y, transform.Z, kart.X, targetY, kart.Z)
 	return render.EncodeRetainedObject(render.RetainedObject{
 		Layers: 1,
 		Transform: render.TransformSample{
-			PreviousTick: tick - 1,
-			CurrentTick: tick,
-			Previous: matrix,
-			Current: matrix,
+			PreviousTick: tick - 1, CurrentTick: tick, Previous: matrix, Current: matrix,
 		},
 		Bounds: render.Bounds3{
-			Min: [3]int64{x - 1, transform.Y - 1, z - 1},
-			Max: [3]int64{x + 1, transform.Y + 1, z + 1},
+			Min: [3]int64{x - 1, transform.Y - 1, z - 1}, Max: [3]int64{x + 1, transform.Y + 1, z + 1},
 		},
-		Components: []render.RenderComponent{
-			{Kind: 2, SchemaHash: 2, Bytes: camera},
-		},
+		Components: []render.RenderComponent{{Kind: 2, SchemaHash: 2, Bytes: camera}},
 	})
 }
 
-func blockKartLookAtMatrix(x int64, y int64, z int64,
-	targetX int64, targetY int64, targetZ int64) [12]int64 {
+func blockKartLookAtMatrix(x int64, y int64, z int64, targetX int64, targetY int64, targetZ int64) [12]int64 {
 	zx := float64(x - targetX)
 	zy := float64(y - targetY)
 	zz := float64(z - targetZ)
-	zLength := math.Sqrt(zx*zx + zy*zy + zz*zz)
+	zLength := math.Sqrt(zx * zx + zy * zy + zz * zz)
 	if zLength < 1 {
 		return blockKartIdentityMatrix()
 	}
@@ -959,7 +755,7 @@ func blockKartLookAtMatrix(x int64, y int64, z int64,
 	zz /= zLength
 	xx := zz
 	xz := -zx
-	xLength := math.Sqrt(xx*xx + xz*xz)
+	xLength := math.Sqrt(xx * xx + xz * xz)
 	if xLength < 0.001 {
 		xx = 1
 		xz = 0
@@ -968,11 +764,10 @@ func blockKartLookAtMatrix(x int64, y int64, z int64,
 		xz /= xLength
 	}
 	yx := zy * xz
-	yy := zz*xx - zx*xz
+	yy := zz * xx - zx * xz
 	yz := -zy * xx
 	return [12]int64{
-		int64(xx * 1000), int64(yx * 1000), int64(zx * 1000), x,
-		0, int64(yy * 1000), int64(zy * 1000), y,
+		int64(xx * 1000), int64(yx * 1000), int64(zx * 1000), x, 0, int64(yy * 1000), int64(zy * 1000), y,
 		int64(xz * 1000), int64(yz * 1000), int64(zz * 1000), z,
 	}
 }
@@ -1032,10 +827,10 @@ func (game *BlockKart) restartRace() error {
 func (game *BlockKart) respawn() error {
 	transform := Transform{X: 0, Y: 1200, Z: 367500, Yaw_milliradians: 1571}
 	if !game.Physics.Submit(physics3d.Command{
-		Kind: physics3d.CommandTeleport,
-		Body: game.KartBody,
+		Kind: physics3d.CommandTeleport, Body: game.KartBody,
 		Value: [3]int64{transform.X, transform.Y, transform.Z},
-	}) || !game.Transforms.Upsert(game.KartEntity, transform) ||
+	}) ||
+		!game.Transforms.Upsert(game.KartEntity, transform) ||
 		!game.Velocities.Upsert(game.KartEntity, Velocity{}) {
 		return errors.New("blockkart: respawn")
 	}
@@ -1055,38 +850,26 @@ func blockKartPoseMatrix(value Transform) [12]int64 {
 	heading := float64(value.Yaw_milliradians) / 1000.0
 	sine := int64(math.Sin(heading) * 1000)
 	cosine := int64(math.Cos(heading) * 1000)
-	return [12]int64{
-		cosine, 0, -sine, value.X,
-		0, 1000, 0, value.Y,
-		sine, 0, cosine, value.Z,
-	}
+	return [12]int64{cosine, 0, -sine, value.X, 0, 1000, 0, value.Y, sine, 0, cosine, value.Z}
 }
 
-func blockKartScaledPoseMatrix(value Transform, scaleX int64, scaleY int64,
-	scaleZ int64) [12]int64 {
+func blockKartScaledPoseMatrix(value Transform, scaleX int64, scaleY int64, scaleZ int64) [12]int64 {
 	heading := float64(value.Yaw_milliradians) / 1000.0
 	sine := math.Sin(heading)
 	cosine := math.Cos(heading)
 	return [12]int64{
-		int64(cosine * float64(scaleX)), 0, -int64(sine * float64(scaleZ)), value.X,
-		0, scaleY, 0, value.Y,
-		int64(sine * float64(scaleX)), 0, int64(cosine * float64(scaleZ)), value.Z,
+		int64(cosine * float64(scaleX)), 0, -int64(sine * float64(scaleZ)), value.X, 0, scaleY, 0,
+		value.Y, int64(sine * float64(scaleX)), 0, int64(cosine * float64(scaleZ)), value.Z,
 	}
 }
 
 func blockKartIdentityMatrix() [12]int64 {
-	return [12]int64{
-		1000, 0, 0, 0,
-		0, 1000, 0, 0,
-		0, 0, 1000, 0,
-	}
+	return [12]int64{1000, 0, 0, 0, 0, 1000, 0, 0, 0, 0, 1000, 0}
 }
 
 func blockKartTransformBytes(value Transform) []byte {
 	result := []byte{}
-	for _, field := range []int64{
-		value.X, value.Y, value.Z, int64(value.Yaw_milliradians),
-	} {
+	for _, field := range []int64{value.X, value.Y, value.Z, int64(value.Yaw_milliradians)} {
 		for shift := uint32(0); shift < 64; shift += 8 {
 			result = append(result, byte(uint64(field) >> shift))
 		}
