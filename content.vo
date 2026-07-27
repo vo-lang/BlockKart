@@ -296,10 +296,6 @@ func (game *BlockKart) applyGameplayContacts(state *KartState) error {
 func (game *BlockKart) startAssets(context voplay.StartContext) error {
 	paths := []string{
 		"assets/audio/kart_engine.wav",
-		"assets/audio/kart_boost.wav",
-		"assets/audio/kart_hit.wav",
-		"assets/audio/kart_skid.wav",
-		"assets/audio/kart_grass.wav",
 	}
 	handles := []uint64{}
 	for _, path := range paths {
@@ -310,10 +306,10 @@ func (game *BlockKart) startAssets(context voplay.StartContext) error {
 		handles = append(handles, uint64(handle.Index))
 	}
 	game.EngineAudioAsset = handles[0]
-	game.BoostAudioAsset = handles[1]
-	game.HitAudioAsset = handles[2]
-	game.SkidAudioAsset = handles[3]
-	game.GrassAudioAsset = handles[4]
+	game.BoostAudioAsset = handles[0]
+	game.HitAudioAsset = handles[0]
+	game.SkidAudioAsset = handles[0]
+	game.GrassAudioAsset = handles[0]
 	game.KartMeshAsset = 10001
 	game.Audio, _ = audio.NewControlState(8, 32, 64)
 	if game.Audio == nil {
@@ -347,14 +343,9 @@ func (game *BlockKart) startAssets(context voplay.StartContext) error {
 	game.EngineAudioSource = audioCommit.CreatedSources[0]
 	audioPaths := []string{
 		"assets/audio/kart_engine.wav",
-		"assets/audio/kart_boost.wav",
-		"assets/audio/kart_hit.wav",
-		"assets/audio/kart_skid.wav",
-		"assets/audio/kart_grass.wav",
 	}
 	audioHandles := []uint64{
-		game.EngineAudioAsset, game.BoostAudioAsset, game.HitAudioAsset,
-		game.SkidAudioAsset, game.GrassAudioAsset,
+		game.EngineAudioAsset,
 	}
 	for index, path := range audioPaths {
 		bytes, readErr := os.ReadFile(path)
@@ -397,82 +388,6 @@ func (game *BlockKart) buildStaticRenderPackets() [][]byte {
 		IntensityMilli: 1800,
 		CastsShadow: true,
 	})
-	terrainMaterial := render3d.EncodeMaterial(render3d.Material{
-		Id: 100,
-		BaseColor: [4]uint16{18000, 42000, 16000, 65535},
-		Roughness: 59000,
-		Alpha: render3d.AlphaOpaque,
-		Revision: 1,
-	})
-	roadMaterial := render3d.EncodeMaterial(render3d.Material{
-		Id: 101,
-		BaseColor: [4]uint16{4200, 5200, 5600, 65535},
-		Roughness: 57000,
-		Alpha: render3d.AlphaOpaque,
-		Revision: 1,
-	})
-	kartMaterial := render3d.EncodeMaterial(render3d.Material{
-		Id: 102,
-		BaseColor: [4]uint16{58000, 7000, 5000, 65535},
-		Metallic: 5000,
-		Roughness: 30000,
-		Alpha: render3d.AlphaOpaque,
-		Revision: 1,
-	})
-	collectibleMaterial := render3d.EncodeMaterial(render3d.Material{
-		Id: 103,
-		BaseColor: [4]uint16{65535, 50000, 5000, 65535},
-		Metallic: 12000,
-		Roughness: 18000,
-		Emissive: [3]uint16{16000, 9000, 500},
-		Alpha: render3d.AlphaOpaque,
-		Revision: 1,
-	})
-	boostMaterial := render3d.EncodeMaterial(render3d.Material{
-		Id: 104,
-		BaseColor: [4]uint16{5000, 42000, 65535, 65535},
-		Roughness: 22000,
-		Emissive: [3]uint16{1000, 10000, 18000},
-		Alpha: render3d.AlphaOpaque,
-		Revision: 1,
-	})
-	obstacleMaterial := render3d.EncodeMaterial(render3d.Material{
-		Id: 105,
-		BaseColor: [4]uint16{56000, 9000, 5000, 65535},
-		Roughness: 46000,
-		Alpha: render3d.AlphaOpaque,
-		Revision: 1,
-	})
-	wheelMaterial := render3d.EncodeMaterial(render3d.Material{
-		Id: 106,
-		BaseColor: [4]uint16{1800, 2100, 2400, 65535},
-		Roughness: 62000,
-		Alpha: render3d.AlphaOpaque,
-		Revision: 1,
-	})
-	metalMaterial := render3d.EncodeMaterial(render3d.Material{
-		Id: 107,
-		BaseColor: [4]uint16{36000, 39000, 42000, 65535},
-		Metallic: 50000,
-		Roughness: 18000,
-		Alpha: render3d.AlphaOpaque,
-		Revision: 1,
-	})
-	foliageMaterial := render3d.EncodeMaterial(render3d.Material{
-		Id: 108,
-		BaseColor: [4]uint16{9000, 36000, 7000, 65535},
-		Roughness: 60000, Alpha: render3d.AlphaOpaque, Revision: 1,
-	})
-	woodMaterial := render3d.EncodeMaterial(render3d.Material{
-		Id: 109,
-		BaseColor: [4]uint16{24000, 12000, 4500, 65535},
-		Roughness: 62000, Alpha: render3d.AlphaOpaque, Revision: 1,
-	})
-	curbMaterial := render3d.EncodeMaterial(render3d.Material{
-		Id: 110,
-		BaseColor: [4]uint16{61000, 61000, 61000, 65535},
-		Roughness: 52000, Alpha: render3d.AlphaOpaque, Revision: 1,
-	})
 	if len(environment) == 0 || len(sun) == 0 {
 		return nil
 	}
@@ -482,37 +397,6 @@ func (game *BlockKart) buildStaticRenderPackets() [][]byte {
 		return nil
 	}
 	packets = append(packets, environmentObject, sunObject)
-	materials := [][]byte{
-		terrainMaterial, roadMaterial, kartMaterial, collectibleMaterial,
-		boostMaterial, obstacleMaterial, wheelMaterial, metalMaterial,
-		foliageMaterial, woodMaterial, curbMaterial,
-	}
-	for index, descriptor := range materials {
-		if len(descriptor) == 0 {
-			return nil
-		}
-		asset := uint64(100 + index)
-		packet, ok := render.EncodeAssetPacket(
-			game.Engine, 1, render.AssetMaterial3d, asset, 1,
-			game.RenderControls.Revision, 1, descriptor,
-		)
-		if !ok {
-			return nil
-		}
-		game.RenderAssetPackets = append(game.RenderAssetPackets, packet)
-	}
-	terrainMesh := blockKartCubeMeshArtifact(game.KartMeshAsset)
-	if len(terrainMesh) == 0 {
-		return nil
-	}
-	terrainMeshPacket, ok := render.EncodeAssetPacket(
-		game.Engine, 1, render.AssetMesh3d, game.KartMeshAsset, 1,
-		game.RenderControls.Revision, 1, terrainMesh,
-	)
-	if !ok {
-		return nil
-	}
-	game.RenderAssetPackets = append(game.RenderAssetPackets, terrainMeshPacket)
 	terrainInstance := render3d.EncodeMeshInstance(render3d.RetainedMeshInstance{
 		MaterialAsset: 100,
 		Layers: 1,
