@@ -68,7 +68,10 @@ type BlockKart struct {
 	RenderWidth uint32
 	RenderHeight uint32
 	RenderControlPublished bool
+	RenderWorldPublished bool
+	RenderLiveDynamicEntities map[uint32]bool
 	StaticRenderPackets [][]byte
+	MeshInstancePackets map[uint64][]byte
 	RenderAssetPackets [][]byte
 	RenderAssetCursor uint32
 	RenderAssetsPublished bool
@@ -184,6 +187,8 @@ func StartBlockKart(game *BlockKart, init BlockKartInit, context voplay.StartCon
 		return errors.New("blockkart: invalid governed init")
 	}
 	game.Engine = context.Engine()
+	game.RenderLiveDynamicEntities = map[uint32]bool{}
+	game.MeshInstancePackets = map[uint64][]byte{}
 	var ok bool
 	game.Transforms, ok = NewTransformStore(512, 4096)
 	if !ok {
@@ -863,30 +868,50 @@ func (game *BlockKart) frame(tick voplay.TickBatch, pulse []byte) (voplay.TickOu
 	if len(hud) == 0 {
 		return voplay.TickOutput{}, errors.New("blockkart: encode HUD")
 	}
-	objects := make([]render.SnapshotObject, 0, len(game.StaticRenderPackets) + len(kartPackets) +
-		len(gameplayObjects) + len(checkpointObjects) + len(effectObjects) + len(hud) + 1)
-	for index, bytes := range game.StaticRenderPackets {
-		objects = append(objects, render.SnapshotObject{
-			Entity: voplay.Handle{Index: uint32(1000 + index), Generation: 1}, Bytes: bytes,
-		})
-	}
+	dynamicObjects := make([]render.SnapshotObject, 0, len(kartPackets) + len(gameplayObjects) +
+		len(checkpointObjects) + len(effectObjects) + len(hud) + 1)
 	for index, bytes := range kartPackets {
-		objects = append(objects, render.SnapshotObject{
+		dynamicObjects = append(dynamicObjects, render.SnapshotObject{
 			Entity: voplay.Handle{Index: uint32(100 + index), Generation: 1}, Bytes: bytes,
 		})
 	}
-	objects = append(objects, gameplayObjects...)
-	objects = append(objects, checkpointObjects...)
-	objects = append(objects, effectObjects...)
-	objects = append(objects, render.SnapshotObject{
+	dynamicObjects = append(dynamicObjects, gameplayObjects...)
+	dynamicObjects = append(dynamicObjects, checkpointObjects...)
+	dynamicObjects = append(dynamicObjects, effectObjects...)
+	dynamicObjects = append(dynamicObjects, render.SnapshotObject{
 		Entity: voplay.Handle{Index: 900001, Generation: 1}, Bytes: camera,
 	})
-	objects = append(objects, hud...)
-	blockKartSortSnapshotObjects(objects)
+	dynamicObjects = append(dynamicObjects, hud...)
+	blockKartSortSnapshotObjects(dynamicObjects)
 	game.RenderRevision++
-	snapshot, encodedSnapshot := render.EncodeSnapshotPacket(game.Engine, 1, framePulse.PulseId, game.RenderRevision, game.RenderControls.Revision, tick.FirstTick, objects)
-	if !encodedSnapshot {
-		return voplay.TickOutput{}, errors.New("blockkart: encode render snapshot")
+	renderPacket := []byte{}
+	renderEncoded := false
+	if !game.RenderWorldPublished {
+		objects := make([]render.SnapshotObject, 0, len(game.StaticRenderPackets) + len(dynamicObjects))
+		for index, bytes := range game.StaticRenderPackets {
+			objects = append(objects, render.SnapshotObject{
+				Entity: voplay.Handle{Index: uint32(1000 + index), Generation: 1}, Bytes: bytes,
+			})
+		}
+		objects = append(objects, dynamicObjects...)
+		blockKartSortSnapshotObjects(objects)
+		renderPacket, renderEncoded = render.EncodeSnapshotPacket(
+			game.Engine, 1, framePulse.PulseId, game.RenderRevision,
+			game.RenderControls.Revision, tick.FirstTick, objects,
+		)
+		if renderEncoded {
+			game.RenderLiveDynamicEntities = blockKartDynamicEntitySet(dynamicObjects)
+			game.RenderWorldPublished = true
+		}
+	} else {
+		ops := game.renderTransactionOps(dynamicObjects)
+		renderPacket, renderEncoded = render.EncodeTransactionPacket(
+			game.Engine, 1, framePulse.PulseId, game.RenderRevision - 1, game.RenderRevision,
+			game.RenderControls.Revision, tick.FirstTick, ops,
+		)
+	}
+	if !renderEncoded {
+		return voplay.TickOutput{}, errors.New("blockkart: encode retained render update")
 	}
 	output := voplay.TickOutput{AssetPackets: assetPackets}
 	if !game.RenderControlPublished {
@@ -909,7 +934,7 @@ func (game *BlockKart) frame(tick voplay.TickBatch, pulse []byte) (voplay.TickOu
 			game.RenderAssetsPublished = true
 		}
 	}
-	output.RenderPackets = append(output.RenderPackets, snapshot)
+	output.RenderPackets = append(output.RenderPackets, renderPacket)
 	if err := game.updateAudio(transform, tick.FirstTick); err != nil {
 		return voplay.TickOutput{}, err
 	}
@@ -1076,6 +1101,38 @@ func blockKartSortSnapshotObjects(objects []render.SnapshotObject) {
 		}
 		objects[position] = value
 	}
+}
+
+func blockKartDynamicEntitySet(objects []render.SnapshotObject) map[uint32]bool {
+	entities := map[uint32]bool{}
+	for _, object := range objects {
+		entities[object.Entity.Index] = true
+	}
+	return entities
+}
+
+func (game *BlockKart) renderTransactionOps(objects []render.SnapshotObject) []render.TransactionOp {
+	current := blockKartDynamicEntitySet(objects)
+	ops := make([]render.TransactionOp, 0, len(objects) + len(game.RenderLiveDynamicEntities))
+	for _, object := range objects {
+		kind := render.TransactionUpsert
+		if !game.RenderLiveDynamicEntities[object.Entity.Index] {
+			kind = render.TransactionSpawn
+		}
+		ops = append(ops, render.TransactionOp{
+			Kind: kind, Entity: object.Entity, Bytes: object.Bytes,
+		})
+	}
+	for entity := range game.RenderLiveDynamicEntities {
+		if !current[entity] {
+			ops = append(ops, render.TransactionOp{
+				Kind: render.TransactionDespawn,
+				Entity: voplay.Handle{Index: entity, Generation: 1},
+			})
+		}
+	}
+	game.RenderLiveDynamicEntities = current
+	return ops
 }
 
 func (game *BlockKart) updateAudio(transform Transform, tick uint64) error {

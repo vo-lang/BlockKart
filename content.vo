@@ -521,12 +521,16 @@ func (game *BlockKart) checkpointRenderObjects(state KartState, tick uint64) ([]
 }
 
 func (game *BlockKart) retainedGameplayObject(transform Transform, tick uint64, material uint64, halfX int64, halfY int64, halfZ int64) []byte {
-	mesh := render3d.EncodeMeshInstance(render3d.RetainedMeshInstance{
-		MaterialAsset: material, Layers: 1, CastsShadow: true, ReceivesShadow: true,
-		Lods: []render3d.LodMesh{{MeshAsset: game.KartMeshAsset, MaxDistanceMilli: 600000}},
-	})
+	mesh := game.MeshInstancePackets[material]
 	if len(mesh) == 0 {
-		return nil
+		mesh = render3d.EncodeMeshInstance(render3d.RetainedMeshInstance{
+			MaterialAsset: material, Layers: 1, CastsShadow: true, ReceivesShadow: true,
+			Lods: []render3d.LodMesh{{MeshAsset: game.KartMeshAsset, MaxDistanceMilli: 600000}},
+		})
+		if len(mesh) == 0 {
+			return nil
+		}
+		game.MeshInstancePackets[material] = mesh
 	}
 	matrix := blockKartScaledPoseMatrix(transform, halfX * 2, halfY * 2, halfZ * 2)
 	return render.EncodeRetainedObject(render.RetainedObject{
