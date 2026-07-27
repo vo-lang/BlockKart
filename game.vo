@@ -1256,6 +1256,23 @@ func (game *BlockKart) hudPackets() []render.SnapshotObject {
 			Entity: voplay.Handle{Index: uint32(910000 + shape.Id), Generation: 1}, Bytes: packet,
 		})
 	}
+	texts := []render2d.TextRun{
+		{Id: 1, Font: 1, Text: []byte("BlockKart"), Position: [2]int64{42000, 70000}, SizeMilli: 26000, Color: [4]byte{255, 255, 255, 255}, Z: 180, Layers: 2},
+		{Id: 2, Font: 1, Text: []byte("PRIMITIVE CIRCUIT"), Position: [2]int64{42000, 104000}, SizeMilli: 15000, Color: [4]byte{246, 184, 48, 255}, Z: 180, Layers: 2},
+		{Id: 3, Font: 1, Text: []byte("LAP"), Position: [2]int64{42000, 145000}, SizeMilli: 13000, Color: [4]byte{210, 225, 238, 255}, Z: 180, Layers: 2},
+		{Id: 4, Font: 1, Text: []byte("TIME"), Position: [2]int64{566000, 25000}, SizeMilli: 13000, Color: [4]byte{210, 225, 238, 255}, Z: 180, Layers: 2},
+		{Id: 5, Font: 1, Text: []byte("SPEED"), Position: [2]int64{1050000, 630000}, SizeMilli: 13000, Color: [4]byte{210, 225, 238, 255}, Z: 180, Layers: 2},
+		{Id: 6, Font: 1, Text: []byte("W/UP GAS   S/DOWN BRAKE   A/D STEER   SPACE DRIFT   R RESTART"), Position: [2]int64{30000, 700000}, SizeMilli: 13000, Color: [4]byte{235, 244, 250, 235}, Z: 180, Layers: 2},
+	}
+	for _, text := range texts {
+		packet := render2d.EncodeText(text)
+		if len(packet) == 0 {
+			return nil
+		}
+		objects = append(objects, render.SnapshotObject{
+			Entity: voplay.Handle{Index: uint32(920000 + text.Id), Generation: 1}, Bytes: packet,
+		})
+	}
 	return objects
 }
 

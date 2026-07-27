@@ -575,6 +575,8 @@ func (game *BlockKart) kartRenderPackets(transform Transform, tick uint64) ([][]
 		{Local: [3]int64{-1050, -320, -850}, Size: [3]int64{520, 620, 760}, Material: 106},
 		{Local: [3]int64{1050, -320, -850}, Size: [3]int64{520, 620, 760}, Material: 106},
 		{Local: [3]int64{0, -40, 1450}, Size: [3]int64{2100, 260, 320}, Material: 107},
+		{Local: [3]int64{0, 1050, -350}, Size: [3]int64{620, 620, 620}, Material: 103},
+		{Local: [3]int64{0, 650, -250}, Size: [3]int64{760, 720, 560}, Material: 102},
 	}
 	packets := make([][]byte, 0, len(parts))
 	for _, value := range parts {
