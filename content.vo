@@ -466,21 +466,33 @@ func (game *BlockKart) buildStaticRenderPackets() [][]byte {
 		Id uint64
 		Path string
 	}{
-		{12001, "assets/maps/primitive_track/grass_texture.png"},
 		{12002, "assets/maps/primitive_track/dirt_texture.png"},
 		{12003, "assets/maps/primitive_track/meadow_texture.png"},
 		{12004, "assets/maps/primitive_track/rock_texture.png"},
-		{12005, "assets/maps/primitive_track/terrain_splat_large.png"},
-		{12006, "assets/effects/grass_card_atlas.png"},
 		{12007, "assets/maps/primitive_track/dirt_normal.png"},
 		{12008, "assets/maps/primitive_track/dirt_mr.png"},
 		{12009, "assets/maps/primitive_track/rock_normal.png"},
 		{12010, "assets/maps/primitive_track/rock_mr.png"},
-		{12011, "assets/maps/primitive_track/grass_normal.png"},
-		{12012, "assets/maps/primitive_track/grass_mr.png"},
 		{12013, "assets/maps/primitive_track/meadow_normal.png"},
 		{12014, "assets/maps/primitive_track/meadow_mr.png"},
 		{12100, "assets/maps/golden_alpine/asphalt_albedo_v1.png"},
+	}
+	if !blockKartUseGoldenScene {
+		textures = append(
+			textures,
+			struct {
+				Id uint64
+				Path string
+			}{12001, "assets/maps/primitive_track/grass_texture.png"},
+			struct {
+				Id uint64
+				Path string
+			}{12005, "assets/maps/primitive_track/terrain_splat_large.png"},
+			struct {
+				Id uint64
+				Path string
+			}{12006, "assets/effects/grass_card_atlas.png"},
+		)
 	}
 	for _, texture := range textures {
 		bytes, readErr := os.ReadFile(texture.Path)
@@ -534,6 +546,15 @@ func (game *BlockKart) buildStaticRenderPackets() [][]byte {
 		{Id: 134, BaseColor: [4]uint16{6000, 39000, 65535, 65535}, Roughness: 35000, Emissive: [3]uint16{500, 4700, 11000}, Alpha: render3d.AlphaOpaque, Revision: 1},
 	}
 	for _, material := range materials {
+		if blockKartUseGoldenScene &&
+			material.Id != 102 && material.Id != 103 && material.Id != 104 &&
+			material.Id != 105 && material.Id != 106 && material.Id != 107 &&
+			material.Id != 112 && material.Id != 118 && material.Id != 122 &&
+			material.Id != 123 && material.Id != 124 && material.Id != 125 &&
+			material.Id != 126 && material.Id != 127 && material.Id != 128 &&
+			material.Id != 129 {
+			continue
+		}
 		descriptor := render3d.EncodeMaterial(material)
 		packet, ok := render.EncodeAssetPacket(
 			game.Engine, 1, render.AssetMaterial3d, material.Id, 1,
