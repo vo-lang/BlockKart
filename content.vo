@@ -905,16 +905,17 @@ func (game *BlockKart) kartRenderPackets(transform Transform, tick uint64) ([][]
 		{-1050, -320, 850}, {1050, -320, 850},
 		{-1050, -320, -850}, {1050, -320, -850},
 	}
+	visualTransform := blockKartAuthoredKartTransform(transform, [3]int64{0, 0, 0})
 	packets := make([][]byte, 0, 1 + len(wheelLocations))
 	bodyPacket := game.retainedGameplayMeshPartsObject(
-		transform, tick, bodyParts, 500, 500, 500,
+		visualTransform, tick, bodyParts, 500, 500, 500,
 	)
 	if len(bodyPacket) == 0 {
 		return nil, false
 	}
 	packets = append(packets, bodyPacket)
 	for _, location := range wheelLocations {
-		partTransform := blockKartLocalTransform(transform, location)
+		partTransform := blockKartAuthoredKartTransform(transform, location)
 		packet := game.retainedGameplayMeshPartsObject(
 			partTransform, tick, wheelMeshes, 500, 500, 500,
 		)
@@ -1036,6 +1037,18 @@ func blockKartLocalTransform(parent Transform, local [3]int64) Transform {
 		Y: parent.Y + local[1],
 		Z: parent.Z + int64(-sine * float64(local[0]) + cosine * float64(local[2])),
 		Yaw_milliradians: parent.Yaw_milliradians,
+	}
+}
+
+func blockKartAuthoredKartTransform(parent Transform, local [3]int64) Transform {
+	heading := float64(parent.Yaw_milliradians) / 1000.0
+	sine := math.Sin(heading)
+	cosine := math.Cos(heading)
+	return Transform{
+		X: parent.X - int64(cosine * float64(local[0]) + sine * float64(local[2])),
+		Y: parent.Y + local[1],
+		Z: parent.Z + int64(sine * float64(local[0]) - cosine * float64(local[2])),
+		Yaw_milliradians: 3142 - parent.Yaw_milliradians,
 	}
 }
 
