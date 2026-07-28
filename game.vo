@@ -120,6 +120,8 @@ type BlockKart struct {
 	GamepadDrift bool
 	GamepadBoost bool
 	Steering_milli int32
+	WheelSpin_milliradians int32
+	ChassisLean_milliradians int32
 	TouchPoints map[uint32]BlockKartTouchPoint
 	Paused bool
 	CameraMode uint32
@@ -722,12 +724,16 @@ func (game *BlockKart) drive(tick voplay.TickBatch) error {
 		state.Speed_per_second = 0
 		velocity.X_per_second = 0
 		velocity.Z_per_second = 0
+		velocity.Yaw_per_second = 0
 		if !game.Velocities.Upsert(game.KartEntity, velocity) ||
 			!game.KartStates.Upsert(game.KartEntity, state) {
 			return errors.New("blockkart: hold race state")
 		}
 		game.BoostPressed = false
 		game.Steering_milli = 0
+		game.ChassisLean_milliradians = blockKartApproachInt32(
+			game.ChassisLean_milliradians, 0, 12,
+		)
 		return nil
 	}
 	roadBeforeDrive := game.nearestRoadSample(transform)
@@ -827,7 +833,7 @@ func (game *BlockKart) drive(tick voplay.TickBatch) error {
 	if nextSpeed < -250 {
 		direction = -1.0
 	}
-	desiredYawRate := float64(game.Steering_milli) / 1000.0 *
+	desiredYawRate := -float64(game.Steering_milli) / 1000.0 *
 		maximumYawRate * steeringAuthority * direction
 	steeringBlend := steeringResponse * deltaSeconds
 	if steeringBlend > 1 {
@@ -839,6 +845,20 @@ func (game *BlockKart) drive(tick voplay.TickBatch) error {
 		yawRate = 0
 	}
 	velocity.Yaw_per_second = int32(yawRate)
+	leanTarget := int32(-yawRate * speedRatio * 0.050)
+	if leanTarget > 90 {
+		leanTarget = 90
+	}
+	if leanTarget < -90 {
+		leanTarget = -90
+	}
+	game.ChassisLean_milliradians = blockKartApproachInt32(
+		game.ChassisLean_milliradians, leanTarget, 7,
+	)
+	spinStep := int32(nextSpeed * deltaSeconds / 440.0 * 1000.0)
+	game.WheelSpin_milliradians = blockKartWrapMilliRadians(
+		game.WheelSpin_milliradians + spinStep,
+	)
 	transform.Yaw_milliradians += int32(yawRate * deltaSeconds)
 	heading := float64(transform.Yaw_milliradians) / 1000.0
 	forwardX := math.Sin(heading)
@@ -903,6 +923,16 @@ func blockKartApproachInt32(current int32, target int32, step int32) int32 {
 		}
 	}
 	return current
+}
+
+func blockKartWrapMilliRadians(value int32) int32 {
+	for value > 3142 {
+		value -= 6283
+	}
+	for value < -3142 {
+		value += 6283
+	}
+	return value
 }
 
 func (game *BlockKart) stepPhysics(tick voplay.TickBatch) error {

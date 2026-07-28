@@ -853,6 +853,21 @@ func (game *BlockKart) retainedGameplayMeshPartsObject(
 	halfY int64,
 	halfZ int64,
 ) []byte {
+	matrix := blockKartScaledPoseMatrix(transform, halfX * 2, halfY * 2, halfZ * 2)
+	return game.retainedGameplayMeshPartsMatrixObject(
+		transform, tick, parts, matrix, halfX, halfY, halfZ,
+	)
+}
+
+func (game *BlockKart) retainedGameplayMeshPartsMatrixObject(
+	transform Transform,
+	tick uint64,
+	parts []blockKartMeshPart,
+	matrix [12]int64,
+	halfX int64,
+	halfY int64,
+	halfZ int64,
+) []byte {
 	components := make([]render.RenderComponent, 0, len(parts))
 	for _, part := range parts {
 		cacheKey := part.Mesh * 1000 + part.Material
@@ -871,7 +886,6 @@ func (game *BlockKart) retainedGameplayMeshPartsObject(
 			Kind: 1, SchemaHash: part.Mesh, Bytes: mesh,
 		})
 	}
-	matrix := blockKartScaledPoseMatrix(transform, halfX * 2, halfY * 2, halfZ * 2)
 	return render.EncodeRetainedObject(render.RetainedObject{
 		Layers: 1,
 		Transform: render.TransformSample{
@@ -902,13 +916,15 @@ func (game *BlockKart) kartRenderPackets(transform Transform, tick uint64) ([][]
 		{Mesh: 10012, Material: 118},
 	}
 	wheelLocations := [][3]int64{
-		{-1050, -320, 850}, {1050, -320, 850},
-		{-1050, -320, -850}, {1050, -320, -850},
+		{-1050, -320, 1080}, {1050, -320, 1080},
+		{-1050, -320, -1100}, {1050, -320, -1100},
 	}
 	visualTransform := blockKartAuthoredKartTransform(transform, [3]int64{0, 0, 0})
 	packets := make([][]byte, 0, 1 + len(wheelLocations))
-	bodyPacket := game.retainedGameplayMeshPartsObject(
-		visualTransform, tick, bodyParts, 500, 500, 500,
+	bodyPacket := game.retainedGameplayMeshPartsMatrixObject(
+		visualTransform, tick, bodyParts,
+		blockKartAuthoredBodyMatrix(visualTransform, game.ChassisLean_milliradians),
+		1900, 1000, 1900,
 	)
 	if len(bodyPacket) == 0 {
 		return nil, false
@@ -916,8 +932,30 @@ func (game *BlockKart) kartRenderPackets(transform Transform, tick uint64) ([][]
 	packets = append(packets, bodyPacket)
 	for _, location := range wheelLocations {
 		partTransform := blockKartAuthoredKartTransform(transform, location)
-		packet := game.retainedGameplayMeshPartsObject(
-			partTransform, tick, wheelMeshes, 500, 500, 500,
+		steer_milliradians := int32(0)
+		if location[2] < 0 {
+			steeringScale := 0.42
+			if game.Steering_milli > 0 {
+				if location[0] > 0 {
+					steeringScale = 0.48
+				} else {
+					steeringScale = 0.36
+				}
+			} else if game.Steering_milli < 0 {
+				if location[0] < 0 {
+					steeringScale = 0.48
+				} else {
+					steeringScale = 0.36
+				}
+			}
+			steer_milliradians = int32(float64(game.Steering_milli) * steeringScale)
+		}
+		packet := game.retainedGameplayMeshPartsMatrixObject(
+			partTransform, tick, wheelMeshes,
+			blockKartAuthoredWheelMatrix(
+				partTransform, steer_milliradians, game.WheelSpin_milliradians,
+			),
+			520, 520, 520,
 		)
 		if len(packet) == 0 {
 			return nil, false
@@ -1052,10 +1090,51 @@ func blockKartAuthoredKartTransform(parent Transform, local [3]int64) Transform 
 	}
 }
 
+func blockKartAuthoredBodyMatrix(transform Transform, lean_milliradians int32) [12]int64 {
+	heading := float64(transform.Yaw_milliradians) / 1000.0
+	lean := float64(lean_milliradians) / 1000.0
+	sine := math.Sin(heading)
+	cosine := math.Cos(heading)
+	leanSine := math.Sin(lean)
+	leanCosine := math.Cos(lean)
+	return [12]int64{
+		int64(cosine * leanCosine * 1000), int64(-cosine * leanSine * 1000), int64(-sine * 1000), transform.X,
+		int64(leanSine * 1000), int64(leanCosine * 1000), 0, transform.Y,
+		int64(sine * leanCosine * 1000), int64(-sine * leanSine * 1000), int64(cosine * 1000), transform.Z,
+	}
+}
+
+func blockKartAuthoredWheelMatrix(
+	transform Transform,
+	steer_milliradians int32,
+	spin_milliradians int32,
+) [12]int64 {
+	heading := float64(transform.Yaw_milliradians + steer_milliradians) / 1000.0
+	spin := float64(spin_milliradians) / 1000.0
+	sine := math.Sin(heading)
+	cosine := math.Cos(heading)
+	spinSine := math.Sin(spin)
+	spinCosine := math.Cos(spin)
+	return [12]int64{
+		int64(cosine * 1000), int64(-sine * spinSine * 1000), int64(-sine * spinCosine * 1000), transform.X,
+		0, int64(spinCosine * 1000), int64(-spinSine * 1000), transform.Y,
+		int64(sine * 1000), int64(cosine * spinSine * 1000), int64(cosine * spinCosine * 1000), transform.Z,
+	}
+}
+
 func (game *BlockKart) cameraPacket(kart Transform, tick uint64) []byte {
+	speedRatio := 0.0
+	state, ok := game.KartStates.Get(game.KartEntity)
+	if ok {
+		speedRatio = math.Abs(float64(state.Speed_per_second)) / 42000.0
+		if speedRatio > 1 {
+			speedRatio = 1
+		}
+	}
+	verticalFov := uint32(56000 + speedRatio * 9000)
 	camera := render3d.EncodeCamera(render3d.Camera3d{
 		Projection: render3d.CameraProjection{
-			Kind: render3d.CameraPerspective, VerticalFovMillidegrees: 58000, NearMilli: 100,
+			Kind: render3d.CameraPerspective, VerticalFovMillidegrees: verticalFov, NearMilli: 100,
 			FarMilli: 1600000,
 		},
 		ExposureMilli: 100,
@@ -1064,22 +1143,31 @@ func (game *BlockKart) cameraPacket(kart Transform, tick uint64) []byte {
 		return nil
 	}
 	heading := float64(kart.Yaw_milliradians) / 1000.0
-	distance := float64(12000)
-	height := int64(6200)
+	distance := 11000.0 + speedRatio * 2500.0
+	height := int64(5600.0 + speedRatio * 900.0)
+	lookAhead := 7500.0 + speedRatio * 7000.0
+	lateralLook := float64(game.Steering_milli) * 1.4
 	if game.CameraMode == 1 {
 		distance = 4500
 		height = 2600
+		lookAhead = 9000
+		lateralLook = 0
 	}
 	if game.CameraMode == 2 {
 		distance = 30000
 		height = 26000
+		lateralLook = 0
 	}
 	x := kart.X - int64(math.Sin(heading) * distance)
 	z := kart.Z - int64(math.Cos(heading) * distance)
 	transform := Transform{X: x, Y: kart.Y + height, Z: z, Yaw_milliradians: kart.Yaw_milliradians}
-	targetX := kart.X + int64(math.Sin(heading) * 9000)
-	targetZ := kart.Z + int64(math.Cos(heading) * 9000)
-	targetY := kart.Y + 1600
+	targetX := kart.X + int64(
+		math.Sin(heading) * lookAhead + math.Cos(heading) * lateralLook,
+	)
+	targetZ := kart.Z + int64(
+		math.Cos(heading) * lookAhead - math.Sin(heading) * lateralLook,
+	)
+	targetY := kart.Y + 1450
 	if game.CameraMode == 2 {
 		targetX = kart.X
 		targetZ = kart.Z
@@ -1175,6 +1263,8 @@ func (game *BlockKart) restartRace() error {
 	game.GamepadDrift = false
 	game.GamepadBoost = false
 	game.Steering_milli = 0
+	game.WheelSpin_milliradians = 0
+	game.ChassisLean_milliradians = 0
 	game.TouchPoints = map[uint32]BlockKartTouchPoint{}
 	game.BoostPressed = false
 	game.OffRoad = false
@@ -1186,6 +1276,8 @@ func (game *BlockKart) restartRace() error {
 
 func (game *BlockKart) respawn() error {
 	game.Steering_milli = 0
+	game.WheelSpin_milliradians = 0
+	game.ChassisLean_milliradians = 0
 	transform := Transform{X: 30000, Y: 1200, Z: 367500, Yaw_milliradians: 1571}
 	game.LastSafeTransform = transform
 	if game.Physics != nil && game.KartBody.Valid() &&
@@ -1213,6 +1305,8 @@ func (game *BlockKart) respawn() error {
 
 func (game *BlockKart) recoverToTrack() error {
 	game.Steering_milli = 0
+	game.WheelSpin_milliradians = 0
+	game.ChassisLean_milliradians = 0
 	transform := game.LastSafeTransform
 	if transform.X == 0 && transform.Z == 0 {
 		transform = Transform{X: 30000, Y: 1200, Z: 367500, Yaw_milliradians: 1571}
