@@ -235,6 +235,40 @@ function icosahedronTemplate() {
   return facetedTemplate(vertices, faces);
 }
 
+function uvSphereTemplate(longitudes, latitudes) {
+  const positions = [];
+  const normals = [];
+  const texcoords = [];
+  const indices = [];
+  for (let latitude = 0; latitude <= latitudes; latitude += 1) {
+    const v = latitude / latitudes;
+    const polar = v * Math.PI;
+    const vertical = Math.cos(polar);
+    const radius = Math.sin(polar);
+    for (let longitude = 0; longitude <= longitudes; longitude += 1) {
+      const u = longitude / longitudes;
+      const azimuth = u * Math.PI * 2;
+      const normal = [
+        Math.sin(azimuth) * radius,
+        vertical,
+        Math.cos(azimuth) * radius,
+      ];
+      positions.push(normal.map((component) => component * 0.5));
+      normals.push(normal);
+      texcoords.push([u, v]);
+    }
+  }
+  const stride = longitudes + 1;
+  for (let latitude = 0; latitude < latitudes; latitude += 1) {
+    for (let longitude = 0; longitude < longitudes; longitude += 1) {
+      const a = latitude * stride + longitude;
+      const b = a + stride;
+      indices.push(a, b, a + 1, a + 1, b, b + 1);
+    }
+  }
+  return { positions, normals, texcoords, indices };
+}
+
 function kartBodyTemplate() {
   const vertices = [
     [-0.50, -0.38, -0.48], [0.50, -0.38, -0.48],
@@ -315,25 +349,28 @@ function torusTemplate(majorSegments, minorSegments, majorRadius, minorRadius) {
 function buildHeroKartMeshes() {
   const box = beveledBoxTemplate(0.34);
   const slimBox = beveledBoxTemplate(0.16);
-  const sphere = icosahedronTemplate();
+  const sphere = uvSphereTemplate(16, 10);
   const cylinder = cylinderTemplate(12);
   const primary = mergeMeshes([
     meshFromTemplate(kartBodyTemplate(), [
-      sceneInstanceEuler([0, 0.12, 0.16], [2.05, 0.78, 2.55], [0, 0, 0]),
-      sceneInstanceEuler([0, 0.16, -1.20], [1.76, 0.58, 1.18], [0.03, 0, 0]),
+      sceneInstanceEuler([0, 0.10, 0.18], [2.08, 0.70, 2.48], [0, 0, 0]),
+      sceneInstanceEuler([0, 0.12, -1.20], [1.74, 0.52, 1.20], [0.05, 0, 0]),
+    ]),
+    meshFromTemplate(sphere, [
+      sceneInstanceEuler([-0.92, 0.20, -0.82], [0.76, 0.56, 1.16], [0, 0, 0]),
+      sceneInstanceEuler([0.92, 0.20, -0.82], [0.76, 0.56, 1.16], [0, 0, 0]),
+      sceneInstanceEuler([-0.92, 0.24, 0.86], [0.80, 0.62, 1.10], [0, 0, 0]),
+      sceneInstanceEuler([0.92, 0.24, 0.86], [0.80, 0.62, 1.10], [0, 0, 0]),
+      sceneInstanceEuler([0, 0.37, -1.26], [1.44, 0.48, 0.80], [0, 0, 0]),
     ]),
     meshFromTemplate(box, [
-      sceneInstanceEuler([-1.05, 0.04, 0.12], [0.48, 0.42, 1.42], [0, 0, 0]),
-      sceneInstanceEuler([1.05, 0.04, 0.12], [0.48, 0.42, 1.42], [0, 0, 0]),
-      sceneInstanceEuler([-0.92, 0.25, -0.92], [0.55, 0.32, 0.76], [0, 0, 0]),
-      sceneInstanceEuler([0.92, 0.25, -0.92], [0.55, 0.32, 0.76], [0, 0, 0]),
-      sceneInstanceEuler([-0.88, 0.30, 0.90], [0.58, 0.36, 0.72], [0, 0, 0]),
-      sceneInstanceEuler([0.88, 0.30, 0.90], [0.58, 0.36, 0.72], [0, 0, 0]),
+      sceneInstanceEuler([-1.08, -0.02, 0.08], [0.34, 0.26, 1.62], [0, 0, 0]),
+      sceneInstanceEuler([1.08, -0.02, 0.08], [0.34, 0.26, 1.62], [0, 0, 0]),
     ]),
   ]);
   const rubber = mergeMeshes([
     meshFromTemplate(box, [
-      sceneInstanceEuler([0, 0.72, 0.52], [0.92, 0.98, 0.64], [-0.20, 0, 0]),
+      sceneInstanceEuler([0, 0.69, 0.52], [0.94, 0.94, 0.68], [-0.20, 0, 0]),
       sceneInstanceEuler([0, -0.30, 0.12], [1.62, 0.16, 2.78], [0, 0, 0]),
       sceneInstanceEuler([0, 0.18, -1.69], [1.06, 0.34, 0.16], [0, 0, 0]),
       sceneInstanceEuler([-0.58, 0.26, 1.52], [0.36, 0.28, 0.20], [0, 0, 0]),
@@ -352,6 +389,11 @@ function buildHeroKartMeshes() {
       sceneInstanceEuler([-0.88, 0.73, 1.38], [0.14, 0.70, 0.14], [0, 0, -0.16]),
       sceneInstanceEuler([0.88, 0.73, 1.38], [0.14, 0.70, 0.14], [0, 0, 0.16]),
       sceneInstanceEuler([0, 0.46, -1.52], [1.14, 0.10, 0.10], [0, 0, 0]),
+      sceneInstanceEuler([-0.67, 0.44, -1.31], [0.10, 0.12, 0.74], [0, 0.22, 0]),
+      sceneInstanceEuler([0.67, 0.44, -1.31], [0.10, 0.12, 0.74], [0, -0.22, 0]),
+    ]),
+    meshFromTemplate(torusTemplate(16, 5, 0.52, 0.035), [
+      sceneInstanceEuler([0, 0.33, -1.25], [1.32, 0.78, 1], [Math.PI * 0.5, 0, 0]),
     ]),
   ]);
   const driver = mergeMeshes([
@@ -359,13 +401,13 @@ function buildHeroKartMeshes() {
       sceneInstanceEuler([0, 0.88, 0.40], [0.80, 0.92, 0.58], [-0.16, 0, 0]),
     ]),
     meshFromTemplate(sphere, [
-      sceneInstanceEuler([0, 1.54, 0.35], [0.72, 0.78, 0.72], [0, 0, 0]),
+      sceneInstanceEuler([0, 1.53, 0.35], [0.76, 0.80, 0.76], [0, 0, 0]),
       sceneInstanceEuler([-0.35, 0.97, -0.14], [0.22, 0.22, 0.22], [0, 0, 0]),
       sceneInstanceEuler([0.35, 0.97, -0.14], [0.22, 0.22, 0.22], [0, 0, 0]),
     ]),
   ]);
   const visor = meshFromTemplate(box, [
-    sceneInstanceEuler([0, 1.57, -0.02], [0.68, 0.27, 0.15], [-0.04, 0, 0]),
+    sceneInstanceEuler([0, 1.56, -0.03], [0.70, 0.25, 0.13], [-0.04, 0, 0]),
     sceneInstanceEuler([0, 0.82, 0.12], [0.54, 0.18, 0.42], [-0.20, 0, 0]),
   ]);
   const metal = mergeMeshes([
@@ -381,8 +423,8 @@ function buildHeroKartMeshes() {
     ]),
   ]);
   const tailLights = meshFromTemplate(sphere, [
-    sceneInstanceEuler([-0.72, 0.50, 1.51], [0.28, 0.24, 0.16], [0, 0, 0]),
-    sceneInstanceEuler([0.72, 0.50, 1.51], [0.28, 0.24, 0.16], [0, 0, 0]),
+    sceneInstanceEuler([-0.72, 0.48, 1.49], [0.30, 0.24, 0.14], [0, 0, 0]),
+    sceneInstanceEuler([0.72, 0.48, 1.49], [0.30, 0.24, 0.14], [0, 0, 0]),
   ]);
   const suitAccent = meshFromTemplate(slimBox, [
     sceneInstanceEuler([0, 1.00, 0.10], [0.48, 0.24, 0.12], [-0.16, 0, 0]),
@@ -518,6 +560,13 @@ function buildSceneryMeshes() {
   const tireBlack = [];
   const tireRed = [];
   const tireWhite = [];
+  const snowcaps = [];
+  const flowersGold = [];
+  const flowersBlue = [];
+  const paddockBlue = [];
+  const paddockGold = [];
+  const spectators = [];
+  const grandstands = [];
   for (let segment = 0; segment < points.length; segment += 1) {
     const from = points[segment];
     const to = points[(segment + 1) % points.length];
@@ -526,7 +575,7 @@ function buildSceneryMeshes() {
     const length = Math.hypot(dx, dz);
     const right = [dz / length, 0, -dx / length];
     const yaw = Math.atan2(dx, dz);
-    const samples = Math.max(1, Math.floor(length / 58));
+    const samples = Math.max(1, Math.floor(length / 30));
     for (let sample = 0; sample < samples; sample += 1) {
       const along = (sample + 0.45) / samples;
       const base = [
@@ -559,6 +608,32 @@ function buildSceneryMeshes() {
           [5.4 * treeScale, 7.0 * treeScale, 5.4 * treeScale],
           yaw - 0.20,
         ));
+        if ((salt + segment) % 3 !== 1) {
+          const forestDistance = distance + 20 + salt % 9;
+          const forestTree = [
+            base[0] + right[0] * side * forestDistance +
+              dx / length * ((salt % 5) - 2) * 2.3,
+            base[1] + 0.4,
+            base[2] + right[2] * side * forestDistance +
+              dz / length * ((salt % 5) - 2) * 2.3,
+          ];
+          const forestScale = 0.58 + (salt % 4) * 0.08;
+          trunks.push(sceneInstance(
+            forestTree,
+            [1.9 * forestScale, 7.0 * forestScale, 1.9 * forestScale],
+            yaw + 0.2,
+          ));
+          darkCrowns.push(sceneInstance(
+            [forestTree[0], forestTree[1] + 6.4 * forestScale, forestTree[2]],
+            [10.2 * forestScale, 10.0 * forestScale, 10.2 * forestScale],
+            yaw,
+          ));
+          crowns.push(sceneInstance(
+            [forestTree[0], forestTree[1] + 11.0 * forestScale, forestTree[2]],
+            [6.8 * forestScale, 8.2 * forestScale, 6.8 * forestScale],
+            yaw + 0.4,
+          ));
+        }
         if ((salt + segment) % 4 === 0) {
           broadleafCrowns.push(sceneInstance(
             [
@@ -568,6 +643,27 @@ function buildSceneryMeshes() {
             ],
             [8.0 * treeScale, 6.5 * treeScale, 8.0 * treeScale],
             yaw + 0.6,
+          ));
+        }
+      }
+      if (sample % 2 === 0) {
+        const flowerSide = (sample + segment) % 4 < 2 ? -1 : 1;
+        const flowerDistance = 17.2 + (sample % 3) * 1.4;
+        const flowerBase = [
+          base[0] + right[0] * flowerSide * flowerDistance,
+          base[1] + 0.55,
+          base[2] + right[2] * flowerSide * flowerDistance,
+        ];
+        const targetFlowers = (sample + segment) % 3 === 0 ? flowersBlue : flowersGold;
+        for (let bloom = -2; bloom <= 2; bloom += 1) {
+          targetFlowers.push(sceneInstanceEuler(
+            [
+              flowerBase[0] + dx / length * bloom * 0.9 + right[0] * flowerSide * Math.abs(bloom) * 0.25,
+              flowerBase[1] + (Math.abs(bloom) % 2) * 0.2,
+              flowerBase[2] + dz / length * bloom * 0.9 + right[2] * flowerSide * Math.abs(bloom) * 0.25,
+            ],
+            [0.38, 0.62, 0.38],
+            [0, yaw + bloom * 0.4, 0],
           ));
         }
       }
@@ -665,6 +761,31 @@ function buildSceneryMeshes() {
     [[560, 64, 80], [135, 185, 128], -0.1],
   ]) {
     mountains.push(sceneInstance(instance[0], instance[1], instance[2]));
+    snowcaps.push(sceneInstance(
+      [instance[0][0], instance[0][1] + instance[1][1] * 0.31, instance[0][2]],
+      [instance[1][0] * 0.42, instance[1][1] * 0.34, instance[1][2] * 0.42],
+      instance[2],
+    ));
+  }
+
+  for (const x of [112, 148, 184, 220]) {
+    const side = x % 72 === 4 ? -1 : 1;
+    const z = side < 0 ? 329 : 405;
+    const target = x % 72 === 4 ? paddockBlue : paddockGold;
+    target.push(sceneInstanceEuler([x, 4.4, z], [8.8, 7.4, 8.8], [0, Math.PI * 0.25, 0]));
+    grandstands.push(
+      sceneInstanceEuler([x, 0.9, z], [9.5, 1.3, 7.5], [0, Math.PI * 0.5, 0]),
+      sceneInstanceEuler([x, 2.3, z + side * 3.2], [9.5, 1.1, 2.1], [0, Math.PI * 0.5, 0]),
+    );
+    for (let row = 0; row < 2; row += 1) {
+      for (let person = -3; person <= 3; person += 1) {
+        spectators.push(sceneInstanceEuler(
+          [x + person * 2.0, 3.8 + row * 1.6, z + side * (1.6 + row * 2.2)],
+          [0.74, 1.15, 0.74],
+          [0, 0, 0],
+        ));
+      }
+    }
   }
 
   const lodgeWood = [
@@ -709,6 +830,13 @@ function buildSceneryMeshes() {
     sceneryMesh('scenery_lodge_plaster.vmg1', 11315n, beveledBoxTemplate(0.18), lodgePlaster),
     sceneryMesh('scenery_lodge_windows.vmg1', 11316n, beveledBoxTemplate(0.08), lodgeWindows),
     sceneryMesh('scenery_race_banners.vmg1', 11317n, beveledBoxTemplate(0.10), raceBanners),
+    sceneryMesh('scenery_snowcaps.vmg1', 11318n, coneTemplate(7), snowcaps),
+    sceneryMesh('scenery_flowers_gold.vmg1', 11319n, icosahedronTemplate(), flowersGold),
+    sceneryMesh('scenery_flowers_blue.vmg1', 11320n, icosahedronTemplate(), flowersBlue),
+    sceneryMesh('scenery_paddock_blue.vmg1', 11321n, coneTemplate(4), paddockBlue),
+    sceneryMesh('scenery_paddock_gold.vmg1', 11322n, coneTemplate(4), paddockGold),
+    sceneryMesh('scenery_spectators.vmg1', 11323n, uvSphereTemplate(8, 5), spectators),
+    sceneryMesh('scenery_grandstands.vmg1', 11324n, beveledBoxTemplate(0.18), grandstands),
   ];
 }
 

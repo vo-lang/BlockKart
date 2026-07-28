@@ -511,6 +511,9 @@ func (game *BlockKart) buildStaticRenderPackets() [][]byte {
 		{Id: 129, BaseColor: [4]uint16{36000, 7000, 54000, 65535}, Metallic: 5000, Roughness: 25000, Alpha: render3d.AlphaOpaque, Revision: 1},
 		{Id: 130, BaseColor: [4]uint16{24000, 28500, 30500, 65535}, Roughness: 61000, Alpha: render3d.AlphaOpaque, Revision: 1},
 		{Id: 131, BaseColor: [4]uint16{7000, 18000, 26000, 65535}, Metallic: 18000, Roughness: 14000, Emissive: [3]uint16{1200, 6200, 9800}, Alpha: render3d.AlphaOpaque, Revision: 1},
+		{Id: 132, BaseColor: [4]uint16{62000, 64000, 65535, 65535}, Roughness: 47000, Emissive: [3]uint16{1600, 1900, 2200}, Alpha: render3d.AlphaOpaque, Revision: 1},
+		{Id: 133, BaseColor: [4]uint16{65535, 47000, 2400, 65535}, Roughness: 38000, Emissive: [3]uint16{8500, 3900, 300}, Alpha: render3d.AlphaOpaque, Revision: 1},
+		{Id: 134, BaseColor: [4]uint16{6000, 39000, 65535, 65535}, Roughness: 35000, Emissive: [3]uint16{500, 4700, 11000}, Alpha: render3d.AlphaOpaque, Revision: 1},
 	}
 	for _, material := range materials {
 		descriptor := render3d.EncodeMaterial(material)
@@ -638,6 +641,13 @@ func (game *BlockKart) buildStaticRenderPackets() [][]byte {
 		{11315, 118, "generated/render/scenery_lodge_plaster.vmg1"},
 		{11316, 131, "generated/render/scenery_lodge_windows.vmg1"},
 		{11317, 102, "generated/render/scenery_race_banners.vmg1"},
+		{11318, 132, "generated/render/scenery_snowcaps.vmg1"},
+		{11319, 133, "generated/render/scenery_flowers_gold.vmg1"},
+		{11320, 134, "generated/render/scenery_flowers_blue.vmg1"},
+		{11321, 102, "generated/render/scenery_paddock_blue.vmg1"},
+		{11322, 123, "generated/render/scenery_paddock_gold.vmg1"},
+		{11323, 124, "generated/render/scenery_spectators.vmg1"},
+		{11324, 121, "generated/render/scenery_grandstands.vmg1"},
 	}
 	for _, mesh := range meshes {
 		bytes, readErr := os.ReadFile(mesh.Path)

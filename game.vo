@@ -1538,60 +1538,63 @@ func (game *BlockKart) hudPackets(includeStatic bool) []render.SnapshotObject {
 	}
 	staticShapes := []render2d.Shape{
 		{
-			Id: 1, Kind: render2d.ShapeRoundedRect, Bounds: [4]int64{26000, 25000, 260000, 82000},
-			RadiusMilli: 18000, Fill: [4]byte{7, 16, 29, 218}, StrokeMilli: 2500,
-			Stroke: [4]byte{38, 205, 235, 205}, Z: 100, Layers: 2,
+			Id: 1, Kind: render2d.ShapeRoundedRect, Bounds: [4]int64{22000, 18000, 226000, 70000},
+			RadiusMilli: 12000, Fill: [4]byte{5, 13, 24, 168}, StrokeMilli: 1400,
+			Stroke: [4]byte{80, 133, 162, 118}, Z: 100, Layers: 2,
 		},
 		{
-			Id: 2, Kind: render2d.ShapeRoundedRect, Bounds: [4]int64{500000, 22000, 280000, 83000},
-			RadiusMilli: 18000, Fill: [4]byte{7, 16, 29, 215}, StrokeMilli: 2200,
-			Stroke: [4]byte{255, 199, 63, 210}, Z: 100, Layers: 2,
+			Id: 2, Kind: render2d.ShapeRoundedRect, Bounds: [4]int64{520000, 18000, 240000, 66000},
+			RadiusMilli: 12000, Fill: [4]byte{5, 13, 24, 154}, StrokeMilli: 1400,
+			Stroke: [4]byte{255, 199, 63, 145}, Z: 100, Layers: 2,
 		},
 		{
-			Id: 3, Kind: render2d.ShapeRoundedRect, Bounds: [4]int64{1000000, 22000, 250000, 185000},
-			RadiusMilli: 20000, Fill: [4]byte{7, 16, 29, 205}, StrokeMilli: 1800,
-			Stroke: [4]byte{125, 169, 194, 125}, Z: 100, Layers: 2,
+			Id: 3, Kind: render2d.ShapeRoundedRect, Bounds: [4]int64{1042000, 18000, 214000, 154000},
+			RadiusMilli: 15000, Fill: [4]byte{5, 13, 24, 152}, StrokeMilli: 1400,
+			Stroke: [4]byte{125, 169, 194, 105}, Z: 100, Layers: 2,
 		},
 		{
-			Id: 4, Kind: render2d.ShapeCircle, Bounds: [4]int64{1040000, 492000, 202000, 202000},
-			Fill: [4]byte{5, 12, 22, 224}, StrokeMilli: 5000,
-			Stroke: [4]byte{28, 52, 72, 235}, Z: 100, Layers: 2,
+			Id: 4, Kind: render2d.ShapeCircle, Bounds: [4]int64{1066000, 510000, 180000, 180000},
+			Fill: [4]byte{4, 11, 20, 174}, StrokeMilli: 4200,
+			Stroke: [4]byte{25, 49, 68, 190}, Z: 100, Layers: 2,
 		},
 		{
-			Id: 5, Kind: render2d.ShapeCircle, Bounds: [4]int64{1060000, 512000, 162000, 162000},
-			Fill: [4]byte{10, 23, 38, 235}, StrokeMilli: 2000,
-			Stroke: [4]byte{70, 102, 124, 170}, Z: 101, Layers: 2,
+			Id: 5, Kind: render2d.ShapeCircle, Bounds: [4]int64{1080000, 524000, 152000, 152000},
+			Fill: [4]byte{7, 19, 33, 188}, StrokeMilli: 1600,
+			Stroke: [4]byte{70, 102, 124, 128}, Z: 101, Layers: 2,
 		},
 		{
-			Id: 6, Kind: render2d.ShapeRoundedRect, Bounds: [4]int64{26000, 600000, 350000, 94000},
-			RadiusMilli: 19000, Fill: [4]byte{7, 16, 29, 218}, StrokeMilli: 2000,
-			Stroke: [4]byte{117, 155, 181, 150}, Z: 100, Layers: 2,
+			Id: 6, Kind: render2d.ShapeRoundedRect, Bounds: [4]int64{22000, 624000, 318000, 66000},
+			RadiusMilli: 13000, Fill: [4]byte{5, 13, 24, 166}, StrokeMilli: 1400,
+			Stroke: [4]byte{117, 155, 181, 112}, Z: 100, Layers: 2,
 		},
 		{
-			Id: 7, Kind: render2d.ShapeRoundedRect, Bounds: [4]int64{48000, 656000, 306000, 13000},
-			RadiusMilli: 6500, Fill: [4]byte{24, 43, 58, 255}, Z: 102, Layers: 2,
+			Id: 7, Kind: render2d.ShapeRoundedRect, Bounds: [4]int64{42000, 669000, 278000, 9000},
+			RadiusMilli: 4500, Fill: [4]byte{20, 41, 56, 225}, Z: 102, Layers: 2,
 		},
 		{
-			Id: 8, Kind: render2d.ShapeRoundedRect, Bounds: [4]int64{470000, 677000, 340000, 15000},
-			RadiusMilli: 7500, Fill: [4]byte{17, 34, 50, 225}, StrokeMilli: 1200,
-			Stroke: [4]byte{44, 92, 120, 180}, Z: 100, Layers: 2,
+			Id: 8, Kind: render2d.ShapeRoundedRect, Bounds: [4]int64{482000, 701000, 316000, 7000},
+			RadiusMilli: 3500, Fill: [4]byte{17, 34, 50, 158}, Z: 100, Layers: 2,
 		},
 		{
-			Id: 9, Kind: render2d.ShapePath, Bounds: [4]int64{1020000, 43000, 210000, 136000},
-			Path: blockKartMinimapPath(), Fill: [4]byte{0, 0, 0, 0}, StrokeMilli: 6500,
-			Stroke: [4]byte{82, 115, 137, 210}, Z: 104, Layers: 2,
+			Id: 9, Kind: render2d.ShapePath, Bounds: [4]int64{1030000, 34000, 210000, 136000},
+				Path: blockKartMinimapPath(), Fill: [4]byte{0, 0, 0, 0}, StrokeMilli: 6500,
+				Stroke: [4]byte{42, 74, 93, 205}, Z: 104, Layers: 2,
 		},
 		{
-			Id: 10, Kind: render2d.ShapePath, Bounds: [4]int64{1020000, 43000, 210000, 136000},
-			Path: blockKartMinimapPath(), Fill: [4]byte{0, 0, 0, 0}, StrokeMilli: 2200,
-			Stroke: [4]byte{224, 239, 244, 235}, Z: 105, Layers: 2,
+			Id: 10, Kind: render2d.ShapePath, Bounds: [4]int64{1030000, 34000, 210000, 136000},
+				Path: blockKartMinimapPath(), Fill: [4]byte{0, 0, 0, 0}, StrokeMilli: 2200,
+				Stroke: [4]byte{224, 239, 244, 235}, Z: 105, Layers: 2,
+		},
+		{
+			Id: 11, Kind: render2d.ShapeRoundedRect, Bounds: [4]int64{22000, 18000, 6000, 70000},
+			RadiusMilli: 3000, Fill: [4]byte{35, 211, 250, 240}, Z: 103, Layers: 2,
 		},
 	}
 	shapes := []render2d.Shape{}
 	if includeStatic {
 		shapes = append(shapes, staticShapes...)
 	}
-	driftWidth := int64(game.DriftCharge_milli) * 306000 / 1800
+	driftWidth := int64(game.DriftCharge_milli) * 278000 / 1800
 	driftColor := [4]byte{255, 192, 55, 255}
 	if game.DriftStage == 2 {
 		driftColor = [4]byte{38, 211, 255, 255}
@@ -1600,16 +1603,16 @@ func (game *BlockKart) hudPackets(includeStatic bool) []render.SnapshotObject {
 		driftColor = [4]byte{255, 82, 65, 255}
 	}
 	shapes = append(shapes, render2d.Shape{
-		Id: 100, Kind: render2d.ShapeRoundedRect, Bounds: [4]int64{48000, 656000, driftWidth + 1, 13000},
-		RadiusMilli: 6500, Fill: driftColor, Z: 112, Layers: 2,
+		Id: 100, Kind: render2d.ShapeRoundedRect, Bounds: [4]int64{42000, 669000, driftWidth + 1, 9000},
+		RadiusMilli: 4500, Fill: driftColor, Z: 112, Layers: 2,
 	})
 	boostWidth := int64(0)
 	if game.BoostPressed {
-		boostWidth = 340000
+		boostWidth = 316000
 	}
 	shapes = append(shapes, render2d.Shape{
-		Id: 101, Kind: render2d.ShapeRoundedRect, Bounds: [4]int64{470000, 677000, boostWidth + 1, 15000},
-		RadiusMilli: 7500, Fill: [4]byte{33, 218, 255, 240}, Z: 112, Layers: 2,
+		Id: 101, Kind: render2d.ShapeRoundedRect, Bounds: [4]int64{482000, 701000, boostWidth + 1, 7000},
+		RadiusMilli: 3500, Fill: [4]byte{33, 218, 255, 222}, Z: 112, Layers: 2,
 	})
 	activeSpeedDots := int(speedKph * 14 / 150)
 	if activeSpeedDots > 14 {
@@ -1617,8 +1620,8 @@ func (game *BlockKart) hudPackets(includeStatic bool) []render.SnapshotObject {
 	}
 	for index := 0; index < 14; index++ {
 		angle := -2.35 + float64(index) / 13.0 * 4.70
-		x := int64(1141000.0 + math.Cos(angle) * 84000.0)
-		y := int64(593000.0 + math.Sin(angle) * 84000.0)
+		x := int64(1156000.0 + math.Cos(angle) * 73000.0)
+		y := int64(600000.0 + math.Sin(angle) * 73000.0)
 		color := [4]byte{34, 57, 73, 240}
 		if index < activeSpeedDots {
 			color = [4]byte{39, 209, 246, 255}
@@ -1628,7 +1631,7 @@ func (game *BlockKart) hudPackets(includeStatic bool) []render.SnapshotObject {
 		}
 		shapes = append(shapes, render2d.Shape{
 			Id: uint64(120 + index), Kind: render2d.ShapeCircle,
-			Bounds: [4]int64{x - 6500, y - 6500, 13000, 13000},
+			Bounds: [4]int64{x - 5200, y - 5200, 10400, 10400},
 			Fill: color, Z: 113, Layers: 2,
 		})
 	}
@@ -1667,23 +1670,23 @@ func (game *BlockKart) hudPackets(includeStatic bool) []render.SnapshotObject {
 		lapText[0] = '3'
 	}
 	staticTexts := []render2d.TextRun{
-		{Id: 1, Font: 1, Text: []byte("ALPINE ASCENT"), Position: [2]int64{47000, 53000}, SizeMilli: 21000, Color: [4]byte{255, 255, 255, 255}, Z: 180, Layers: 2},
-		{Id: 2, Font: 1, Text: []byte("TIME ATTACK"), Position: [2]int64{47000, 82000}, SizeMilli: 12000, Color: [4]byte{39, 209, 246, 255}, Z: 180, Layers: 2},
-		{Id: 3, Font: 1, Text: []byte("LAP"), Position: [2]int64{208000, 50000}, SizeMilli: 11000, Color: [4]byte{174, 203, 220, 255}, Z: 180, Layers: 2},
-		{Id: 4, Font: 1, Text: []byte("RACE TIME"), Position: [2]int64{588000, 48000}, SizeMilli: 11000, Color: [4]byte{174, 203, 220, 255}, Z: 180, Layers: 2},
-		{Id: 5, Font: 1, Text: []byte("COURSE"), Position: [2]int64{1019000, 48000}, SizeMilli: 10000, Color: [4]byte{174, 203, 220, 255}, Z: 180, Layers: 2},
-		{Id: 6, Font: 1, Text: []byte("DRIFT CHARGE"), Position: [2]int64{48000, 630000}, SizeMilli: 12000, Color: [4]byte{222, 235, 243, 255}, Z: 180, Layers: 2},
-		{Id: 7, Font: 1, Text: []byte("KM/H"), Position: [2]int64{1118000, 643000}, SizeMilli: 11000, Color: [4]byte{166, 194, 211, 255}, Z: 180, Layers: 2},
-		{Id: 8, Font: 1, Text: []byte("W GAS   A/D STEER   SPACE DRIFT   SHIFT BOOST   R RESET"), Position: [2]int64{405000, 711000}, SizeMilli: 10500, Color: [4]byte{209, 227, 237, 215}, Z: 180, Layers: 2},
+		{Id: 1, Font: 1, Text: []byte("ALPINE ASCENT"), Position: [2]int64{41000, 44000}, SizeMilli: 17000, Color: [4]byte{255, 255, 255, 250}, Z: 180, Layers: 2},
+		{Id: 2, Font: 1, Text: []byte("TIME ATTACK"), Position: [2]int64{42000, 72000}, SizeMilli: 9000, Color: [4]byte{39, 209, 246, 240}, Z: 180, Layers: 2},
+		{Id: 3, Font: 1, Text: []byte("LAP"), Position: [2]int64{188000, 41000}, SizeMilli: 9000, Color: [4]byte{174, 203, 220, 230}, Z: 180, Layers: 2},
+		{Id: 4, Font: 1, Text: []byte("RACE TIME"), Position: [2]int64{602000, 35000}, SizeMilli: 9000, Color: [4]byte{174, 203, 220, 220}, Z: 180, Layers: 2},
+		{Id: 5, Font: 1, Text: []byte("COURSE"), Position: [2]int64{1060000, 38000}, SizeMilli: 8500, Color: [4]byte{174, 203, 220, 220}, Z: 180, Layers: 2},
+		{Id: 6, Font: 1, Text: []byte("DRIFT"), Position: [2]int64{42000, 649000}, SizeMilli: 10000, Color: [4]byte{222, 235, 243, 235}, Z: 180, Layers: 2},
+		{Id: 7, Font: 1, Text: []byte("KM/H"), Position: [2]int64{1136000, 650000}, SizeMilli: 9000, Color: [4]byte{166, 194, 211, 220}, Z: 180, Layers: 2},
+		{Id: 8, Font: 1, Text: []byte("W  DRIVE    A/D  STEER    SPACE  DRIFT    SHIFT  BOOST"), Position: [2]int64{430000, 716000}, SizeMilli: 8500, Color: [4]byte{209, 227, 237, 142}, Z: 180, Layers: 2},
 	}
 	texts := []render2d.TextRun{}
 	if includeStatic {
 		texts = append(texts, staticTexts...)
 	}
 	texts = append(texts,
-		render2d.TextRun{Id: 10, Font: 1, Text: lapText, Position: [2]int64{210000, 79000}, SizeMilli: 22000, Color: [4]byte{255, 198, 58, 255}, Z: 182, Layers: 2},
-		render2d.TextRun{Id: 11, Font: 1, Text: blockKartRaceTimeText(state.Elapsed_millis), Position: [2]int64{557000, 82000}, SizeMilli: 33000, Color: [4]byte{255, 255, 255, 255}, Z: 182, Layers: 2},
-		render2d.TextRun{Id: 12, Font: 1, Text: blockKartDecimalText(speedKph, 3), Position: [2]int64{1092000, 616000}, SizeMilli: 50000, Color: [4]byte{255, 255, 255, 255}, Z: 182, Layers: 2},
+		render2d.TextRun{Id: 10, Font: 1, Text: lapText, Position: [2]int64{185000, 72000}, SizeMilli: 18000, Color: [4]byte{255, 198, 58, 255}, Z: 182, Layers: 2},
+		render2d.TextRun{Id: 11, Font: 1, Text: blockKartRaceTimeText(state.Elapsed_millis), Position: [2]int64{565000, 70000}, SizeMilli: 27000, Color: [4]byte{255, 255, 255, 250}, Z: 182, Layers: 2},
+		render2d.TextRun{Id: 12, Font: 1, Text: blockKartDecimalText(speedKph, 3), Position: [2]int64{1107000, 625000}, SizeMilli: 42000, Color: [4]byte{255, 255, 255, 250}, Z: 182, Layers: 2},
 	)
 	if game.DriftStage != 0 {
 		stageText := []byte("CHARGED")
@@ -1694,7 +1697,7 @@ func (game *BlockKart) hudPackets(includeStatic bool) []render.SnapshotObject {
 			stageText = []byte("ULTRA")
 		}
 		texts = append(texts, render2d.TextRun{
-			Id: 13, Font: 1, Text: stageText, Position: [2]int64{270000, 630000}, SizeMilli: 12000,
+			Id: 13, Font: 1, Text: stageText, Position: [2]int64{245000, 649000}, SizeMilli: 10000,
 			Color: driftColor, Z: 182, Layers: 2,
 		})
 	}
