@@ -5,7 +5,7 @@ by BlockKart:
 
 ```sh
 cargo run --quiet -- \
-  ../../art/exports/blockkart_alpine_golden_scene_v12.glb \
+  ../../art/exports/blockkart_alpine_golden_scene_v13.glb \
   ../../generated/golden_scene \
   ../../golden_scene_generated.vo
 ```

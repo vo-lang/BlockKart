@@ -21,10 +21,10 @@ from mathutils import Vector
 
 
 ROOT = Path(__file__).resolve().parents[2]
-BLEND_PATH = ROOT / "art/blender/blockkart_alpine_golden_scene_v12.blend"
-RENDER_PATH = ROOT / "docs/images/blockkart-blender-golden-scene-v12.png"
-REPORT_PATH = ROOT / "art/blender/blockkart_alpine_golden_scene_v12.json"
-GLB_PATH = ROOT / "art/exports/blockkart_alpine_golden_scene_v12.glb"
+BLEND_PATH = ROOT / "art/blender/blockkart_alpine_golden_scene_v13.blend"
+RENDER_PATH = ROOT / "docs/images/blockkart-blender-golden-scene-v13.png"
+REPORT_PATH = ROOT / "art/blender/blockkart_alpine_golden_scene_v13.json"
+GLB_PATH = ROOT / "art/exports/blockkart_alpine_golden_scene_v13.glb"
 SEED = 20260728
 random.seed(SEED)
 
@@ -646,6 +646,49 @@ def create_tree_template(
     return obj
 
 
+def create_grass_tuft_template(
+    name: str,
+    material: bpy.types.Material,
+    target: bpy.types.Collection,
+    seed: int,
+) -> bpy.types.Object:
+    rng = random.Random(seed)
+    vertices: list[tuple[float, float, float]] = []
+    faces: list[tuple[int, ...]] = []
+    for blade in range(7):
+        angle = math.tau * blade / 7.0 + rng.uniform(-0.22, 0.22)
+        center_x = math.cos(angle) * rng.uniform(0.06, 0.34)
+        center_y = math.sin(angle) * rng.uniform(0.06, 0.34)
+        right_x = math.cos(angle) * rng.uniform(0.10, 0.18)
+        right_y = math.sin(angle) * rng.uniform(0.10, 0.18)
+        lean_x = math.cos(angle + rng.uniform(-0.5, 0.5)) * rng.uniform(0.08, 0.22)
+        lean_y = math.sin(angle + rng.uniform(-0.5, 0.5)) * rng.uniform(0.08, 0.22)
+        height = rng.uniform(0.48, 0.98)
+        base = len(vertices)
+        vertices.extend(
+            (
+                (center_x - right_x, center_y - right_y, 0.0),
+                (center_x + right_x, center_y + right_y, 0.0),
+                (center_x + lean_x + right_x * 0.22, center_y + lean_y + right_y * 0.22, height * 0.72),
+                (center_x + lean_x, center_y + lean_y, height),
+            )
+        )
+        faces.extend(
+            (
+                (base, base + 1, base + 2, base + 3),
+                (base + 3, base + 2, base + 1, base),
+            )
+        )
+    mesh = bpy.data.meshes.new(f"{name} mesh")
+    mesh.from_pydata(vertices, [], faces)
+    mesh.materials.append(material)
+    obj = bpy.data.objects.new(name, mesh)
+    obj.hide_render = True
+    obj.hide_viewport = True
+    target.objects.link(obj)
+    return obj
+
+
 def create_mountain(
     name: str,
     center: tuple[float, float, float],
@@ -1234,7 +1277,7 @@ def create_skid_marks(
     material: bpy.types.Material,
     target: bpy.types.Collection,
 ) -> None:
-    for segment_index, (start, end) in enumerate(((24, 34), (61, 74), (101, 112))):
+    for segment_index, (start, end) in enumerate(((61, 74), (101, 112))):
         for track_index, offset in enumerate((-1.05, 1.05)):
             vertices = []
             faces = []
@@ -1652,6 +1695,8 @@ sun_disc_material = principled_material(
 trunk_material = principled_material("Pine trunk", (0.25, 0.115, 0.040, 1.0), 0.86)
 pine_dark_material = principled_material("Pine forest dark", (0.060, 0.19, 0.080, 1.0), 0.78)
 pine_light_material = principled_material("Pine forest light", (0.10, 0.30, 0.125, 1.0), 0.75)
+tuft_dark_material = principled_material("Meadow tuft dark", (0.055, 0.23, 0.075, 1.0), 0.88)
+tuft_light_material = principled_material("Meadow tuft light", (0.16, 0.39, 0.105, 1.0), 0.86)
 water = water_material()
 waterfall_surface = waterfall_material()
 foam_material = principled_material(
@@ -1834,12 +1879,12 @@ shrub_templates = [
     create_rock_template("Shrub source light", pine_light_material, source_collection, 742),
 ]
 shrub_count = 0
-for _ in range(135):
+for _ in range(260):
     x = random.uniform(-98.0, 102.0)
-    y = random.uniform(8.0, 205.0)
+    y = random.uniform(-12.0, 220.0)
     road_distance, _ = nearest_road(x, y)
     creek_distance = abs(x - (38.0 + max(0.0, y - 150.0) * 0.09))
-    if road_distance < 13.5 or road_distance > 47.0 or creek_distance < 7.0:
+    if road_distance < 12.5 or road_distance > 43.0 or creek_distance < 7.0:
         continue
     scale_x = random.uniform(1.4, 3.4)
     scale_y = random.uniform(1.2, 3.0)
@@ -1854,6 +1899,39 @@ for _ in range(135):
         environment_collection,
     )
     shrub_count += 1
+
+grass_tuft_templates = [
+    create_grass_tuft_template(
+        "Grass tuft source dark",
+        tuft_dark_material,
+        source_collection,
+        760,
+    ),
+    create_grass_tuft_template(
+        "Grass tuft source light",
+        tuft_light_material,
+        source_collection,
+        761,
+    ),
+]
+grass_tuft_count = 0
+for _ in range(720):
+    x = random.uniform(-120.0, 152.0)
+    y = random.uniform(-18.0, 258.0)
+    road_distance, _ = nearest_road(x, y)
+    creek_distance = abs(x - (38.0 + max(0.0, y - 150.0) * 0.09))
+    if road_distance < 10.8 or road_distance > 38.0 or creek_distance < 5.5:
+        continue
+    scale = random.uniform(0.62, 1.38)
+    linked_instance(
+        random.choice(grass_tuft_templates),
+        f"Instanced grass tuft {grass_tuft_count:03d}",
+        (x, y, terrain_height(x, y) + 0.04),
+        (scale * random.uniform(0.72, 1.25), scale, scale * random.uniform(0.8, 1.35)),
+        random.uniform(0.0, math.tau),
+        environment_collection,
+    )
+    grass_tuft_count += 1
 
 for index in range(36):
     point_index = random.randint(18, 132)
@@ -1989,10 +2067,10 @@ for index in range(82):
         race_collection,
     )
 
-for index in range(32):
-    point = ROAD_SAMPLES[min(len(ROAD_SAMPLES) - 1, 34 + index * 2)]
-    previous = ROAD_SAMPLES[max(0, 34 + index * 2 - 1)]
-    following = ROAD_SAMPLES[min(len(ROAD_SAMPLES) - 1, 34 + index * 2 + 1)]
+for index in range(18):
+    point = ROAD_SAMPLES[min(len(ROAD_SAMPLES) - 1, 52 + index * 2)]
+    previous = ROAD_SAMPLES[max(0, 52 + index * 2 - 1)]
+    following = ROAD_SAMPLES[min(len(ROAD_SAMPLES) - 1, 52 + index * 2 + 1)]
     tx, ty = following[0] - previous[0], following[1] - previous[1]
     length = max(0.001, math.hypot(tx, ty))
     side = -1.0
@@ -2201,7 +2279,7 @@ finally:
 bpy.ops.render.render(write_still=True)
 
 report = {
-    "schema": "blockkart.blenderGoldenScene.v12",
+    "schema": "blockkart.blenderGoldenScene.v13",
     "seed": SEED,
     "blender": bpy.app.version_string,
     "renderer": scene.render.engine,
@@ -2210,6 +2288,7 @@ report = {
     "runtimeUvMeshes": runtime_uv_meshes,
     "linkedPines": tree_count,
     "linkedShrubs": shrub_count,
+    "linkedGrassTufts": grass_tuft_count,
     "vertices": sum(len(obj.data.vertices) for obj in visible_meshes),
     "polygons": sum(len(obj.data.polygons) for obj in visible_meshes),
     "blend": str(BLEND_PATH.relative_to(ROOT)),

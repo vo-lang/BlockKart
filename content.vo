@@ -439,16 +439,16 @@ func (game *BlockKart) startAssets(context voplay.StartContext) error {
 func (game *BlockKart) buildStaticRenderPackets() [][]byte {
 	packets := [][]byte{}
 	environment := render3d.EncodeEnvironment(render3d.Environment{
-		FogColor: [3]uint16{27500, 40500, 53500}, FogStartMilli: 310000, FogEndMilli: 1250000,
-		ExposureMilli: 90, ToneMap: render3d.ToneMapAces, BloomThreshold: 56000, BloomStrength: 3200,
+		FogColor: [3]uint16{24500, 35000, 48500}, FogStartMilli: 340000, FogEndMilli: 1210000,
+		ExposureMilli: 0, ToneMap: render3d.ToneMapAces, BloomThreshold: 56000, BloomStrength: 3200,
 		AntiAlias: render3d.AntiAliasMsaa, MsaaSamples: 4,
 	})
 	sun := render3d.EncodeLight(render3d.RetainedLight{
-		Kind: render3d.LightDirectional, Color: [3]uint16{65535, 60000, 52000}, IntensityMilli: 1550,
+		Kind: render3d.LightDirectional, Color: [3]uint16{65535, 57000, 45500}, IntensityMilli: 1850,
 		CastsShadow: true,
 	})
 	skyFill := render3d.EncodeLight(render3d.RetainedLight{
-		Kind: render3d.LightDirectional, Color: [3]uint16{30000, 42000, 65535}, IntensityMilli: 190,
+		Kind: render3d.LightDirectional, Color: [3]uint16{26000, 39000, 65535}, IntensityMilli: 120,
 		CastsShadow: false,
 	})
 	if len(environment) == 0 || len(sun) == 0 || len(skyFill) == 0 {
@@ -1113,18 +1113,18 @@ func (game *BlockKart) kartRenderPacketsStyled(
 		partTransform := blockKartAuthoredKartTransform(transform, location)
 		steer_milliradians := int32(0)
 		if location[2] < 0 {
-			steeringScale := 0.42
+			steeringScale := 0.36
 			if steering_milli > 0 {
 				if location[0] > 0 {
-					steeringScale = 0.48
+					steeringScale = 0.42
 				} else {
-					steeringScale = 0.36
+					steeringScale = 0.30
 				}
 			} else if steering_milli < 0 {
 				if location[0] < 0 {
-					steeringScale = 0.48
+					steeringScale = 0.42
 				} else {
-					steeringScale = 0.36
+					steeringScale = 0.30
 				}
 			}
 			steer_milliradians = int32(float64(steering_milli) * steeringScale)
@@ -1462,26 +1462,26 @@ func (game *BlockKart) cameraPacket(kart Transform, tick uint64) []byte {
 			speedRatio = 1
 		}
 	}
-	verticalFov := uint32(55000 + speedRatio * 10500)
+	verticalFov := uint32(50000 + speedRatio * 8500)
 	camera := render3d.EncodeCamera(render3d.Camera3d{
 		Projection: render3d.CameraProjection{
 			Kind: render3d.CameraPerspective, VerticalFovMillidegrees: verticalFov, NearMilli: 80,
 			FarMilli: 1600000,
 		},
-		ExposureMilli: 100,
+		ExposureMilli: 0,
 	})
 	if len(camera) == 0 {
 		return nil
 	}
 	heading := float64(kart.Yaw_milliradians) / 1000.0
-	distance := 9800.0 + speedRatio * 3100.0
-	height := int64(5000.0 + speedRatio * 950.0)
-	lookAhead := 8200.0 + speedRatio * 8300.0
-	lateralLook := float64(game.Steering_milli) * 0.36
-	cameraSide := -float64(game.Steering_milli) * 0.07
+	distance := 8200.0 + speedRatio * 2400.0
+	height := int64(4200.0 + speedRatio * 800.0)
+	lookAhead := 7600.0 + speedRatio * 7600.0
+	lateralLook := float64(game.Steering_milli) * 0.18
+	cameraSide := -float64(game.Steering_milli) * 0.035
 	if game.Drifting {
-		lateralLook += float64(game.DriftDirection) * 950.0
-		cameraSide -= float64(game.DriftDirection) * 260.0
+		lateralLook += float64(game.DriftDirection) * 720.0
+		cameraSide -= float64(game.DriftDirection) * 180.0
 	}
 	cameraShake := 0.0
 	if game.BoostPressed {
@@ -1516,7 +1516,7 @@ func (game *BlockKart) cameraPacket(kart Transform, tick uint64) []byte {
 	targetZ := kart.Z + int64(
 		math.Cos(heading) * lookAhead - math.Sin(heading) * lateralLook,
 	)
-	targetY := kart.Y + int64(1320.0 + speedRatio * 220.0)
+	targetY := kart.Y + int64(1450.0 + speedRatio * 180.0)
 	if game.CameraMode == 2 {
 		targetX = kart.X
 		targetZ = kart.Z
