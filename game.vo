@@ -66,6 +66,8 @@ type BlockKart struct {
 	PadEntities []BlockKartPhysicsEntity
 	ObstacleEntities []BlockKartPhysicsEntity
 	Contacts []physics3d.ContactEvent
+	TrackCenterline []BlockKartRoadPoint
+	LastSafeTransform Transform
 	RenderControls *render.RenderControlStore
 	RenderTarget render.StableControlRef
 	RenderView render.StableControlRef
@@ -243,6 +245,10 @@ func StartBlockKart(game *BlockKart, init BlockKartInit, context voplay.StartCon
 	if !ok {
 		return errors.New("blockkart: moving obstacle store")
 	}
+	game.Physics, ok = physics3d.NewRuntime(512, 1024, 4096, 4096)
+	if !ok {
+		return errors.New("blockkart: physics owner")
+	}
 	if err := game.startWorld(context); err != nil {
 		return err
 	}
@@ -275,6 +281,9 @@ func (game *BlockKart) updateGameplay(tick voplay.TickBatch) error {
 	if err := game.updateDynamics(tick); err != nil {
 		return err
 	}
+	if err := game.stepPhysics(tick); err != nil {
+		return err
+	}
 	if err := game.syncRace(tick); err != nil {
 		return err
 	}
@@ -299,16 +308,37 @@ func (game *BlockKart) startWorld(context voplay.StartContext) error {
 	if err != nil || !kart.Valid() {
 		return errors.New("blockkart: spawn kart")
 	}
+	var ok bool
 	game.KartEntity = uint64(kart.Index)
-	if !game.Transforms.Upsert(game.KartEntity, Transform{
+	startTransform := Transform{
 		X: 30000, Y: 1200, Z: 367500, Yaw_milliradians: 1571,
-	}) ||
+	}
+	game.TrackCenterline = blockKartTrackCenterline()
+	if len(game.TrackCenterline) == 0 {
+		return errors.New("blockkart: build track centerline")
+	}
+	game.LastSafeTransform = startTransform
+	if !game.Transforms.Upsert(game.KartEntity, startTransform) ||
 		!game.Velocities.Upsert(game.KartEntity, Velocity{}) ||
 		!game.Controls.Upsert(game.KartEntity, KartControl{}) ||
 		!game.KartStates.Upsert(game.KartEntity, KartState{
 			Checkpoint: 1, Countdown_ticks: blockKartCountdownTicks,
 		}) {
 		return errors.New("blockkart: initialize kart components")
+	}
+	game.KartBody, ok = game.Physics.CreateBody(physics3d.BodyDesc{
+		Kind: physics3d.BodyDynamic,
+		Position: [3]int64{startTransform.X, startTransform.Y, startTransform.Z},
+	})
+	if !ok || !game.KartBody.Valid() {
+		return errors.New("blockkart: create kart body")
+	}
+	game.KartCollider, ok = game.Physics.CreateCollider(physics3d.ColliderDesc{
+		Body: game.KartBody, HalfExtent: [3]uint32{850, 500, 1250},
+		Layer: blockKartLayerKart, Mask: blockKartLayerWorld | blockKartLayerTrigger,
+	})
+	if !ok || game.KartCollider.Index == 0 {
+		return errors.New("blockkart: create kart collider")
 	}
 	if err = game.startTrack(context); err != nil {
 		return err
@@ -700,7 +730,9 @@ func (game *BlockKart) drive(tick voplay.TickBatch) error {
 		game.Steering_milli = 0
 		return nil
 	}
-	game.OffRoad = blockKartDistanceFromRoad(transform) > 15000
+	roadBeforeDrive := game.nearestRoadSample(transform)
+	game.OffRoad = roadBeforeDrive.Distance_milli >
+		roadBeforeDrive.Half_width_milli + 5500
 	deltaSeconds := float64(tick.FixedTickNanos) / 1000000000.0
 	speed := float64(state.Speed_per_second)
 	absoluteSpeed := math.Abs(speed)
@@ -839,12 +871,6 @@ func (game *BlockKart) drive(tick voplay.TickBatch) error {
 	}
 	velocity.X_per_second = int64(forwardX * nextSpeed + rightX * lateralSpeed)
 	velocity.Z_per_second = int64(forwardZ * nextSpeed + rightZ * lateralSpeed)
-	transform.X += velocity.X_per_second * int64(tick.FixedTickNanos) / 1000000000
-	transform.Z += velocity.Z_per_second * int64(tick.FixedTickNanos) / 1000000000
-	if transform.X < -650000 || transform.X > 650000 ||
-		transform.Z < -650000 || transform.Z > 650000 {
-		return game.respawn()
-	}
 	if !game.Transforms.Upsert(game.KartEntity, transform) {
 		return errors.New("blockkart: update drive transform")
 	}
@@ -907,8 +933,23 @@ func (game *BlockKart) stepPhysics(tick voplay.TickBatch) error {
 			return errors.New("blockkart: physics transform")
 		}
 		transform.X = body.Position[0]
-		transform.Y = body.Position[1]
 		transform.Z = body.Position[2]
+		road := game.nearestRoadSample(transform)
+		transform.Y = road.Y
+		if road.Distance_milli <= road.Half_width_milli + 2500 {
+			game.LastSafeTransform = transform
+		}
+		if road.Distance_milli > road.Half_width_milli + 8000 ||
+			transform.X < -650000 || transform.X > 650000 ||
+			transform.Z < -650000 || transform.Z > 650000 {
+			return game.recoverToTrack()
+		}
+		if !game.Physics.Submit(physics3d.Command{
+			Kind: physics3d.CommandTeleport, Body: game.KartBody,
+			Value: [3]int64{transform.X, transform.Y, transform.Z},
+		}) {
+			return errors.New("blockkart: align kart body to road")
+		}
 		if !game.Transforms.Upsert(game.KartEntity, transform) {
 			return errors.New("blockkart: publish physics transform")
 		}
@@ -926,14 +967,20 @@ func (game *BlockKart) syncRace(tick voplay.TickBatch) error {
 	if !ok {
 		return errors.New("blockkart: race state")
 	}
-	for _, gate := range game.TrackGates {
-		if gate.Order != state.Checkpoint + 1 {
+	for _, contact := range game.Contacts {
+		var other physics3d.BodyRef
+		if contact.A == game.KartBody {
+			other = contact.B
+		} else if contact.B == game.KartBody {
+			other = contact.A
+		} else {
 			continue
 		}
-		gateTransform := Transform{X: gate.Position[0], Y: gate.Position[1], Z: gate.Position[2]}
-		if blockKartHorizontalDistanceSquared(transform, gateTransform) <= 24000 * 24000 {
-			state.Checkpoint++
-			break
+		for _, gate := range game.TrackGates {
+			if gate.Body == other && gate.Order == state.Checkpoint + 1 {
+				state.Checkpoint++
+				break
+			}
 		}
 	}
 	if err := game.applyGameplayContacts(&state); err != nil {
@@ -1184,38 +1231,6 @@ func (game *BlockKart) audioOneShot(asset uint64, gain int32, tick uint64, deadl
 	}
 	game.AudioSequence++
 	return audio.EncodeEventPacket(game.Engine, 1, game.AudioSequence, game.AudioSequence, tick, game.Audio.Revision, deadlineMillis, oneShot)
-}
-
-func blockKartDistanceFromRoad(transform Transform) int64 {
-	points := blockKartTrackPoints()
-	bestSquared := float64(1.0e30)
-	x := float64(transform.X)
-	z := float64(transform.Z)
-	for index, from := range points {
-		to := points[(index + 1) % len(points)]
-		ax := float64(from[0])
-		az := float64(from[2])
-		dx := float64(to[0] - from[0])
-		dz := float64(to[2] - from[2])
-		lengthSquared := dx * dx + dz * dz
-		if lengthSquared == 0 {
-			continue
-		}
-		along := ((x - ax) * dx + (z - az) * dz) / lengthSquared
-		if along < 0 {
-			along = 0
-		}
-		if along > 1 {
-			along = 1
-		}
-		offsetX := x - (ax + dx * along)
-		offsetZ := z - (az + dz * along)
-		distanceSquared := offsetX * offsetX + offsetZ * offsetZ
-		if distanceSquared < bestSquared {
-			bestSquared = distanceSquared
-		}
-	}
-	return int64(math.Sqrt(bestSquared))
 }
 
 func (game *BlockKart) processEndpointReturns(tick voplay.TickBatch) error {

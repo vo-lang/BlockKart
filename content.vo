@@ -21,6 +21,114 @@ func blockKartTrackPoints() [][3]int64 {
 	}
 }
 
+func blockKartTrackHalfWidths() []int64 {
+	return []int64{
+		9500, 9500, 9400, 9200, 9000, 9200, 9300, 9400,
+		9400, 9300, 9200, 9000, 9100, 9200, 9400, 9500,
+	}
+}
+
+type BlockKartRoadPoint struct {
+	X int64
+	Y int64
+	Z int64
+	Half_width_milli int64
+}
+
+type BlockKartRoadSample struct {
+	X int64
+	Y int64
+	Z int64
+	Half_width_milli int64
+	Distance_milli int64
+}
+
+func blockKartCatmullRom(a int64, b int64, c int64, d int64, t float64) int64 {
+	t2 := t * t
+	t3 := t2 * t
+	return int64(0.5 * (2.0 * float64(b) +
+		float64(-a + c) * t +
+		float64(2 * a - 5 * b + 4 * c - d) * t2 +
+		float64(-a + 3 * b - 3 * c + d) * t3))
+}
+
+func blockKartTrackCenterline() []BlockKartRoadPoint {
+	anchors := blockKartTrackPoints()
+	widths := blockKartTrackHalfWidths()
+	if len(anchors) < 4 || len(widths) != len(anchors) {
+		return nil
+	}
+	const samplesPerSegment = 18
+	result := make([]BlockKartRoadPoint, 0, len(anchors) * samplesPerSegment)
+	for index, b := range anchors {
+		a := anchors[(index - 1 + len(anchors)) % len(anchors)]
+		c := anchors[(index + 1) % len(anchors)]
+		d := anchors[(index + 2) % len(anchors)]
+		wa := widths[(index - 1 + len(widths)) % len(widths)]
+		wb := widths[index]
+		wc := widths[(index + 1) % len(widths)]
+		wd := widths[(index + 2) % len(widths)]
+		for sample := 0; sample < samplesPerSegment; sample++ {
+			t := float64(sample) / float64(samplesPerSegment)
+			result = append(result, BlockKartRoadPoint{
+				X: blockKartCatmullRom(a[0], b[0], c[0], d[0], t),
+				Y: blockKartCatmullRom(a[1], b[1], c[1], d[1], t),
+				Z: blockKartCatmullRom(a[2], b[2], c[2], d[2], t),
+				Half_width_milli: blockKartCatmullRom(wa, wb, wc, wd, t),
+			})
+		}
+	}
+	return result
+}
+
+func (game *BlockKart) nearestRoadSample(transform Transform) BlockKartRoadSample {
+	if game == nil || len(game.TrackCenterline) == 0 {
+		return BlockKartRoadSample{
+			X: transform.X, Y: transform.Y, Z: transform.Z,
+			Half_width_milli: 9000, Distance_milli: 1000000,
+		}
+	}
+	bestSquared := float64(1.0e30)
+	best := BlockKartRoadSample{}
+	x := float64(transform.X)
+	z := float64(transform.Z)
+	for index, from := range game.TrackCenterline {
+		to := game.TrackCenterline[(index + 1) % len(game.TrackCenterline)]
+		dx := float64(to.X - from.X)
+		dz := float64(to.Z - from.Z)
+		lengthSquared := dx * dx + dz * dz
+		if lengthSquared < 1 {
+			continue
+		}
+		along := ((x - float64(from.X)) * dx + (z - float64(from.Z)) * dz) /
+			lengthSquared
+		if along < 0 {
+			along = 0
+		}
+		if along > 1 {
+			along = 1
+		}
+		nearestX := float64(from.X) + dx * along
+		nearestZ := float64(from.Z) + dz * along
+		offsetX := x - nearestX
+		offsetZ := z - nearestZ
+		distanceSquared := offsetX * offsetX + offsetZ * offsetZ
+		if distanceSquared >= bestSquared {
+			continue
+		}
+		bestSquared = distanceSquared
+		best = BlockKartRoadSample{
+			X: int64(nearestX),
+			Y: from.Y + int64(float64(to.Y - from.Y) * along),
+			Z: int64(nearestZ),
+			Half_width_milli: from.Half_width_milli +
+				int64(float64(to.Half_width_milli - from.Half_width_milli) * along),
+		}
+	}
+	best.Distance_milli = int64(math.Sqrt(bestSquared))
+	return best
+}
+
 type BlockKartPhysicsEntity struct {
 	Entity uint64
 	Body physics3d.BodyRef
@@ -37,8 +145,22 @@ func (game *BlockKart) startTrack(context voplay.StartContext) error {
 			}) {
 			return errors.New("blockkart: initialize checkpoint")
 		}
+		body, ok := game.Physics.CreateBody(physics3d.BodyDesc{
+			Kind: physics3d.BodyStatic, Position: position,
+		})
+		if !ok {
+			return errors.New("blockkart: create checkpoint body")
+		}
+		collider, ok := game.Physics.CreateCollider(physics3d.ColliderDesc{
+			Body: body, HalfExtent: [3]uint32{16000, 4000, 16000},
+			Layer: blockKartLayerTrigger, Mask: blockKartLayerKart, Sensor: true,
+		})
+		if !ok {
+			return errors.New("blockkart: create checkpoint collider")
+		}
 		game.TrackGates = append(game.TrackGates, BlockKartGate{
-			Entity: entityId, Order: uint32(index + 1), Position: position,
+			Entity: entityId, Order: uint32(index + 1), Body: body, Collider: collider,
+			Position: position,
 		})
 	}
 	return nil
@@ -54,8 +176,21 @@ func (game *BlockKart) startGameplay(context voplay.StartContext) error {
 			!game.Collectibles.Upsert(entityId, Collectible{Value: 100}) {
 			return errors.New("blockkart: initialize collectible")
 		}
+		body, ok := game.Physics.CreateBody(physics3d.BodyDesc{
+			Kind: physics3d.BodyStatic, Position: position,
+		})
+		if !ok {
+			return errors.New("blockkart: collectible body")
+		}
+		collider, ok := game.Physics.CreateCollider(physics3d.ColliderDesc{
+			Body: body, HalfExtent: [3]uint32{2500, 1800, 2500},
+			Layer: blockKartLayerTrigger, Mask: blockKartLayerKart, Sensor: true,
+		})
+		if !ok {
+			return errors.New("blockkart: collectible collider")
+		}
 		game.Pickups = append(game.Pickups, BlockKartPhysicsEntity{
-			Entity: entityId,
+			Entity: entityId, Body: body, Collider: collider,
 		})
 	}
 	for index := 2; index < len(points); index += 4 {
@@ -65,8 +200,21 @@ func (game *BlockKart) startGameplay(context voplay.StartContext) error {
 			!game.BoostPads.Upsert(entityId, BoostPad{Strength: 12000}) {
 			return errors.New("blockkart: initialize boost pad")
 		}
+		body, ok := game.Physics.CreateBody(physics3d.BodyDesc{
+			Kind: physics3d.BodyStatic, Position: position,
+		})
+		if !ok {
+			return errors.New("blockkart: boost pad body")
+		}
+		collider, ok := game.Physics.CreateCollider(physics3d.ColliderDesc{
+			Body: body, HalfExtent: [3]uint32{6000, 900, 6000},
+			Layer: blockKartLayerTrigger, Mask: blockKartLayerKart, Sensor: true,
+		})
+		if !ok {
+			return errors.New("blockkart: boost pad collider")
+		}
 		game.PadEntities = append(game.PadEntities, BlockKartPhysicsEntity{
-			Entity: entityId,
+			Entity: entityId, Body: body, Collider: collider,
 		})
 	}
 	for index := 3; index < len(points); index += 5 {
@@ -83,8 +231,22 @@ func (game *BlockKart) startGameplay(context voplay.StartContext) error {
 			!game.MovingObstacles.Upsert(entityId, obstacle) {
 			return errors.New("blockkart: initialize moving obstacle")
 		}
+		body, ok := game.Physics.CreateBody(physics3d.BodyDesc{
+			Kind: physics3d.BodyKinematic,
+			Position: [3]int64{obstacle.Origin_x, obstacle.Origin_y, obstacle.Origin_z},
+		})
+		if !ok {
+			return errors.New("blockkart: moving obstacle body")
+		}
+		collider, ok := game.Physics.CreateCollider(physics3d.ColliderDesc{
+			Body: body, HalfExtent: [3]uint32{1800, 1400, 1800},
+			Layer: blockKartLayerWorld, Mask: blockKartLayerKart,
+		})
+		if !ok {
+			return errors.New("blockkart: moving obstacle collider")
+		}
 		game.ObstacleEntities = append(game.ObstacleEntities, BlockKartPhysicsEntity{
-			Entity: entityId,
+			Entity: entityId, Body: body, Collider: collider,
 		})
 	}
 	return nil
@@ -110,7 +272,10 @@ func (game *BlockKart) updateDynamics(tick voplay.TickBatch) error {
 			obstacle.Origin_x + signed * int64(obstacle.Axis_x) / 1000, obstacle.Origin_y,
 			obstacle.Origin_z + signed * int64(obstacle.Axis_z) / 1000,
 		}
-		if !game.Transforms.Upsert(entity.Entity, Transform{
+		if !game.Physics.Submit(physics3d.Command{
+			Kind: physics3d.CommandKinematicTarget, Body: entity.Body, Value: position,
+		}) ||
+			!game.Transforms.Upsert(entity.Entity, Transform{
 			X: position[0], Y: position[1], Z: position[2],
 		}) {
 			return errors.New("blockkart: move obstacle")
@@ -135,49 +300,54 @@ func (game *BlockKart) applyGameplayContacts(state *KartState) error {
 	if state == nil {
 		return errors.New("blockkart: missing gameplay state")
 	}
-	kart, ok := game.Transforms.Get(game.KartEntity)
-	if !ok {
-		return errors.New("blockkart: gameplay transform")
-	}
-	for _, pickup := range game.Pickups {
-		position, found := game.Transforms.Get(pickup.Entity)
-		value, valueFound := game.Collectibles.Get(pickup.Entity)
-		if !found || !valueFound {
-			return errors.New("blockkart: collectible proximity state")
+	for _, contact := range game.Contacts {
+		var other physics3d.BodyRef
+		if contact.A == game.KartBody {
+			other = contact.B
+		} else if contact.B == game.KartBody {
+			other = contact.A
+		} else {
+			continue
 		}
-		if !value.Collected && blockKartHorizontalDistanceSquared(kart, position) <= 4500 * 4500 {
-			value.Collected = true
-			state.Score += value.Value
-			if !game.Collectibles.Upsert(pickup.Entity, value) {
-				return errors.New("blockkart: collect pickup")
+		for _, pickup := range game.Pickups {
+			if pickup.Body != other {
+				continue
+			}
+			value, ok := game.Collectibles.Get(pickup.Entity)
+			if !ok {
+				return errors.New("blockkart: collectible contact")
+			}
+			if !value.Collected {
+				value.Collected = true
+				state.Score += value.Value
+				if !game.Collectibles.Upsert(pickup.Entity, value) {
+					return errors.New("blockkart: collect pickup")
+				}
 			}
 		}
-	}
-	for _, padEntity := range game.PadEntities {
-		position, found := game.Transforms.Get(padEntity.Entity)
-		pad, padFound := game.BoostPads.Get(padEntity.Entity)
-		if !found || !padFound {
-			return errors.New("blockkart: boost pad proximity state")
-		}
-		if pad.Cooldown_ticks == 0 &&
-			blockKartHorizontalDistanceSquared(kart, position) <= 7500 * 7500 {
-			state.Boost_ticks = blockKartBoostTicks
-			pad.Cooldown_ticks = blockKartBoostCooldownTicks
-			if !game.BoostPads.Upsert(padEntity.Entity, pad) {
-				return errors.New("blockkart: activate boost pad")
+		for _, padEntity := range game.PadEntities {
+			if padEntity.Body != other {
+				continue
+			}
+			pad, ok := game.BoostPads.Get(padEntity.Entity)
+			if !ok {
+				return errors.New("blockkart: boost pad contact")
+			}
+			if pad.Cooldown_ticks == 0 {
+				state.Boost_ticks = blockKartBoostTicks
+				pad.Cooldown_ticks = blockKartBoostCooldownTicks
+				if !game.BoostPads.Upsert(padEntity.Entity, pad) {
+					return errors.New("blockkart: activate boost pad")
+				}
 			}
 		}
-	}
-	for _, obstacle := range game.ObstacleEntities {
-		position, found := game.Transforms.Get(obstacle.Entity)
-		if !found {
-			return errors.New("blockkart: obstacle proximity state")
-		}
-		if blockKartHorizontalDistanceSquared(kart, position) <= 3800 * 3800 {
-			game.HitAudioPending = true
-			state.Speed_per_second = 0
-			state.Boost_ticks = 0
-			return game.respawn()
+		for _, obstacle := range game.ObstacleEntities {
+			if obstacle.Body == other {
+				game.HitAudioPending = true
+				state.Speed_per_second = 0
+				state.Boost_ticks = 0
+				return game.recoverToTrack()
+			}
 		}
 	}
 	return nil
@@ -1004,6 +1174,14 @@ func (game *BlockKart) restartRace() error {
 func (game *BlockKart) respawn() error {
 	game.Steering_milli = 0
 	transform := Transform{X: 30000, Y: 1200, Z: 367500, Yaw_milliradians: 1571}
+	game.LastSafeTransform = transform
+	if game.Physics != nil && game.KartBody.Valid() &&
+		!game.Physics.Submit(physics3d.Command{
+			Kind: physics3d.CommandTeleport, Body: game.KartBody,
+			Value: [3]int64{transform.X, transform.Y, transform.Z},
+		}) {
+		return errors.New("blockkart: submit respawn teleport")
+	}
 	if !game.Transforms.Upsert(game.KartEntity, transform) ||
 		!game.Velocities.Upsert(game.KartEntity, Velocity{}) {
 		return errors.New("blockkart: respawn")
@@ -1016,6 +1194,40 @@ func (game *BlockKart) respawn() error {
 	state.Boost_ticks = 0
 	if !game.KartStates.Upsert(game.KartEntity, state) {
 		return errors.New("blockkart: reset respawn speed")
+	}
+	return nil
+}
+
+func (game *BlockKart) recoverToTrack() error {
+	game.Steering_milli = 0
+	transform := game.LastSafeTransform
+	if transform.X == 0 && transform.Z == 0 {
+		transform = Transform{X: 30000, Y: 1200, Z: 367500, Yaw_milliradians: 1571}
+	}
+	road := game.nearestRoadSample(transform)
+	transform.X = road.X
+	transform.Y = road.Y
+	transform.Z = road.Z
+	game.LastSafeTransform = transform
+	if game.Physics != nil && game.KartBody.Valid() &&
+		!game.Physics.Submit(physics3d.Command{
+			Kind: physics3d.CommandTeleport, Body: game.KartBody,
+			Value: [3]int64{transform.X, transform.Y, transform.Z},
+		}) {
+		return errors.New("blockkart: submit recovery teleport")
+	}
+	if !game.Transforms.Upsert(game.KartEntity, transform) ||
+		!game.Velocities.Upsert(game.KartEntity, Velocity{}) {
+		return errors.New("blockkart: recover kart")
+	}
+	state, ok := game.KartStates.Get(game.KartEntity)
+	if !ok {
+		return errors.New("blockkart: recover race state")
+	}
+	state.Speed_per_second = 0
+	state.Boost_ticks = 0
+	if !game.KartStates.Upsert(game.KartEntity, state) {
+		return errors.New("blockkart: reset recovery speed")
 	}
 	return nil
 }
