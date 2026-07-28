@@ -572,11 +572,11 @@ func (game *BlockKart) readInput(tick voplay.TickBatch) error {
 	leftActive := game.LeftPressed || leftTapped
 	rightActive := game.RightPressed || rightTapped
 	if leftActive == rightActive {
-		control.Steer_milli = game.GamepadSteer
+		control.Steer_milli = -game.GamepadSteer
 	} else if leftActive {
-		control.Steer_milli = -1000
-	} else {
 		control.Steer_milli = 1000
+	} else {
+		control.Steer_milli = -1000
 	}
 	if game.ThrottlePressed || throttleTapped {
 		control.Throttle_milli = 1000
@@ -672,7 +672,7 @@ func (game *BlockKart) applyTouchControls(control *KartControl) {
 	for _, point := range game.TouchPoints {
 		switch point.Role {
 			case 1:
-				steer := (int64(point.X) - centerX) * 1000 / radius
+				steer := (centerX - int64(point.X)) * 1000 / radius
 				vertical := (centerY - int64(point.Y)) * 1000 / radius
 				if steer < -1000 {
 					steer = -1000
