@@ -5,7 +5,7 @@ by BlockKart:
 
 ```sh
 cargo run --quiet -- \
-  ../../art/exports/blockkart_alpine_golden_scene_v10.glb \
+  ../../art/exports/blockkart_alpine_golden_scene_v11.glb \
   ../../generated/golden_scene \
   ../../golden_scene_generated.vo
 ```
@@ -13,6 +13,8 @@ cargo run --quiet -- \
 It imports through `voplay-import-gltf`, flattens the static node hierarchy,
 removes the authored vehicle placeholders, preserves material batches, applies
 normal transforms, and writes VMG1 meshes plus generated Vo descriptors.
+The bake assigns runtime-projected UVs and the production PBR texture sets for
+the authored asphalt, road shoulder, meadow, cliff, and bridge materials.
 
 Every material batch is split on triangle boundaries into artifacts no larger
 than 900 KiB. This keeps the enclosing Voplay render asset packet below the

@@ -21,10 +21,10 @@ from mathutils import Vector
 
 
 ROOT = Path(__file__).resolve().parents[2]
-BLEND_PATH = ROOT / "art/blender/blockkart_alpine_golden_scene_v10.blend"
-RENDER_PATH = ROOT / "docs/images/blockkart-blender-golden-scene-v10.png"
-REPORT_PATH = ROOT / "art/blender/blockkart_alpine_golden_scene_v10.json"
-GLB_PATH = ROOT / "art/exports/blockkart_alpine_golden_scene_v10.glb"
+BLEND_PATH = ROOT / "art/blender/blockkart_alpine_golden_scene_v11.blend"
+RENDER_PATH = ROOT / "docs/images/blockkart-blender-golden-scene-v11.png"
+REPORT_PATH = ROOT / "art/blender/blockkart_alpine_golden_scene_v11.json"
+GLB_PATH = ROOT / "art/exports/blockkart_alpine_golden_scene_v11.glb"
 SEED = 20260728
 random.seed(SEED)
 
@@ -292,6 +292,32 @@ def create_cylinder(
     return obj
 
 
+def create_torus(
+    name: str,
+    location: tuple[float, float, float],
+    major_radius: float,
+    minor_radius: float,
+    material: bpy.types.Material,
+    target: bpy.types.Collection,
+    rotation: tuple[float, float, float] = (0.0, 0.0, 0.0),
+) -> bpy.types.Object:
+    bpy.ops.mesh.primitive_torus_add(
+        major_segments=16,
+        minor_segments=8,
+        major_radius=major_radius,
+        minor_radius=minor_radius,
+        location=location,
+        rotation=rotation,
+    )
+    obj = bpy.context.object
+    obj.name = name
+    obj.data.materials.append(material)
+    for polygon in obj.data.polygons:
+        polygon.use_smooth = True
+    move_to_collection(obj, target)
+    return obj
+
+
 def create_uv_sphere(
     name: str,
     location: tuple[float, float, float],
@@ -524,8 +550,8 @@ def create_rock_template(
     seed: int,
 ) -> bpy.types.Object:
     rng = random.Random(seed)
-    segments = 10
-    rings = 5
+    segments = 8
+    rings = 4
     vertices = []
     faces = []
     for ring in range(rings + 1):
@@ -553,7 +579,7 @@ def create_rock_template(
     mesh.from_pydata(vertices, [], faces)
     mesh.materials.append(material)
     for polygon in mesh.polygons:
-        polygon.use_smooth = True
+        polygon.use_smooth = False
     obj = bpy.data.objects.new(name, mesh)
     obj.hide_render = True
     obj.hide_viewport = True
@@ -1447,6 +1473,52 @@ def restore_gltf_material_fallbacks(
             material.node_tree.links.new(from_socket, to_socket)
 
 
+def runtime_uv_scale(mesh: bpy.types.Mesh) -> float:
+    names = " ".join(material.name.lower() for material in mesh.materials if material is not None)
+    if "road asphalt" in names:
+        return 0.20
+    if "road shoulder" in names:
+        return 0.16
+    if "meadow grass" in names:
+        return 0.11
+    if "slate cliff" in names or "bridge stone" in names:
+        return 0.14
+    return 0.10
+
+
+def ensure_runtime_uvs(objects: list[bpy.types.Object]) -> int:
+    """Give authored procedural meshes stable box-projected UVs before GLB export."""
+    generated = 0
+    visited: set[int] = set()
+    for obj in objects:
+        if obj.type != "MESH":
+            continue
+        mesh = obj.data
+        identity = mesh.as_pointer()
+        if identity in visited:
+            continue
+        visited.add(identity)
+        if len(mesh.uv_layers) != 0:
+            continue
+        mesh.update()
+        uv_layer = mesh.uv_layers.new(name="RuntimeUV")
+        scale = runtime_uv_scale(mesh)
+        for polygon in mesh.polygons:
+            normal = polygon.normal
+            dominant = max(range(3), key=lambda axis: abs(normal[axis]))
+            for loop_index in polygon.loop_indices:
+                coordinate = mesh.vertices[mesh.loops[loop_index].vertex_index].co
+                if dominant == 0:
+                    uv = (coordinate.y * scale, coordinate.z * scale)
+                elif dominant == 1:
+                    uv = (coordinate.x * scale, coordinate.z * scale)
+                else:
+                    uv = (coordinate.x * scale, coordinate.y * scale)
+                uv_layer.data[loop_index].uv = uv
+        generated += 1
+    return generated
+
+
 clear_scene()
 
 scene = bpy.context.scene
@@ -1785,11 +1857,11 @@ for index in range(36):
     tx, ty = following[0] - previous[0], following[1] - previous[1]
     length = max(0.001, math.hypot(tx, ty))
     side = -1.0 if index % 2 else 1.0
-    offset = random.uniform(14.0, 25.0)
+    offset = random.uniform(17.0, 28.0)
     x = point[0] + ty / length * offset * side
     y = point[1] - tx / length * offset * side
     ground = terrain_height(x, y)
-    scale = random.uniform(1.4, 4.0)
+    scale = random.uniform(1.0, 2.8)
     linked_instance(
         rock_templates[index % len(rock_templates)],
         f"Trackside rock {index:02d}",
@@ -1911,7 +1983,7 @@ for index in range(82):
         race_collection,
     )
 
-for index in range(36):
+for index in range(32):
     point = ROAD_SAMPLES[min(len(ROAD_SAMPLES) - 1, 34 + index * 2)]
     previous = ROAD_SAMPLES[max(0, 34 + index * 2 - 1)]
     following = ROAD_SAMPLES[min(len(ROAD_SAMPLES) - 1, 34 + index * 2 + 1)]
@@ -1920,15 +1992,26 @@ for index in range(36):
     side = -1.0
     x = point[0] + ty / length * 9.0 * side
     y = point[1] - tx / length * 9.0 * side
-    create_cylinder(
+    tire_rotation = (0.0, math.pi * 0.5, math.atan2(ty, tx))
+    create_torus(
         f"Safety tire {index:02d}",
         (x, y, point[2] + 0.62),
-        0.62,
-        0.45,
-        (curb_red_material, curb_white_material, tire_material)[index % 3],
+        0.46,
+        0.15,
+        tire_material,
         race_collection,
-        vertices=16,
-        rotation=(0.0, math.pi * 0.5, math.atan2(ty, tx)),
+        rotation=tire_rotation,
+    )
+    create_cylinder(
+        f"Safety tire hub {index:02d}",
+        (x, y, point[2] + 0.62),
+        0.24,
+        0.18,
+        curb_red_material if index % 2 == 0 else curb_white_material,
+        race_collection,
+        vertices=12,
+        rotation=tire_rotation,
+        bevel=0.025,
     )
 
 for index, point_index in enumerate((38, 58, 79, 103, 126)):
@@ -2077,6 +2160,12 @@ except (AttributeError, TypeError):
 BLEND_PATH.parent.mkdir(parents=True, exist_ok=True)
 RENDER_PATH.parent.mkdir(parents=True, exist_ok=True)
 GLB_PATH.parent.mkdir(parents=True, exist_ok=True)
+visible_meshes = [
+    obj
+    for obj in scene.objects
+    if obj.type == "MESH" and not obj.hide_render
+]
+runtime_uv_meshes = ensure_runtime_uvs(visible_meshes)
 bpy.ops.wm.save_as_mainfile(filepath=str(BLEND_PATH))
 gltf_material_state = begin_gltf_material_fallbacks(
     (
@@ -2105,18 +2194,14 @@ finally:
     restore_gltf_material_fallbacks(gltf_material_state)
 bpy.ops.render.render(write_still=True)
 
-visible_meshes = [
-    obj
-    for obj in scene.objects
-    if obj.type == "MESH" and not obj.hide_render
-]
 report = {
-    "schema": "blockkart.blenderGoldenScene.v10",
+    "schema": "blockkart.blenderGoldenScene.v11",
     "seed": SEED,
     "blender": bpy.app.version_string,
     "renderer": scene.render.engine,
     "resolution": [scene.render.resolution_x, scene.render.resolution_y],
     "visibleMeshObjects": len(visible_meshes),
+    "runtimeUvMeshes": runtime_uv_meshes,
     "linkedPines": tree_count,
     "linkedShrubs": shrub_count,
     "vertices": sum(len(obj.data.vertices) for obj in visible_meshes),

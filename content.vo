@@ -439,16 +439,16 @@ func (game *BlockKart) startAssets(context voplay.StartContext) error {
 func (game *BlockKart) buildStaticRenderPackets() [][]byte {
 	packets := [][]byte{}
 	environment := render3d.EncodeEnvironment(render3d.Environment{
-		FogColor: [3]uint16{33500, 49500, 60500}, FogStartMilli: 260000, FogEndMilli: 1180000,
+		FogColor: [3]uint16{27500, 40500, 53500}, FogStartMilli: 310000, FogEndMilli: 1250000,
 		ExposureMilli: 90, ToneMap: render3d.ToneMapAces, BloomThreshold: 56000, BloomStrength: 3200,
 		AntiAlias: render3d.AntiAliasMsaa, MsaaSamples: 4,
 	})
 	sun := render3d.EncodeLight(render3d.RetainedLight{
-		Kind: render3d.LightDirectional, Color: [3]uint16{65535, 61000, 55500}, IntensityMilli: 1250,
+		Kind: render3d.LightDirectional, Color: [3]uint16{65535, 60000, 52000}, IntensityMilli: 1550,
 		CastsShadow: true,
 	})
 	skyFill := render3d.EncodeLight(render3d.RetainedLight{
-		Kind: render3d.LightDirectional, Color: [3]uint16{33000, 44500, 65535}, IntensityMilli: 360,
+		Kind: render3d.LightDirectional, Color: [3]uint16{30000, 42000, 65535}, IntensityMilli: 190,
 		CastsShadow: false,
 	})
 	if len(environment) == 0 || len(sun) == 0 || len(skyFill) == 0 {
@@ -476,6 +476,11 @@ func (game *BlockKart) buildStaticRenderPackets() [][]byte {
 		{12008, "assets/maps/primitive_track/dirt_mr.png"},
 		{12009, "assets/maps/primitive_track/rock_normal.png"},
 		{12010, "assets/maps/primitive_track/rock_mr.png"},
+		{12011, "assets/maps/primitive_track/grass_normal.png"},
+		{12012, "assets/maps/primitive_track/grass_mr.png"},
+		{12013, "assets/maps/primitive_track/meadow_normal.png"},
+		{12014, "assets/maps/primitive_track/meadow_mr.png"},
+		{12100, "assets/maps/golden_alpine/asphalt_albedo_v1.png"},
 	}
 	for _, texture := range textures {
 		bytes, readErr := os.ReadFile(texture.Path)
@@ -1459,17 +1464,17 @@ func (game *BlockKart) cameraPacket(kart Transform, tick uint64) []byte {
 	distance := 9800.0 + speedRatio * 3100.0
 	height := int64(5000.0 + speedRatio * 950.0)
 	lookAhead := 8200.0 + speedRatio * 8300.0
-	lateralLook := float64(game.Steering_milli) * 1.05
-	cameraSide := -float64(game.Steering_milli) * 0.20
+	lateralLook := float64(game.Steering_milli) * 0.36
+	cameraSide := -float64(game.Steering_milli) * 0.07
 	if game.Drifting {
-		lateralLook += float64(game.DriftDirection) * 2200.0
-		cameraSide -= float64(game.DriftDirection) * 650.0
+		lateralLook += float64(game.DriftDirection) * 950.0
+		cameraSide -= float64(game.DriftDirection) * 260.0
 	}
 	cameraShake := 0.0
 	if game.BoostPressed {
-		cameraShake = math.Sin(float64(tick) * 1.91) * 70.0 * speedRatio
+		cameraShake = math.Sin(float64(tick) * 1.91) * 38.0 * speedRatio
 	} else if game.OffRoad {
-		cameraShake = math.Sin(float64(tick) * 2.73) * 48.0 * speedRatio
+		cameraShake = math.Sin(float64(tick) * 2.73) * 28.0 * speedRatio
 	}
 	if game.CameraMode == 1 {
 		distance = 4500

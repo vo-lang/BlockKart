@@ -1,0 +1,19 @@
+{
+  "schema": "blockkart.blenderGoldenScene.v11",
+  "seed": 20260728,
+  "blender": "5.2.0 LTS",
+  "renderer": "BLENDER_EEVEE",
+  "resolution": [
+    1280,
+    720
+  ],
+  "visibleMeshObjects": 1406,
+  "runtimeUvMeshes": 39,
+  "linkedPines": 548,
+  "linkedShrubs": 43,
+  "vertices": 110499,
+  "polygons": 99686,
+  "blend": "art/blender/blockkart_alpine_golden_scene_v11.blend",
+  "glb": "art/exports/blockkart_alpine_golden_scene_v11.glb",
+  "render": "docs/images/blockkart-blender-golden-scene-v11.png"
+}

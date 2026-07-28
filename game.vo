@@ -882,12 +882,14 @@ func (game *BlockKart) drive(tick voplay.TickBatch) error {
 	}
 	state.Speed_per_second = int64(nextSpeed)
 	absoluteSpeed = math.Abs(nextSpeed)
-	steeringStep := int32(7200.0 * deltaSeconds)
+	speedRatio := blockKartClampFloat64(absoluteSpeed / normalMaximumSpeed, 0, 1)
+	steeringRate := 4000.0 - speedRatio * 1200.0
+	steeringStep := int32(steeringRate * deltaSeconds)
 	if control.Steer_milli == 0 {
-		steeringStep = int32(9600.0 * deltaSeconds)
+		steeringStep = int32(6500.0 * deltaSeconds)
 	} else if game.Steering_milli != 0 &&
 		(game.Steering_milli < 0) != (control.Steer_milli < 0) {
-		steeringStep = int32(13200.0 * deltaSeconds)
+		steeringStep = int32(7800.0 * deltaSeconds)
 	}
 	if steeringStep < 1 {
 		steeringStep = 1
@@ -895,31 +897,29 @@ func (game *BlockKart) drive(tick voplay.TickBatch) error {
 	game.Steering_milli = blockKartApproachInt32(
 		game.Steering_milli, control.Steer_milli, steeringStep,
 	)
-	absoluteSpeed = math.Abs(nextSpeed)
-	speedRatio := blockKartClampFloat64(absoluteSpeed / normalMaximumSpeed, 0, 1)
 	steeringValue := float64(game.Steering_milli) / 1000.0
-	steeringCurve := math.Pow(math.Abs(steeringValue), 0.82)
+	steeringCurve := math.Pow(math.Abs(steeringValue), 1.05)
 	if steeringValue < 0 {
 		steeringCurve = -steeringCurve
 	}
-	maximumWheelAngle := 0.58 - speedRatio * 0.25
+	maximumWheelAngle := 0.48 - speedRatio * 0.25
 	lowSpeedAuthority := blockKartClampFloat64(absoluteSpeed / 4200.0, 0, 1)
 	direction := 1.0
 	if nextSpeed < -250 {
 		direction = -1.0
 	}
-	desiredYawRate := direction * nextSpeed / 9800.0 *
+	desiredYawRate := direction * nextSpeed / 10800.0 *
 		math.Tan(steeringCurve * maximumWheelAngle) * lowSpeedAuthority
-	maximumYawRate := 1.48 - speedRatio * 0.28
-	steeringResponse := 8.6
+	maximumYawRate := 1.15 - speedRatio * 0.33
+	steeringResponse := 6.3
 	if game.Drifting {
-		driftArc := float64(game.DriftDirection) * (0.46 + speedRatio * 0.72)
-		counterSteer := steeringCurve * (0.32 + speedRatio * 0.18)
+		driftArc := float64(game.DriftDirection) * (0.40 + speedRatio * 0.62)
+		counterSteer := steeringCurve * (0.28 + speedRatio * 0.15)
 		desiredYawRate = (driftArc + counterSteer) * direction
-		maximumYawRate = 1.72
-		steeringResponse = 5.4
+		maximumYawRate = 1.42
+		steeringResponse = 4.8
 	} else if control.Steer_milli == 0 {
-		steeringResponse = 11.5
+		steeringResponse = 9.0
 	}
 	desiredYawRate = blockKartClampFloat64(
 		desiredYawRate, -maximumYawRate, maximumYawRate,
@@ -968,7 +968,7 @@ func (game *BlockKart) drive(tick voplay.TickBatch) error {
 	rightZ := -math.Sin(heading)
 	lateralSpeed := float64(velocity.X_per_second) * rightX +
 		float64(velocity.Z_per_second) * rightZ
-	grip := 12.5 - speedRatio * 3.0
+	grip := 14.5 - speedRatio * 2.5
 	if game.Drifting {
 		grip = 2.9
 	}

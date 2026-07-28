@@ -8,8 +8,7 @@ use std::{
 };
 
 use voplay_import_gltf::{
-    GltfAlphaMode, GltfImportConfig, GltfImportPlan, GltfMeshArtifact, import,
-    materialize_meshes,
+    GltfAlphaMode, GltfImportConfig, GltfImportPlan, GltfMeshArtifact, import, materialize_meshes,
 };
 use voplay_render_3d::{
     MeshArtifact3d, MeshArtifact3dConfig, MeshDescriptor, encode_mesh_artifact_3d,
@@ -137,7 +136,11 @@ fn transform_normal(matrix: [i64; 16], normal: [f32; 3]) -> [f32; 3] {
         + inverse[5] * normal[1] as f64
         + inverse[8] * normal[2] as f64;
     let length = (x * x + y * y + z * z).sqrt().max(1.0e-12);
-    [(x / length) as f32, (y / length) as f32, (z / length) as f32]
+    [
+        (x / length) as f32,
+        (y / length) as f32,
+        (z / length) as f32,
+    ]
 }
 
 fn vehicle_node(name: Option<&str>) -> bool {
@@ -146,6 +149,61 @@ fn vehicle_node(name: Option<&str>) -> bool {
         || name.contains("green rival")
         || name.contains("orange rival")
         || name.contains("purple rival")
+}
+
+fn projected_texcoord(
+    plan: &GltfImportPlan,
+    material: usize,
+    position: [f32; 3],
+    normal: [f32; 3],
+    fallback: [f32; 2],
+) -> [f32; 2] {
+    let name = plan
+        .materials
+        .get(material)
+        .and_then(|value| value.name.as_deref())
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    let scale = if name.contains("road asphalt") {
+        Some(0.20)
+    } else if name.contains("road shoulder") {
+        Some(0.16)
+    } else if name.contains("meadow grass") {
+        Some(0.11)
+    } else if name.contains("slate cliff") || name.contains("bridge stone") {
+        Some(0.14)
+    } else {
+        None
+    };
+    let Some(scale) = scale else {
+        return fallback;
+    };
+    if name.contains("road ") || name.contains("meadow grass") {
+        return [position[0] * scale, position[2] * scale];
+    }
+    let absolute = normal.map(f32::abs);
+    if absolute[1] >= absolute[0] && absolute[1] >= absolute[2] {
+        [position[0] * scale, position[2] * scale]
+    } else if absolute[0] >= absolute[2] {
+        [position[2] * scale, position[1] * scale]
+    } else {
+        [position[0] * scale, position[1] * scale]
+    }
+}
+
+fn material_textures(name: Option<&str>) -> [u64; 5] {
+    let name = name.unwrap_or_default().to_ascii_lowercase();
+    if name.contains("road asphalt") {
+        [12_100, 12_007, 12_008, 0, 0]
+    } else if name.contains("road shoulder") {
+        [12_002, 12_007, 12_008, 0, 0]
+    } else if name.contains("meadow grass") {
+        [12_003, 12_013, 12_014, 0, 0]
+    } else if name.contains("slate cliff") || name.contains("bridge stone") {
+        [12_004, 12_009, 12_010, 0, 0]
+    } else {
+        [0; 5]
+    }
 }
 
 fn collect_node(
@@ -183,7 +241,13 @@ fn collect_node(
                     let normal = transform_normal(world, artifact.normals[index]);
                     target.positions.push(position);
                     target.normals.push(normal);
-                    target.texcoords.push(artifact.texcoords[index]);
+                    target.texcoords.push(projected_texcoord(
+                        plan,
+                        material,
+                        position,
+                        normal,
+                        artifact.texcoords[index],
+                    ));
                     bounds.include(position);
                 }
                 target.indices.extend(
@@ -223,7 +287,11 @@ fn shadow_policy(plan: &GltfImportPlan, material: usize) -> Result<(bool, bool),
         .materials
         .get(material)
         .ok_or_else(|| format!("missing material {material}"))?;
-    let name = material.name.as_deref().unwrap_or_default().to_ascii_lowercase();
+    let name = material
+        .name
+        .as_deref()
+        .unwrap_or_default()
+        .to_ascii_lowercase();
     if name.contains("sky") || name.contains("sun disc") {
         return Ok((false, false));
     }
@@ -322,11 +390,16 @@ fn generate_vo(
             .get(*material_index)
             .ok_or_else(|| format!("missing material {material_index}"))?;
         let id = MATERIAL_ID_BASE + *material_index as u64;
-        let base = material.base_color.map(|value| u16::from(value) * 257);
+        let textures = material_textures(material.name.as_deref());
+        let base = if textures[0] == 0 {
+            material.base_color.map(|value| u16::from(value) * 257)
+        } else {
+            [u16::MAX; 4]
+        };
         let (alpha, cutoff) = alpha_expression(material.alpha);
         writeln!(
             source,
-            "\t\t{{Id: {id}, BaseColor: [4]uint16{{{}, {}, {}, {}}}, Metallic: {}, Roughness: {}, Emissive: [3]uint16{{{}, {}, {}}}, Alpha: {alpha}, AlphaCutoff: {cutoff}, DoubleSided: {}, Unlit: {}, Revision: 1}},",
+            "\t\t{{Id: {id}, BaseColor: [4]uint16{{{}, {}, {}, {}}}, Metallic: {}, Roughness: {}, Emissive: [3]uint16{{{}, {}, {}}}, Alpha: {alpha}, AlphaCutoff: {cutoff}, DoubleSided: {}, Unlit: {}, Textures: [5]uint64{{{}, {}, {}, {}, {}}}, Revision: 1}},",
             base[0],
             base[1],
             base[2],
@@ -338,6 +411,11 @@ fn generate_vo(
             material.emissive_q16[2],
             material.double_sided,
             material.unlit,
+            textures[0],
+            textures[1],
+            textures[2],
+            textures[3],
+            textures[4],
         )
         .map_err(|_| "write generated material".to_owned())?;
     }
@@ -401,7 +479,9 @@ fn bake(source: &Path, output: &Path, vo_output: &Path) -> Result<(), String> {
         )?;
     }
     fs::create_dir_all(output).map_err(|error| format!("create {}: {error}", output.display()))?;
-    for entry in fs::read_dir(output).map_err(|error| format!("read {}: {error}", output.display()))? {
+    for entry in
+        fs::read_dir(output).map_err(|error| format!("read {}: {error}", output.display()))?
+    {
         let entry = entry.map_err(|error| format!("read generated mesh entry: {error}"))?;
         let path = entry.path();
         if path.extension() == Some(OsStr::new("vmg1")) {
@@ -465,7 +545,10 @@ fn bake(source: &Path, output: &Path, vo_output: &Path) -> Result<(), String> {
 }
 
 fn main() {
-    let arguments = env::args_os().skip(1).map(PathBuf::from).collect::<Vec<_>>();
+    let arguments = env::args_os()
+        .skip(1)
+        .map(PathBuf::from)
+        .collect::<Vec<_>>();
     if arguments.len() != 3 {
         eprintln!(
             "usage: blockkart-voplay-glb-bake <source.glb> <output-directory> <generated.vo>"
