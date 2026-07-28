@@ -13,11 +13,11 @@ import (
 
 func blockKartTrackPoints() [][3]int64 {
 	return [][3]int64{
-		{19600, 1200, 367500}, {254800, 1250, 367500}, {411600, 1540, 313600}, {465500, 1890, 220500},
-		{313600, 2080, 107800}, {450800, 2430, -58800}, {396900, 2720, -254800}, {200900, 2860, -333200},
-		{-44100, 2770, -333200}, {-284200, 2520, -323400}, {-450800, 2230, -215600},
-		{-387100, 1890, -83300}, {-303800, 1690, 9800}, {-436100, 1400, 151900}, {-411600, 1250, 289100},
-		{-230300, 1200, 367500},
+		{19600, 1200, 367500}, {254800, 1800, 367500}, {411600, 5200, 313600}, {465500, 9800, 220500},
+		{313600, 12800, 107800}, {450800, 16000, -58800}, {396900, 22000, -254800}, {200900, 26500, -333200},
+		{-44100, 24500, -333200}, {-284200, 20000, -323400}, {-450800, 15000, -215600},
+		{-387100, 9800, -83300}, {-303800, 6500, 9800}, {-436100, 4200, 151900}, {-411600, 2600, 289100},
+		{-230300, 1600, 367500},
 	}
 }
 
@@ -195,8 +195,14 @@ func (game *BlockKart) startGameplay(context voplay.StartContext) error {
 	}
 	for index := 2; index < len(points); index += 4 {
 		position := points[index]
+		nextPosition := points[(index + 1) % len(points)]
 		entityId := uint64(30 + index / 4)
-		if !game.Transforms.Upsert(entityId, Transform{X: position[0], Y: position[1], Z: position[2]}) ||
+		if !game.Transforms.Upsert(entityId, Transform{
+			X: position[0], Y: position[1], Z: position[2],
+			Yaw_milliradians: int32(math.Atan2(
+				float64(nextPosition[0] - position[0]), float64(nextPosition[2] - position[2]),
+			) * 1000.0),
+		}) ||
 			!game.BoostPads.Upsert(entityId, BoostPad{Strength: 12000}) {
 			return errors.New("blockkart: initialize boost pad")
 		}
@@ -431,12 +437,12 @@ func (game *BlockKart) startAssets(context voplay.StartContext) error {
 func (game *BlockKart) buildStaticRenderPackets() [][]byte {
 	packets := [][]byte{}
 	environment := render3d.EncodeEnvironment(render3d.Environment{
-		FogColor: [3]uint16{28000, 50000, 61000}, FogStartMilli: 220000, FogEndMilli: 1100000,
-		ExposureMilli: 180, ToneMap: render3d.ToneMapAces, BloomThreshold: 52000, BloomStrength: 7000,
+		FogColor: [3]uint16{31500, 48500, 59000}, FogStartMilli: 280000, FogEndMilli: 1250000,
+		ExposureMilli: 135, ToneMap: render3d.ToneMapAces, BloomThreshold: 56000, BloomStrength: 3200,
 		AntiAlias: render3d.AntiAliasMsaa, MsaaSamples: 4,
 	})
 	sun := render3d.EncodeLight(render3d.RetainedLight{
-		Kind: render3d.LightDirectional, Color: [3]uint16{65535, 61000, 52000}, IntensityMilli: 1800,
+		Kind: render3d.LightDirectional, Color: [3]uint16{65535, 59600, 50000}, IntensityMilli: 1650,
 		CastsShadow: true,
 	})
 	if len(environment) == 0 || len(sun) == 0 {
@@ -481,7 +487,7 @@ func (game *BlockKart) buildStaticRenderPackets() [][]byte {
 		{Id: 105, BaseColor: [4]uint16{56000, 9000, 5000, 65535}, Roughness: 46000, Alpha: render3d.AlphaOpaque, Revision: 1},
 		{Id: 106, BaseColor: [4]uint16{1800, 2100, 2400, 65535}, Roughness: 62000, Alpha: render3d.AlphaOpaque, Revision: 1},
 		{Id: 107, BaseColor: [4]uint16{36000, 39000, 42000, 65535}, Metallic: 50000, Roughness: 18000, Alpha: render3d.AlphaOpaque, Revision: 1},
-		{Id: 108, BaseColor: [4]uint16{9000, 43000, 7000, 65535}, Roughness: 60000, Alpha: render3d.AlphaOpaque, Revision: 1},
+		{Id: 108, BaseColor: [4]uint16{10500, 33500, 7500, 65535}, Roughness: 60000, Alpha: render3d.AlphaOpaque, Revision: 1},
 		{Id: 109, BaseColor: [4]uint16{65535, 65535, 65535, 65535}, Roughness: 62000, Alpha: render3d.AlphaOpaque, Textures: [5]uint64{12002, 12007, 12008}, Revision: 1},
 		{Id: 110, BaseColor: [4]uint16{61000, 61000, 61000, 65535}, Roughness: 52000, Alpha: render3d.AlphaOpaque, Revision: 1},
 		{Id: 111, BaseColor: [4]uint16{65535, 65535, 65535, 65535}, Roughness: 61000, Alpha: render3d.AlphaMask, AlphaCutoff: 12000, DoubleSided: true, Textures: [5]uint64{12006}, Revision: 1},
@@ -498,6 +504,13 @@ func (game *BlockKart) buildStaticRenderPackets() [][]byte {
 		{Id: 122, BaseColor: [4]uint16{35000, 36000, 33000, 65535}, Roughness: 59000, Alpha: render3d.AlphaOpaque, Revision: 1},
 		{Id: 123, BaseColor: [4]uint16{65535, 49000, 2000, 65535}, Roughness: 41000, Emissive: [3]uint16{5000, 2800, 0}, Alpha: render3d.AlphaOpaque, Revision: 1},
 		{Id: 124, BaseColor: [4]uint16{2200, 8500, 14500, 65535}, Roughness: 12000, Emissive: [3]uint16{0, 1200, 2600}, Alpha: render3d.AlphaOpaque, Revision: 1},
+		{Id: 125, BaseColor: [4]uint16{65535, 4500, 1800, 65535}, Metallic: 8000, Roughness: 18000, Emissive: [3]uint16{32000, 1200, 300}, Alpha: render3d.AlphaOpaque, Revision: 1},
+		{Id: 126, BaseColor: [4]uint16{9000, 15500, 31000, 65535}, Roughness: 42000, Alpha: render3d.AlphaOpaque, Revision: 1},
+		{Id: 127, BaseColor: [4]uint16{57000, 5500, 3500, 65535}, Metallic: 5000, Roughness: 26000, Alpha: render3d.AlphaOpaque, Revision: 1},
+		{Id: 128, BaseColor: [4]uint16{5000, 43000, 15000, 65535}, Metallic: 5000, Roughness: 28000, Alpha: render3d.AlphaOpaque, Revision: 1},
+		{Id: 129, BaseColor: [4]uint16{36000, 7000, 54000, 65535}, Metallic: 5000, Roughness: 25000, Alpha: render3d.AlphaOpaque, Revision: 1},
+		{Id: 130, BaseColor: [4]uint16{24000, 28500, 30500, 65535}, Roughness: 61000, Alpha: render3d.AlphaOpaque, Revision: 1},
+		{Id: 131, BaseColor: [4]uint16{7000, 18000, 26000, 65535}, Metallic: 18000, Roughness: 14000, Emissive: [3]uint16{1200, 6200, 9800}, Alpha: render3d.AlphaOpaque, Revision: 1},
 	}
 	for _, material := range materials {
 		descriptor := render3d.EncodeMaterial(material)
@@ -534,6 +547,11 @@ func (game *BlockKart) buildStaticRenderPackets() [][]byte {
 		{10010, "generated/render/kart_wheel_p2.vmg1"},
 		{10011, "generated/render/kart_wheel_p3.vmg1"},
 		{10012, "generated/render/kart_wheel_p4.vmg1"},
+		{10013, "generated/render/kart_body_p6.vmg1"},
+		{10014, "generated/render/kart_body_p7.vmg1"},
+		{11400, "generated/render/gameplay_token.vmg1"},
+		{11401, "generated/render/gameplay_barrel.vmg1"},
+		{11402, "generated/render/gameplay_boost_pad.vmg1"},
 	}
 	for _, kartMesh := range kartMeshes {
 		bytes, readErr := os.ReadFile(kartMesh.Path)
@@ -556,11 +574,16 @@ func (game *BlockKart) buildStaticRenderPackets() [][]byte {
 		Material uint64
 		Half [3]int64
 	}{
-		{Transform: Transform{X: 72000, Y: 4400, Z: 358500}, Material: 110, Half: [3]int64{450, 3600, 450}},
-		{Transform: Transform{X: 72000, Y: 4400, Z: 376500}, Material: 110, Half: [3]int64{450, 3600, 450}},
-		{Transform: Transform{X: 72000, Y: 8250, Z: 367500}, Material: 110, Half: [3]int64{500, 450, 9450}},
-		{Transform: Transform{X: 71500, Y: 8250, Z: 364500}, Material: 105, Half: [3]int64{520, 460, 1500}},
-		{Transform: Transform{X: 71500, Y: 8250, Z: 370500}, Material: 105, Half: [3]int64{520, 460, 1500}},
+		{Transform: Transform{X: 72000, Y: 4500, Z: 358000}, Material: 124, Half: [3]int64{650, 3800, 650}},
+		{Transform: Transform{X: 72000, Y: 4500, Z: 377000}, Material: 124, Half: [3]int64{650, 3800, 650}},
+		{Transform: Transform{X: 72000, Y: 8500, Z: 367500}, Material: 102, Half: [3]int64{750, 700, 10150}},
+		{Transform: Transform{X: 72000, Y: 9400, Z: 367500}, Material: 123, Half: [3]int64{820, 180, 10300}},
+		{Transform: Transform{X: 71200, Y: 8450, Z: 362500}, Material: 125, Half: [3]int64{600, 440, 1200}},
+		{Transform: Transform{X: 71200, Y: 8450, Z: 365800}, Material: 103, Half: [3]int64{600, 440, 1200}},
+		{Transform: Transform{X: 71200, Y: 8450, Z: 369200}, Material: 103, Half: [3]int64{600, 440, 1200}},
+		{Transform: Transform{X: 71200, Y: 8450, Z: 372500}, Material: 104, Half: [3]int64{600, 440, 1200}},
+		{Transform: Transform{X: 72000, Y: 900, Z: 358000}, Material: 105, Half: [3]int64{1200, 300, 1200}},
+		{Transform: Transform{X: 72000, Y: 900, Z: 377000}, Material: 105, Half: [3]int64{1200, 300, 1200}},
 	}
 	for _, part := range startGantry {
 		packet := game.staticMeshObject(
@@ -601,7 +624,20 @@ func (game *BlockKart) buildStaticRenderPackets() [][]byte {
 		{11301, 120, "generated/render/scenery_tree_crowns.vmg1"},
 		{11302, 121, "generated/render/scenery_fences.vmg1"},
 		{11303, 122, "generated/render/scenery_rocks.vmg1"},
-		{11304, 123, "generated/render/scenery_signs.vmg1"},
+		{11304, 124, "generated/render/scenery_signs.vmg1"},
+		{11305, 116, "generated/render/scenery_tree_crowns_dark.vmg1"},
+		{11306, 108, "generated/render/scenery_broadleaf.vmg1"},
+		{11307, 122, "generated/render/scenery_cliffs.vmg1"},
+		{11308, 130, "generated/render/scenery_mountains.vmg1"},
+		{11309, 123, "generated/render/scenery_chevrons.vmg1"},
+		{11310, 106, "generated/render/scenery_tire_black.vmg1"},
+		{11311, 105, "generated/render/scenery_tire_red.vmg1"},
+		{11312, 118, "generated/render/scenery_tire_white.vmg1"},
+		{11313, 121, "generated/render/scenery_lodge_wood.vmg1"},
+		{11314, 105, "generated/render/scenery_lodge_roof.vmg1"},
+		{11315, 118, "generated/render/scenery_lodge_plaster.vmg1"},
+		{11316, 131, "generated/render/scenery_lodge_windows.vmg1"},
+		{11317, 102, "generated/render/scenery_race_banners.vmg1"},
 	}
 	for _, mesh := range meshes {
 		bytes, readErr := os.ReadFile(mesh.Path)
@@ -625,8 +661,8 @@ func (game *BlockKart) buildStaticRenderPackets() [][]byte {
 	}
 	for _, object := range hud {
 		index := object.Entity.Index
-		if index == 910001 || index == 910002 || index == 910006 || index == 910018 ||
-			index >= 920001 && index <= 920006 {
+		if index >= 910001 && index < 910100 ||
+			index >= 920001 && index < 920010 {
 			packets = append(packets, object.Bytes)
 		}
 	}
@@ -648,8 +684,8 @@ func (game *BlockKart) staticArtifactObject(meshAsset uint64, material uint64) [
 			PreviousTick: 1, CurrentTick: 1, Previous: identity, Current: identity,
 		},
 		Bounds: render.Bounds3{
-			Min: [3]int64{-600000, -10000, -600000},
-			Max: [3]int64{600000, 60000, 600000},
+			Min: [3]int64{-750000, -20000, -750000},
+			Max: [3]int64{750000, 320000, 750000},
 		},
 		Components: []render.RenderComponent{{Kind: 1, SchemaHash: 1, Bytes: mesh}},
 	})
@@ -733,18 +769,17 @@ func (game *BlockKart) gameplayRenderPackets(tick uint64) ([]render.SnapshotObje
 		if value.Collected {
 			continue
 		}
-		packet := game.GameplayStaticPackets[pickup.Entity]
+		transform, found := game.Transforms.Get(pickup.Entity)
+		if !found {
+			return nil, false
+		}
+		transform.Y += int64(math.Sin(float64(tick + pickup.Entity * 9) * 0.08) * 280.0)
+		transform.Yaw_milliradians = int32((tick * 70 + pickup.Entity * 113) % 6283)
+		packet := game.retainedGameplayMeshObject(
+			transform, tick, 11400, 123, 700, 700, 700,
+		)
 		if len(packet) == 0 {
-			transform, found := game.Transforms.Get(pickup.Entity)
-			if !found {
-				return nil, false
-			}
-			transform.Yaw_milliradians = int32((pickup.Entity * 113) % 6283)
-			packet = game.retainedGameplayObject(transform, 1, 103, 650, 900, 650)
-			if len(packet) == 0 {
-				return nil, false
-			}
-			game.GameplayStaticPackets[pickup.Entity] = packet
+			return nil, false
 		}
 		objects = append(objects, render.SnapshotObject{
 			Entity: voplay.Handle{Index: uint32(2000 + pickup.Entity), Generation: 1}, Bytes: packet,
@@ -757,7 +792,9 @@ func (game *BlockKart) gameplayRenderPackets(tick uint64) ([]render.SnapshotObje
 			if !ok {
 				return nil, false
 			}
-			packet = game.retainedGameplayObject(transform, 1, 104, 4200, 250, 2400)
+			packet = game.retainedGameplayMeshObject(
+				transform, 1, 11402, 104, 4200, 250, 2400,
+			)
 			if len(packet) == 0 {
 				return nil, false
 			}
@@ -772,7 +809,10 @@ func (game *BlockKart) gameplayRenderPackets(tick uint64) ([]render.SnapshotObje
 		if !ok {
 			return nil, false
 		}
-		packet := game.retainedGameplayObject(transform, tick, 105, 1800, 1400, 1800)
+		transform.Yaw_milliradians = int32((tick * 18 + obstacle.Entity * 37) % 6283)
+		packet := game.retainedGameplayMeshObject(
+			transform, tick, 11401, 105, 850, 850, 850,
+		)
 		if len(packet) == 0 {
 			return nil, false
 		}
@@ -900,13 +940,30 @@ func (game *BlockKart) retainedGameplayMeshPartsMatrixObject(
 }
 
 func (game *BlockKart) kartRenderPackets(transform Transform, tick uint64) ([][]byte, bool) {
+	return game.kartRenderPacketsStyled(
+		transform, tick, 102, game.Steering_milli, game.WheelSpin_milliradians,
+		game.ChassisLean_milliradians, game.ChassisPitch_milliradians,
+	)
+}
+
+func (game *BlockKart) kartRenderPacketsStyled(
+	transform Transform,
+	tick uint64,
+	primaryMaterial uint64,
+	steering_milli int32,
+	wheelSpin_milliradians int32,
+	chassisLean_milliradians int32,
+	chassisPitch_milliradians int32,
+) ([][]byte, bool) {
 	bodyParts := []blockKartMeshPart{
-		{Material: 102, Mesh: 10002},
+		{Material: primaryMaterial, Mesh: 10002},
 		{Material: 106, Mesh: 10003},
 		{Material: 103, Mesh: 10004},
 		{Material: 118, Mesh: 10005},
 		{Material: 124, Mesh: 10006},
 		{Material: 107, Mesh: 10007},
+		{Material: 125, Mesh: 10013},
+		{Material: 126, Mesh: 10014},
 	}
 	wheelMeshes := []blockKartMeshPart{
 		{Mesh: 10008, Material: 106},
@@ -916,15 +973,17 @@ func (game *BlockKart) kartRenderPackets(transform Transform, tick uint64) ([][]
 		{Mesh: 10012, Material: 118},
 	}
 	wheelLocations := [][3]int64{
-		{-1050, -320, 1080}, {1050, -320, 1080},
-		{-1050, -320, -1100}, {1050, -320, -1100},
+		{-1320, -260, 1120}, {1320, -260, 1120},
+		{-1320, -260, -1230}, {1320, -260, -1230},
 	}
 	visualTransform := blockKartAuthoredKartTransform(transform, [3]int64{0, 0, 0})
 	packets := make([][]byte, 0, 1 + len(wheelLocations))
 	bodyPacket := game.retainedGameplayMeshPartsMatrixObject(
 		visualTransform, tick, bodyParts,
-		blockKartAuthoredBodyMatrix(visualTransform, game.ChassisLean_milliradians),
-		1900, 1000, 1900,
+		blockKartAuthoredBodyMatrix(
+			visualTransform, chassisLean_milliradians, chassisPitch_milliradians,
+		),
+		2250, 2200, 2250,
 	)
 	if len(bodyPacket) == 0 {
 		return nil, false
@@ -935,25 +994,25 @@ func (game *BlockKart) kartRenderPackets(transform Transform, tick uint64) ([][]
 		steer_milliradians := int32(0)
 		if location[2] < 0 {
 			steeringScale := 0.42
-			if game.Steering_milli > 0 {
+			if steering_milli > 0 {
 				if location[0] > 0 {
 					steeringScale = 0.48
 				} else {
 					steeringScale = 0.36
 				}
-			} else if game.Steering_milli < 0 {
+			} else if steering_milli < 0 {
 				if location[0] < 0 {
 					steeringScale = 0.48
 				} else {
 					steeringScale = 0.36
 				}
 			}
-			steer_milliradians = int32(float64(game.Steering_milli) * steeringScale)
+			steer_milliradians = int32(float64(steering_milli) * steeringScale)
 		}
 		packet := game.retainedGameplayMeshPartsMatrixObject(
 			partTransform, tick, wheelMeshes,
 			blockKartAuthoredWheelMatrix(
-				partTransform, steer_milliradians, game.WheelSpin_milliradians,
+				partTransform, steer_milliradians, wheelSpin_milliradians,
 			),
 			520, 520, 520,
 		)
@@ -965,15 +1024,127 @@ func (game *BlockKart) kartRenderPackets(transform Transform, tick uint64) ([][]
 	return packets, true
 }
 
+func (game *BlockKart) rivalRenderObjects(tick uint64) ([]render.SnapshotObject, bool) {
+	materials := []uint64{127, 128, 129}
+	objects := make([]render.SnapshotObject, 0, len(materials) * 5)
+	for rivalIndex, material := range materials {
+		transform, steering, wheelSpin, lean, pitch, ok := game.rivalVisualState(
+			tick, rivalIndex,
+		)
+		if !ok {
+			return nil, false
+		}
+		packets, encoded := game.kartRenderPacketsStyled(
+			transform, tick, material, steering, wheelSpin, lean, pitch,
+		)
+		if !encoded {
+			return nil, false
+		}
+		for packetIndex, packet := range packets {
+			objects = append(objects, render.SnapshotObject{
+				Entity: voplay.Handle{
+					Index: uint32(300 + rivalIndex * 10 + packetIndex), Generation: 1,
+				},
+				Bytes: packet,
+			})
+		}
+	}
+	return objects, true
+}
+
+func (game *BlockKart) rivalVisualState(
+	tick uint64,
+	rivalIndex int,
+) (Transform, int32, int32, int32, int32, bool) {
+	if game == nil || len(game.TrackCenterline) < 4 {
+		return Transform{}, 0, 0, 0, 0, false
+	}
+	totalLength := int64(0)
+	for index, point := range game.TrackCenterline {
+		next := game.TrackCenterline[(index + 1) % len(game.TrackCenterline)]
+		totalLength += int64(math.Sqrt(
+			float64(next.X - point.X) * float64(next.X - point.X) +
+				float64(next.Z - point.Z) * float64(next.Z - point.Z),
+		))
+	}
+	if totalLength <= 0 {
+		return Transform{}, 0, 0, 0, 0, false
+	}
+	speeds := []int64{24200, 25800, 27100}
+	offsets := []int64{18000, 38000, 61000}
+	laterals := []int64{-2400, 2200, 0}
+	travel := (int64(tick) * speeds[rivalIndex] / int64(blockKartTicksPerSecond) +
+		offsets[rivalIndex]) % totalLength
+	for index, point := range game.TrackCenterline {
+		next := game.TrackCenterline[(index + 1) % len(game.TrackCenterline)]
+		dx := next.X - point.X
+		dy := next.Y - point.Y
+		dz := next.Z - point.Z
+		segmentLength := int64(math.Sqrt(
+			float64(dx) * float64(dx) + float64(dz) * float64(dz),
+		))
+		if segmentLength <= 0 {
+			continue
+		}
+		if travel > segmentLength {
+			travel -= segmentLength
+			continue
+		}
+		along := float64(travel) / float64(segmentLength)
+		heading := math.Atan2(float64(dx), float64(dz))
+		lateral := float64(laterals[rivalIndex])
+		transform := Transform{
+			X: point.X + int64(float64(dx) * along + math.Cos(heading) * lateral),
+			Y: point.Y + int64(float64(dy) * along),
+			Z: point.Z + int64(float64(dz) * along - math.Sin(heading) * lateral),
+			Yaw_milliradians: int32(heading * 1000.0),
+		}
+		after := game.TrackCenterline[(index + 2) % len(game.TrackCenterline)]
+		nextHeading := math.Atan2(float64(after.X - next.X), float64(after.Z - next.Z))
+		deltaHeading := nextHeading - heading
+		for deltaHeading > math.Pi {
+			deltaHeading -= math.Pi * 2
+		}
+		for deltaHeading < -math.Pi {
+			deltaHeading += math.Pi * 2
+		}
+		steering := int32(-deltaHeading * 1600.0)
+		if steering > 760 {
+			steering = 760
+		}
+		if steering < -760 {
+			steering = -760
+		}
+		spin := blockKartWrapMilliRadians(int32(
+			(int64(tick) * speeds[rivalIndex] / int64(blockKartTicksPerSecond)) %
+				2765 * 1000 / 440,
+		))
+		lean := int32(float64(steering) * 0.055)
+		pitch := int32(float64(dy) / float64(segmentLength) * 1000.0)
+		if pitch > 75 {
+			pitch = 75
+		}
+		if pitch < -75 {
+			pitch = -75
+		}
+		return transform, steering, spin, lean, pitch, true
+	}
+	return Transform{}, 0, 0, 0, 0, false
+}
+
 func (game *BlockKart) effectRenderObjects(transform Transform, tick uint64) ([]render.SnapshotObject, bool) {
 	objects := []render.SnapshotObject{}
 	if game.OffRoad || game.Drifting {
+		heading := float64(transform.Yaw_milliradians) / 1000.0
+		dustPosition := [3]int64{
+			transform.X - int64(math.Sin(heading) * 1200.0), transform.Y - 380,
+			transform.Z - int64(math.Cos(heading) * 1200.0),
+		}
 		dust := render3d.EncodeParticleEmitter(render3d.ParticleEmitter3d{
-			Id: 800001, Seed: tick + 7001, Mesh: game.KartMeshAsset, Material: 100, MaxParticles: 160,
-			SpawnPerTick: 5, LifetimeTicks: 28,
-			Position: [3]int64{transform.X, transform.Y - 400, transform.Z},
-			VelocityMin: [3]int64{-2800, 400, -2800}, VelocityMax: [3]int64{2800, 3200, 2800},
-			StartScaleMilli: 160, EndScaleMilli: 20, Layers: 1,
+			Id: 800001, Seed: tick + 7001, Mesh: game.KartMeshAsset, Material: 112, MaxParticles: 128,
+			SpawnPerTick: 4, LifetimeTicks: 24, Position: dustPosition,
+			VelocityMin: [3]int64{-2400, 300, -2400}, VelocityMax: [3]int64{2400, 2500, 2400},
+			StartScaleMilli: 130, EndScaleMilli: 24, Layers: 1,
 		})
 		object := blockKartEffectObject(dust, transform, tick)
 		if len(dust) == 0 || len(object) == 0 {
@@ -981,6 +1152,34 @@ func (game *BlockKart) effectRenderObjects(transform Transform, tick uint64) ([]
 		}
 		objects = append(objects, render.SnapshotObject{
 			Entity: voplay.Handle{Index: 800001, Generation: 1}, Bytes: object,
+		})
+	}
+	if game.Drifting && game.DriftStage != 0 {
+		heading := float64(transform.Yaw_milliradians) / 1000.0
+		sparkMaterial := uint64(123)
+		if game.DriftStage == 2 {
+			sparkMaterial = 104
+		}
+		if game.DriftStage >= 3 {
+			sparkMaterial = 125
+		}
+		sparkPosition := [3]int64{
+			transform.X - int64(math.Sin(heading) * 1350.0), transform.Y - 260,
+			transform.Z - int64(math.Cos(heading) * 1350.0),
+		}
+		sparks := render3d.EncodeParticleEmitter(render3d.ParticleEmitter3d{
+			Id: 800003, Seed: tick + 8201, Mesh: game.KartMeshAsset, Material: sparkMaterial,
+			MaxParticles: 72, SpawnPerTick: 6 + game.DriftStage * 2, LifetimeTicks: 11,
+			Position: sparkPosition,
+			VelocityMin: [3]int64{-3600, 200, -3600}, VelocityMax: [3]int64{3600, 1800, 3600},
+			StartScaleMilli: 56, EndScaleMilli: 7, Layers: 1,
+		})
+		object := blockKartEffectObject(sparks, transform, tick)
+		if len(sparks) == 0 || len(object) == 0 {
+			return nil, false
+		}
+		objects = append(objects, render.SnapshotObject{
+			Entity: voplay.Handle{Index: 800003, Generation: 1}, Bytes: object,
 		})
 	}
 	if game.BoostPressed {
@@ -1090,17 +1289,29 @@ func blockKartAuthoredKartTransform(parent Transform, local [3]int64) Transform 
 	}
 }
 
-func blockKartAuthoredBodyMatrix(transform Transform, lean_milliradians int32) [12]int64 {
+func blockKartAuthoredBodyMatrix(
+	transform Transform,
+	lean_milliradians int32,
+	pitch_milliradians int32,
+) [12]int64 {
 	heading := float64(transform.Yaw_milliradians) / 1000.0
 	lean := float64(lean_milliradians) / 1000.0
+	pitch := float64(pitch_milliradians) / 1000.0
 	sine := math.Sin(heading)
 	cosine := math.Cos(heading)
 	leanSine := math.Sin(lean)
 	leanCosine := math.Cos(lean)
+	pitchSine := math.Sin(pitch)
+	pitchCosine := math.Cos(pitch)
 	return [12]int64{
-		int64(cosine * leanCosine * 1000), int64(-cosine * leanSine * 1000), int64(-sine * 1000), transform.X,
-		int64(leanSine * 1000), int64(leanCosine * 1000), 0, transform.Y,
-		int64(sine * leanCosine * 1000), int64(-sine * leanSine * 1000), int64(cosine * 1000), transform.Z,
+		int64((cosine * leanCosine - sine * pitchSine * leanSine) * 1000),
+		int64((-cosine * leanSine - sine * pitchSine * leanCosine) * 1000),
+		int64(-sine * pitchCosine * 1000), transform.X,
+		int64(pitchCosine * leanSine * 1000), int64(pitchCosine * leanCosine * 1000),
+		int64(-pitchSine * 1000), transform.Y,
+		int64((sine * leanCosine + cosine * pitchSine * leanSine) * 1000),
+		int64((-sine * leanSine + cosine * pitchSine * leanCosine) * 1000),
+		int64(cosine * pitchCosine * 1000), transform.Z,
 	}
 }
 
@@ -1131,10 +1342,10 @@ func (game *BlockKart) cameraPacket(kart Transform, tick uint64) []byte {
 			speedRatio = 1
 		}
 	}
-	verticalFov := uint32(56000 + speedRatio * 9000)
+	verticalFov := uint32(55000 + speedRatio * 10500)
 	camera := render3d.EncodeCamera(render3d.Camera3d{
 		Projection: render3d.CameraProjection{
-			Kind: render3d.CameraPerspective, VerticalFovMillidegrees: verticalFov, NearMilli: 100,
+			Kind: render3d.CameraPerspective, VerticalFovMillidegrees: verticalFov, NearMilli: 80,
 			FarMilli: 1600000,
 		},
 		ExposureMilli: 100,
@@ -1143,31 +1354,49 @@ func (game *BlockKart) cameraPacket(kart Transform, tick uint64) []byte {
 		return nil
 	}
 	heading := float64(kart.Yaw_milliradians) / 1000.0
-	distance := 11000.0 + speedRatio * 2500.0
-	height := int64(5600.0 + speedRatio * 900.0)
-	lookAhead := 7500.0 + speedRatio * 7000.0
-	lateralLook := float64(game.Steering_milli) * 1.4
+	distance := 9800.0 + speedRatio * 3100.0
+	height := int64(5000.0 + speedRatio * 950.0)
+	lookAhead := 8200.0 + speedRatio * 8300.0
+	lateralLook := float64(game.Steering_milli) * 1.05
+	cameraSide := -float64(game.Steering_milli) * 0.20
+	if game.Drifting {
+		lateralLook += float64(game.DriftDirection) * 2200.0
+		cameraSide -= float64(game.DriftDirection) * 650.0
+	}
+	cameraShake := 0.0
+	if game.BoostPressed {
+		cameraShake = math.Sin(float64(tick) * 1.91) * 70.0 * speedRatio
+	} else if game.OffRoad {
+		cameraShake = math.Sin(float64(tick) * 2.73) * 48.0 * speedRatio
+	}
 	if game.CameraMode == 1 {
 		distance = 4500
 		height = 2600
 		lookAhead = 9000
 		lateralLook = 0
+		cameraSide = 0
 	}
 	if game.CameraMode == 2 {
 		distance = 30000
 		height = 26000
 		lateralLook = 0
+		cameraSide = 0
 	}
-	x := kart.X - int64(math.Sin(heading) * distance)
-	z := kart.Z - int64(math.Cos(heading) * distance)
-	transform := Transform{X: x, Y: kart.Y + height, Z: z, Yaw_milliradians: kart.Yaw_milliradians}
+	x := kart.X - int64(math.Sin(heading) * distance) +
+		int64(math.Cos(heading) * cameraSide + cameraShake)
+	z := kart.Z - int64(math.Cos(heading) * distance) -
+		int64(math.Sin(heading) * cameraSide)
+	transform := Transform{
+		X: x, Y: kart.Y + height + int64(cameraShake * 0.35), Z: z,
+		Yaw_milliradians: kart.Yaw_milliradians,
+	}
 	targetX := kart.X + int64(
 		math.Sin(heading) * lookAhead + math.Cos(heading) * lateralLook,
 	)
 	targetZ := kart.Z + int64(
 		math.Cos(heading) * lookAhead - math.Sin(heading) * lateralLook,
 	)
-	targetY := kart.Y + 1450
+	targetY := kart.Y + int64(1320.0 + speedRatio * 220.0)
 	if game.CameraMode == 2 {
 		targetX = kart.X
 		targetZ = kart.Z
@@ -1265,6 +1494,13 @@ func (game *BlockKart) restartRace() error {
 	game.Steering_milli = 0
 	game.WheelSpin_milliradians = 0
 	game.ChassisLean_milliradians = 0
+	game.ChassisPitch_milliradians = 0
+	game.DriftCharge_milli = 0
+	game.DriftStage = 0
+	game.DriftDirection = 0
+	game.WasDrifting = false
+	game.MiniTurbo_ticks = 0
+	game.StartFlash_ticks = 0
 	game.TouchPoints = map[uint32]BlockKartTouchPoint{}
 	game.BoostPressed = false
 	game.OffRoad = false
@@ -1278,6 +1514,13 @@ func (game *BlockKart) respawn() error {
 	game.Steering_milli = 0
 	game.WheelSpin_milliradians = 0
 	game.ChassisLean_milliradians = 0
+	game.ChassisPitch_milliradians = 0
+	game.DriftCharge_milli = 0
+	game.DriftStage = 0
+	game.DriftDirection = 0
+	game.WasDrifting = false
+	game.MiniTurbo_ticks = 0
+	game.StartFlash_ticks = 0
 	transform := Transform{X: 30000, Y: 1200, Z: 367500, Yaw_milliradians: 1571}
 	game.LastSafeTransform = transform
 	if game.Physics != nil && game.KartBody.Valid() &&
@@ -1307,6 +1550,13 @@ func (game *BlockKart) recoverToTrack() error {
 	game.Steering_milli = 0
 	game.WheelSpin_milliradians = 0
 	game.ChassisLean_milliradians = 0
+	game.ChassisPitch_milliradians = 0
+	game.DriftCharge_milli = 0
+	game.DriftStage = 0
+	game.DriftDirection = 0
+	game.WasDrifting = false
+	game.MiniTurbo_ticks = 0
+	game.StartFlash_ticks = 0
 	transform := game.LastSafeTransform
 	if transform.X == 0 && transform.Z == 0 {
 		transform = Transform{X: 30000, Y: 1200, Z: 367500, Yaw_milliradians: 1571}

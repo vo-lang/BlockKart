@@ -122,6 +122,13 @@ type BlockKart struct {
 	Steering_milli int32
 	WheelSpin_milliradians int32
 	ChassisLean_milliradians int32
+	ChassisPitch_milliradians int32
+	DriftCharge_milli uint32
+	DriftStage uint32
+	DriftDirection int32
+	WasDrifting bool
+	MiniTurbo_ticks uint32
+	StartFlash_ticks uint32
 	TouchPoints map[uint32]BlockKartTouchPoint
 	Paused bool
 	CameraMode uint32
@@ -720,6 +727,9 @@ func (game *BlockKart) drive(tick voplay.TickBatch) error {
 	if game.Paused || state.Countdown_ticks != 0 || state.Finished {
 		if state.Countdown_ticks != 0 && !game.Paused {
 			state.Countdown_ticks--
+			if state.Countdown_ticks == 0 {
+				game.StartFlash_ticks = 16
+			}
 		}
 		state.Speed_per_second = 0
 		velocity.X_per_second = 0
@@ -734,7 +744,18 @@ func (game *BlockKart) drive(tick voplay.TickBatch) error {
 		game.ChassisLean_milliradians = blockKartApproachInt32(
 			game.ChassisLean_milliradians, 0, 12,
 		)
+		game.ChassisPitch_milliradians = blockKartApproachInt32(
+			game.ChassisPitch_milliradians, 0, 10,
+		)
+		game.Drifting = false
+		game.WasDrifting = false
+		game.DriftCharge_milli = 0
+		game.DriftStage = 0
+		game.DriftDirection = 0
 		return nil
+	}
+	if game.StartFlash_ticks != 0 {
+		game.StartFlash_ticks--
 	}
 	roadBeforeDrive := game.nearestRoadSample(transform)
 	game.OffRoad = roadBeforeDrive.Distance_milli >
@@ -742,9 +763,62 @@ func (game *BlockKart) drive(tick voplay.TickBatch) error {
 	deltaSeconds := float64(tick.FixedTickNanos) / 1000000000.0
 	speed := float64(state.Speed_per_second)
 	absoluteSpeed := math.Abs(speed)
+	driftInput := control.Steer_milli
+	driftEligible := control.Drift && absoluteSpeed > 8500 &&
+		(game.WasDrifting || math.Abs(float64(driftInput)) > 180)
+	if driftEligible {
+		if !game.WasDrifting {
+			if driftInput < 0 {
+				game.DriftDirection = -1
+			} else {
+				game.DriftDirection = 1
+			}
+			game.DriftCharge_milli = 0
+		}
+		game.Drifting = true
+		chargeGain := uint32(10 + absoluteSpeed / 2200.0 +
+			math.Abs(float64(driftInput)) / 150.0)
+		if driftInput != 0 &&
+			(driftInput < 0) != (game.DriftDirection < 0) {
+			chargeGain += 6
+		}
+		game.DriftCharge_milli += chargeGain
+		if game.DriftCharge_milli > 1800 {
+			game.DriftCharge_milli = 1800
+		}
+		game.DriftStage = 0
+		if game.DriftCharge_milli >= 420 {
+			game.DriftStage = 1
+		}
+		if game.DriftCharge_milli >= 950 {
+			game.DriftStage = 2
+		}
+		if game.DriftCharge_milli >= 1500 {
+			game.DriftStage = 3
+		}
+	} else {
+		game.Drifting = false
+		if game.WasDrifting {
+			if game.DriftCharge_milli >= 1500 {
+				game.MiniTurbo_ticks = 38
+			} else if game.DriftCharge_milli >= 950 {
+				game.MiniTurbo_ticks = 25
+			} else if game.DriftCharge_milli >= 420 {
+				game.MiniTurbo_ticks = 13
+			}
+		}
+		game.DriftCharge_milli = 0
+		game.DriftStage = 0
+		game.DriftDirection = 0
+	}
+	game.WasDrifting = game.Drifting
+	miniTurbo := game.MiniTurbo_ticks != 0
+	if game.MiniTurbo_ticks != 0 {
+		game.MiniTurbo_ticks--
+	}
 	throttle := float64(control.Throttle_milli) / 1000.0
 	brake := float64(control.Brake_milli) / 1000.0
-	engineAcceleration := 16000.0
+	engineAcceleration := 18200.0
 	if game.OffRoad {
 		engineAcceleration *= 0.60
 	}
@@ -763,9 +837,13 @@ func (game *BlockKart) drive(tick voplay.TickBatch) error {
 			acceleration -= 10500.0 * brake
 		}
 	}
-	boosting := control.Boost || state.Boost_ticks != 0
+	boosting := control.Boost || state.Boost_ticks != 0 || miniTurbo
 	if boosting && speed >= 0 {
-		acceleration += 9000.0
+		if miniTurbo {
+			acceleration += 11800.0
+		} else {
+			acceleration += 9000.0
+		}
 	}
 	if throttle == 0 && brake == 0 {
 		resistance := 700.0 + absoluteSpeed * 0.10
@@ -785,9 +863,9 @@ func (game *BlockKart) drive(tick voplay.TickBatch) error {
 		(speed > 0 && nextSpeed < 0 || speed < 0 && nextSpeed > 0) {
 		nextSpeed = 0
 	}
-	maximumSpeed := 32000.0
+	maximumSpeed := 36000.0
 	if boosting {
-		maximumSpeed = 42000.0
+		maximumSpeed = 44000.0
 	}
 	if nextSpeed > maximumSpeed {
 		nextSpeed = maximumSpeed
@@ -822,19 +900,27 @@ func (game *BlockKart) drive(tick voplay.TickBatch) error {
 	if highSpeedRatio > 1 {
 		highSpeedRatio = 1
 	}
-	game.Drifting = control.Drift && absoluteSpeed > 7500
-	maximumYawRate := 1050.0 - highSpeedRatio * 300.0
-	steeringResponse := 5.0
+	maximumYawRate := 1180.0 - highSpeedRatio * 260.0
+	steeringResponse := 6.4
 	if game.Drifting {
-		maximumYawRate = 1700.0 - highSpeedRatio * 250.0
-		steeringResponse = 3.6
+		maximumYawRate = 1580.0 - highSpeedRatio * 180.0
+		steeringResponse = 4.6
 	}
 	direction := 1.0
 	if nextSpeed < -250 {
 		direction = -1.0
 	}
-	desiredYawRate := -float64(game.Steering_milli) / 1000.0 *
-		maximumYawRate * steeringAuthority * direction
+	steeringValue := float64(game.Steering_milli) / 1000.0
+	if game.Drifting {
+		steeringValue = float64(game.DriftDirection) * 0.68 + steeringValue * 0.42
+		if steeringValue > 1 {
+			steeringValue = 1
+		}
+		if steeringValue < -1 {
+			steeringValue = -1
+		}
+	}
+	desiredYawRate := -steeringValue * maximumYawRate * steeringAuthority * direction
 	steeringBlend := steeringResponse * deltaSeconds
 	if steeringBlend > 1 {
 		steeringBlend = 1
@@ -855,6 +941,17 @@ func (game *BlockKart) drive(tick voplay.TickBatch) error {
 	game.ChassisLean_milliradians = blockKartApproachInt32(
 		game.ChassisLean_milliradians, leanTarget, 7,
 	)
+	longitudinalAcceleration := (nextSpeed - speed) / deltaSeconds
+	pitchTarget := int32(longitudinalAcceleration / 18000.0 * 45.0)
+	if pitchTarget > 55 {
+		pitchTarget = 55
+	}
+	if pitchTarget < -55 {
+		pitchTarget = -55
+	}
+	game.ChassisPitch_milliradians = blockKartApproachInt32(
+		game.ChassisPitch_milliradians, pitchTarget, 6,
+	)
 	spinStep := int32(nextSpeed * deltaSeconds / 440.0 * 1000.0)
 	game.WheelSpin_milliradians = blockKartWrapMilliRadians(
 		game.WheelSpin_milliradians + spinStep,
@@ -867,9 +964,9 @@ func (game *BlockKart) drive(tick voplay.TickBatch) error {
 	rightZ := -math.Sin(heading)
 	lateralSpeed := float64(velocity.X_per_second) * rightX +
 		float64(velocity.Z_per_second) * rightZ
-	grip := 5.2
+	grip := 8.2
 	if game.Drifting {
-		grip = 1.6
+		grip = 2.4
 	}
 	if game.OffRoad {
 		grip = 7.4
@@ -879,9 +976,13 @@ func (game *BlockKart) drive(tick voplay.TickBatch) error {
 		gripRetention = 0
 	}
 	lateralSpeed *= gripRetention
+	if game.Drifting {
+		driftLateralTarget := float64(game.DriftDirection) * absoluteSpeed * 0.20
+		lateralSpeed += (driftLateralTarget - lateralSpeed) * 0.16
+	}
 	maximumLateralSpeed := absoluteSpeed * 0.38
 	if game.Drifting {
-		maximumLateralSpeed = absoluteSpeed * 0.72
+		maximumLateralSpeed = absoluteSpeed * 0.48
 	}
 	if lateralSpeed > maximumLateralSpeed {
 		lateralSpeed = maximumLateralSpeed
@@ -904,7 +1005,7 @@ func (game *BlockKart) drive(tick voplay.TickBatch) error {
 	if !game.KartStates.Upsert(game.KartEntity, state) {
 		return errors.New("blockkart: update kart state")
 	}
-	game.BoostPressed = control.Boost || state.Boost_ticks != 0
+	game.BoostPressed = control.Boost || state.Boost_ticks != 0 || miniTurbo
 	return nil
 }
 
@@ -1085,6 +1186,10 @@ func (game *BlockKart) frame(tick voplay.TickBatch, pulse []byte) (voplay.TickOu
 	if !kartEncoded {
 		return voplay.TickOutput{}, errors.New("blockkart: encode retained kart")
 	}
+	rivalObjects, rivalsEncoded := game.rivalRenderObjects(tick.FirstTick)
+	if !rivalsEncoded {
+		return voplay.TickOutput{}, errors.New("blockkart: encode rival karts")
+	}
 	poseBytes := blockKartTransformBytes(transform)
 	previous, _ := game.RenderPoses.Get(game.KartEntity)
 	if !game.RenderPoses.Upsert(game.KartEntity, RenderPose{
@@ -1097,10 +1202,7 @@ func (game *BlockKart) frame(tick voplay.TickBatch, pulse []byte) (voplay.TickOu
 	if !ok {
 		return voplay.TickOutput{}, errors.New("blockkart: encode gameplay entities")
 	}
-	checkpointObjects, ok := game.checkpointRenderObjects(state)
-	if !ok {
-		return voplay.TickOutput{}, errors.New("blockkart: encode checkpoint gate")
-	}
+	checkpointObjects := []render.SnapshotObject{}
 	effectObjects, ok := game.effectRenderObjects(transform, tick.FirstTick)
 	if !ok {
 		return voplay.TickOutput{}, errors.New("blockkart: encode driving effects")
@@ -1113,13 +1215,14 @@ func (game *BlockKart) frame(tick voplay.TickBatch, pulse []byte) (voplay.TickOu
 	if len(hud) == 0 {
 		return voplay.TickOutput{}, errors.New("blockkart: encode HUD")
 	}
-	dynamicObjects := make([]render.SnapshotObject, 0, len(kartPackets) + len(gameplayObjects) +
+	dynamicObjects := make([]render.SnapshotObject, 0, len(kartPackets) + len(rivalObjects) + len(gameplayObjects) +
 		len(checkpointObjects) + len(effectObjects) + len(hud) + 1)
 	for index, bytes := range kartPackets {
 		dynamicObjects = append(dynamicObjects, render.SnapshotObject{
 			Entity: voplay.Handle{Index: uint32(100 + index), Generation: 1}, Bytes: bytes,
 		})
 	}
+	dynamicObjects = append(dynamicObjects, rivalObjects...)
 	dynamicObjects = append(dynamicObjects, gameplayObjects...)
 	dynamicObjects = append(dynamicObjects, checkpointObjects...)
 	dynamicObjects = append(dynamicObjects, effectObjects...)
@@ -1421,6 +1524,278 @@ func (game *BlockKart) updateAudio(transform Transform, tick uint64) error {
 }
 
 func (game *BlockKart) hudPackets(includeStatic bool) []render.SnapshotObject {
+	state, ok := game.KartStates.Get(game.KartEntity)
+	if !ok {
+		return nil
+	}
+	speed := state.Speed_per_second
+	if speed < 0 {
+		speed = -speed
+	}
+	speedKph := uint64(speed * 36 / 10000)
+	if speedKph > 199 {
+		speedKph = 199
+	}
+	staticShapes := []render2d.Shape{
+		{
+			Id: 1, Kind: render2d.ShapeRoundedRect, Bounds: [4]int64{26000, 25000, 260000, 82000},
+			RadiusMilli: 18000, Fill: [4]byte{7, 16, 29, 218}, StrokeMilli: 2500,
+			Stroke: [4]byte{38, 205, 235, 205}, Z: 100, Layers: 2,
+		},
+		{
+			Id: 2, Kind: render2d.ShapeRoundedRect, Bounds: [4]int64{500000, 22000, 280000, 83000},
+			RadiusMilli: 18000, Fill: [4]byte{7, 16, 29, 215}, StrokeMilli: 2200,
+			Stroke: [4]byte{255, 199, 63, 210}, Z: 100, Layers: 2,
+		},
+		{
+			Id: 3, Kind: render2d.ShapeRoundedRect, Bounds: [4]int64{1000000, 22000, 250000, 185000},
+			RadiusMilli: 20000, Fill: [4]byte{7, 16, 29, 205}, StrokeMilli: 1800,
+			Stroke: [4]byte{125, 169, 194, 125}, Z: 100, Layers: 2,
+		},
+		{
+			Id: 4, Kind: render2d.ShapeCircle, Bounds: [4]int64{1040000, 492000, 202000, 202000},
+			Fill: [4]byte{5, 12, 22, 224}, StrokeMilli: 5000,
+			Stroke: [4]byte{28, 52, 72, 235}, Z: 100, Layers: 2,
+		},
+		{
+			Id: 5, Kind: render2d.ShapeCircle, Bounds: [4]int64{1060000, 512000, 162000, 162000},
+			Fill: [4]byte{10, 23, 38, 235}, StrokeMilli: 2000,
+			Stroke: [4]byte{70, 102, 124, 170}, Z: 101, Layers: 2,
+		},
+		{
+			Id: 6, Kind: render2d.ShapeRoundedRect, Bounds: [4]int64{26000, 600000, 350000, 94000},
+			RadiusMilli: 19000, Fill: [4]byte{7, 16, 29, 218}, StrokeMilli: 2000,
+			Stroke: [4]byte{117, 155, 181, 150}, Z: 100, Layers: 2,
+		},
+		{
+			Id: 7, Kind: render2d.ShapeRoundedRect, Bounds: [4]int64{48000, 656000, 306000, 13000},
+			RadiusMilli: 6500, Fill: [4]byte{24, 43, 58, 255}, Z: 102, Layers: 2,
+		},
+		{
+			Id: 8, Kind: render2d.ShapeRoundedRect, Bounds: [4]int64{470000, 677000, 340000, 15000},
+			RadiusMilli: 7500, Fill: [4]byte{17, 34, 50, 225}, StrokeMilli: 1200,
+			Stroke: [4]byte{44, 92, 120, 180}, Z: 100, Layers: 2,
+		},
+		{
+			Id: 9, Kind: render2d.ShapePath, Bounds: [4]int64{1020000, 43000, 210000, 136000},
+			Path: blockKartMinimapPath(), Fill: [4]byte{0, 0, 0, 0}, StrokeMilli: 6500,
+			Stroke: [4]byte{82, 115, 137, 210}, Z: 104, Layers: 2,
+		},
+		{
+			Id: 10, Kind: render2d.ShapePath, Bounds: [4]int64{1020000, 43000, 210000, 136000},
+			Path: blockKartMinimapPath(), Fill: [4]byte{0, 0, 0, 0}, StrokeMilli: 2200,
+			Stroke: [4]byte{224, 239, 244, 235}, Z: 105, Layers: 2,
+		},
+	}
+	shapes := []render2d.Shape{}
+	if includeStatic {
+		shapes = append(shapes, staticShapes...)
+	}
+	driftWidth := int64(game.DriftCharge_milli) * 306000 / 1800
+	driftColor := [4]byte{255, 192, 55, 255}
+	if game.DriftStage == 2 {
+		driftColor = [4]byte{38, 211, 255, 255}
+	}
+	if game.DriftStage >= 3 {
+		driftColor = [4]byte{255, 82, 65, 255}
+	}
+	shapes = append(shapes, render2d.Shape{
+		Id: 100, Kind: render2d.ShapeRoundedRect, Bounds: [4]int64{48000, 656000, driftWidth + 1, 13000},
+		RadiusMilli: 6500, Fill: driftColor, Z: 112, Layers: 2,
+	})
+	boostWidth := int64(0)
+	if game.BoostPressed {
+		boostWidth = 340000
+	}
+	shapes = append(shapes, render2d.Shape{
+		Id: 101, Kind: render2d.ShapeRoundedRect, Bounds: [4]int64{470000, 677000, boostWidth + 1, 15000},
+		RadiusMilli: 7500, Fill: [4]byte{33, 218, 255, 240}, Z: 112, Layers: 2,
+	})
+	activeSpeedDots := int(speedKph * 14 / 150)
+	if activeSpeedDots > 14 {
+		activeSpeedDots = 14
+	}
+	for index := 0; index < 14; index++ {
+		angle := -2.35 + float64(index) / 13.0 * 4.70
+		x := int64(1141000.0 + math.Cos(angle) * 84000.0)
+		y := int64(593000.0 + math.Sin(angle) * 84000.0)
+		color := [4]byte{34, 57, 73, 240}
+		if index < activeSpeedDots {
+			color = [4]byte{39, 209, 246, 255}
+			if index >= 10 {
+				color = [4]byte{255, 190, 55, 255}
+			}
+		}
+		shapes = append(shapes, render2d.Shape{
+			Id: uint64(120 + index), Kind: render2d.ShapeCircle,
+			Bounds: [4]int64{x - 6500, y - 6500, 13000, 13000},
+			Fill: color, Z: 113, Layers: 2,
+		})
+	}
+	if transform, transformOk := game.Transforms.Get(game.KartEntity); transformOk {
+		mapX := int64(1125000) + transform.X * 190000 / 940000
+		mapY := int64(112000) - (transform.Z - 15000) * 112000 / 740000
+		shapes = append(shapes, render2d.Shape{
+			Id: 140, Kind: render2d.ShapeCircle, Bounds: [4]int64{mapX - 7500, mapY - 7500, 15000, 15000},
+			Fill: [4]byte{255, 198, 58, 255}, StrokeMilli: 2200,
+			Stroke: [4]byte{255, 255, 255, 255}, Z: 116, Layers: 2,
+		})
+	}
+	if state.Countdown_ticks != 0 || game.StartFlash_ticks != 0 {
+		shapes = append(shapes, render2d.Shape{
+			Id: 150, Kind: render2d.ShapeCircle, Bounds: [4]int64{560000, 250000, 160000, 160000},
+			Fill: [4]byte{6, 17, 30, 210}, StrokeMilli: 9000,
+			Stroke: [4]byte{255, 198, 58, 245}, Z: 130, Layers: 2,
+		})
+	}
+	if game.Paused || state.Finished {
+		shapes = append(shapes, render2d.Shape{
+			Id: 151, Kind: render2d.ShapeRect, Bounds: [4]int64{0, 0, 1280000, 720000},
+			Fill: [4]byte{2, 7, 14, 175}, Z: 130, Layers: 2,
+		}, render2d.Shape{
+			Id: 152, Kind: render2d.ShapeRoundedRect, Bounds: [4]int64{360000, 220000, 560000, 270000},
+			RadiusMilli: 26000, Fill: [4]byte{8, 20, 35, 242}, StrokeMilli: 4000,
+			Stroke: [4]byte{255, 198, 58, 230}, Z: 132, Layers: 2,
+		})
+	}
+	if game.RenderWidth <= 1000 || game.RenderHeight > game.RenderWidth {
+		shapes = game.appendTouchHud(shapes)
+	}
+
+	lapText := []byte{byte(49 + state.Lap), ' ', '/', ' ', '3'}
+	if state.Lap >= 3 {
+		lapText[0] = '3'
+	}
+	staticTexts := []render2d.TextRun{
+		{Id: 1, Font: 1, Text: []byte("ALPINE ASCENT"), Position: [2]int64{47000, 53000}, SizeMilli: 21000, Color: [4]byte{255, 255, 255, 255}, Z: 180, Layers: 2},
+		{Id: 2, Font: 1, Text: []byte("TIME ATTACK"), Position: [2]int64{47000, 82000}, SizeMilli: 12000, Color: [4]byte{39, 209, 246, 255}, Z: 180, Layers: 2},
+		{Id: 3, Font: 1, Text: []byte("LAP"), Position: [2]int64{208000, 50000}, SizeMilli: 11000, Color: [4]byte{174, 203, 220, 255}, Z: 180, Layers: 2},
+		{Id: 4, Font: 1, Text: []byte("RACE TIME"), Position: [2]int64{588000, 48000}, SizeMilli: 11000, Color: [4]byte{174, 203, 220, 255}, Z: 180, Layers: 2},
+		{Id: 5, Font: 1, Text: []byte("COURSE"), Position: [2]int64{1019000, 48000}, SizeMilli: 10000, Color: [4]byte{174, 203, 220, 255}, Z: 180, Layers: 2},
+		{Id: 6, Font: 1, Text: []byte("DRIFT CHARGE"), Position: [2]int64{48000, 630000}, SizeMilli: 12000, Color: [4]byte{222, 235, 243, 255}, Z: 180, Layers: 2},
+		{Id: 7, Font: 1, Text: []byte("KM/H"), Position: [2]int64{1118000, 643000}, SizeMilli: 11000, Color: [4]byte{166, 194, 211, 255}, Z: 180, Layers: 2},
+		{Id: 8, Font: 1, Text: []byte("W GAS   A/D STEER   SPACE DRIFT   SHIFT BOOST   R RESET"), Position: [2]int64{405000, 711000}, SizeMilli: 10500, Color: [4]byte{209, 227, 237, 215}, Z: 180, Layers: 2},
+	}
+	texts := []render2d.TextRun{}
+	if includeStatic {
+		texts = append(texts, staticTexts...)
+	}
+	texts = append(texts,
+		render2d.TextRun{Id: 10, Font: 1, Text: lapText, Position: [2]int64{210000, 79000}, SizeMilli: 22000, Color: [4]byte{255, 198, 58, 255}, Z: 182, Layers: 2},
+		render2d.TextRun{Id: 11, Font: 1, Text: blockKartRaceTimeText(state.Elapsed_millis), Position: [2]int64{557000, 82000}, SizeMilli: 33000, Color: [4]byte{255, 255, 255, 255}, Z: 182, Layers: 2},
+		render2d.TextRun{Id: 12, Font: 1, Text: blockKartDecimalText(speedKph, 3), Position: [2]int64{1092000, 616000}, SizeMilli: 50000, Color: [4]byte{255, 255, 255, 255}, Z: 182, Layers: 2},
+	)
+	if game.DriftStage != 0 {
+		stageText := []byte("CHARGED")
+		if game.DriftStage == 2 {
+			stageText = []byte("SUPER")
+		}
+		if game.DriftStage >= 3 {
+			stageText = []byte("ULTRA")
+		}
+		texts = append(texts, render2d.TextRun{
+			Id: 13, Font: 1, Text: stageText, Position: [2]int64{270000, 630000}, SizeMilli: 12000,
+			Color: driftColor, Z: 182, Layers: 2,
+		})
+	}
+	if state.Countdown_ticks != 0 || game.StartFlash_ticks != 0 {
+		countdownText := []byte("GO!")
+		if state.Countdown_ticks != 0 {
+			countdown := uint64(
+				(state.Countdown_ticks + blockKartTicksPerSecond - 1) / blockKartTicksPerSecond,
+			)
+			countdownText = blockKartDecimalText(countdown, 1)
+		}
+		texts = append(texts, render2d.TextRun{
+			Id: 14, Font: 1, Text: countdownText, Position: [2]int64{598000, 355000},
+			SizeMilli: 69000, Color: [4]byte{255, 255, 255, 255}, Z: 184, Layers: 2,
+		})
+	}
+	if game.Paused {
+		texts = append(texts,
+			render2d.TextRun{Id: 15, Font: 1, Text: []byte("RACE PAUSED"), Position: [2]int64{492000, 305000}, SizeMilli: 44000, Color: [4]byte{255, 255, 255, 255}, Z: 184, Layers: 2},
+			render2d.TextRun{Id: 16, Font: 1, Text: []byte("PRESS P TO RESUME"), Position: [2]int64{515000, 392000}, SizeMilli: 18000, Color: [4]byte{39, 209, 246, 255}, Z: 184, Layers: 2},
+		)
+	}
+	if state.Finished {
+		texts = append(texts,
+			render2d.TextRun{Id: 17, Font: 1, Text: []byte("FINISH!"), Position: [2]int64{535000, 290000}, SizeMilli: 52000, Color: [4]byte{255, 198, 58, 255}, Z: 184, Layers: 2},
+			render2d.TextRun{Id: 18, Font: 1, Text: blockKartRaceTimeText(state.Elapsed_millis), Position: [2]int64{525000, 370000}, SizeMilli: 36000, Color: [4]byte{255, 255, 255, 255}, Z: 184, Layers: 2},
+			render2d.TextRun{Id: 19, Font: 1, Text: []byte("R  RUN AGAIN"), Position: [2]int64{550000, 438000}, SizeMilli: 17000, Color: [4]byte{39, 209, 246, 255}, Z: 184, Layers: 2},
+		)
+	}
+
+	objects := make([]render.SnapshotObject, 0, len(shapes) + len(texts))
+	for _, shape := range shapes {
+		packet := []byte{}
+		if shape.Id < 100 {
+			packet = game.HudStaticPackets[shape.Id]
+		}
+		if len(packet) == 0 {
+			packet = render2d.EncodeShape(shape)
+			if shape.Id < 100 {
+				game.HudStaticPackets[shape.Id] = packet
+			}
+		}
+		if len(packet) == 0 {
+			return nil
+		}
+		objects = append(objects, render.SnapshotObject{
+			Entity: voplay.Handle{Index: uint32(910000 + shape.Id), Generation: 1}, Bytes: packet,
+		})
+	}
+	for _, text := range texts {
+		packet := []byte{}
+		if text.Id < 10 {
+			cacheKey := uint64(1000 + text.Id)
+			packet = game.HudStaticPackets[cacheKey]
+			if len(packet) == 0 {
+				packet = render2d.EncodeText(text)
+				game.HudStaticPackets[cacheKey] = packet
+			}
+		} else {
+			packet = render2d.EncodeText(text)
+		}
+		if len(packet) == 0 {
+			return nil
+		}
+		objects = append(objects, render.SnapshotObject{
+			Entity: voplay.Handle{Index: uint32(920000 + text.Id), Generation: 1}, Bytes: packet,
+		})
+	}
+	return objects
+}
+
+func blockKartMinimapPath() []int64 {
+	points := blockKartTrackPoints()
+	path := make([]int64, 0, (len(points) + 1) * 2)
+	for _, point := range points {
+		path = append(path,
+			int64(1125000) + point[0] * 190000 / 940000,
+			int64(112000) - (point[2] - 15000) * 112000 / 740000,
+		)
+	}
+	if len(path) >= 2 {
+		path = append(path, path[0], path[1])
+	}
+	return path
+}
+
+func blockKartRaceTimeText(milliseconds uint64) []byte {
+	minutes := milliseconds / 60000
+	if minutes > 99 {
+		minutes = 99
+	}
+	seconds := milliseconds / 1000 % 60
+	tenths := milliseconds / 100 % 10
+	return []byte{
+		byte(48 + minutes / 10), byte(48 + minutes % 10), ':',
+		byte(48 + seconds / 10), byte(48 + seconds % 10), '.',
+		byte(48 + tenths),
+	}
+}
+
+func (game *BlockKart) hudPacketsLegacy(includeStatic bool) []render.SnapshotObject {
 	state, ok := game.KartStates.Get(game.KartEntity)
 	if !ok || len(game.TrackGates) == 0 {
 		return nil
