@@ -1,0 +1,60 @@
+{
+  "schema": "blockkart.sceneModules.v1",
+  "source": {
+    "blend": "../blender/blockkart_alpine_golden_scene_v9.blend",
+    "generator": "../../tools/blender/build_golden_alpine_scene.py",
+    "render": "../../docs/images/blockkart-blender-golden-scene-v9.png"
+  },
+  "runtime": {
+    "asset": "blockkart_alpine_golden_scene_v9.glb",
+    "coordinateSystem": "glTF Y-up",
+    "metersPerUnit": 1,
+    "camera": "Golden chase camera",
+    "voplayImport": {
+      "accepted": true,
+      "sourceNodes": 1383,
+      "sourcePrimitives": 614,
+      "staticMaterialBatches": 34,
+      "providerMeshChunks": 39,
+      "maxMeshArtifactBytes": 921600
+    }
+  },
+  "modules": [
+    {
+      "collection": "01 Terrain and road",
+      "id": "terrainRoad",
+      "runtimePolicy": "static",
+      "collision": "runtimeTrackCenterline"
+    },
+    {
+      "collection": "02 Environment modules",
+      "id": "environment",
+      "runtimePolicy": "staticBatched",
+      "collision": "visualOnly"
+    },
+    {
+      "collection": "03 Landmarks",
+      "id": "landmarks",
+      "runtimePolicy": "staticBatched",
+      "collision": "selectedRuntimeBarriers"
+    },
+    {
+      "collection": "04 Race dressing",
+      "id": "raceDressing",
+      "runtimePolicy": "staticBatched",
+      "collision": "selectedRuntimeBarriers"
+    },
+    {
+      "collection": "05 Vehicles",
+      "id": "vehiclePlaceholders",
+      "runtimePolicy": "excludedAtBake",
+      "collision": "runtimeKartChassis"
+    }
+  ],
+  "materialTransfer": {
+    "current": "glTF core material factors and emissive factors",
+    "textures": 0,
+    "images": 0,
+    "shadowPolicy": "generated per material"
+  }
+}

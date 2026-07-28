@@ -1,0 +1,8 @@
+[package]
+name = "blockkart-voplay-glb-check"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+voplay-import-gltf = { path = "../../../voplay/rust/crates/voplay-import-gltf" }

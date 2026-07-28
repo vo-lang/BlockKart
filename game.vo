@@ -319,9 +319,7 @@ func (game *BlockKart) startWorld(context voplay.StartContext) error {
 	}
 	var ok bool
 	game.KartEntity = uint64(kart.Index)
-	startTransform := Transform{
-		X: 30000, Y: 1200, Z: 367500, Yaw_milliradians: 1571,
-	}
+	startTransform := blockKartStartTransform()
 	game.TrackCenterline = blockKartTrackCenterline()
 	if len(game.TrackCenterline) == 0 {
 		return errors.New("blockkart: build track centerline")
@@ -1590,6 +1588,21 @@ func (game *BlockKart) hudPackets(includeStatic bool) []render.SnapshotObject {
 			RadiusMilli: 3000, Fill: [4]byte{35, 211, 250, 240}, Z: 103, Layers: 2,
 		},
 	}
+	for index, point := range blockKartTrackPoints() {
+		mapX, mapY := blockKartMinimapPoint(point[0], point[2])
+		color := [4]byte{218, 236, 245, 238}
+		radius := int64(3100)
+		if index % 4 == 0 {
+			color = [4]byte{39, 209, 246, 255}
+			radius = 4300
+		}
+		staticShapes = append(staticShapes, render2d.Shape{
+			Id: uint64(20 + index), Kind: render2d.ShapeCircle,
+			Bounds: [4]int64{mapX - radius, mapY - radius, radius * 2, radius * 2},
+			Fill: color, StrokeMilli: 900, Stroke: [4]byte{5, 13, 24, 230},
+			Z: 108, Layers: 2,
+		})
+	}
 	shapes := []render2d.Shape{}
 	if includeStatic {
 		shapes = append(shapes, staticShapes...)
@@ -1636,8 +1649,7 @@ func (game *BlockKart) hudPackets(includeStatic bool) []render.SnapshotObject {
 		})
 	}
 	if transform, transformOk := game.Transforms.Get(game.KartEntity); transformOk {
-		mapX := int64(1125000) + transform.X * 190000 / 940000
-		mapY := int64(112000) - (transform.Z - 15000) * 112000 / 740000
+		mapX, mapY := blockKartMinimapPoint(transform.X, transform.Z)
 		shapes = append(shapes, render2d.Shape{
 			Id: 140, Kind: render2d.ShapeCircle, Bounds: [4]int64{mapX - 7500, mapY - 7500, 15000, 15000},
 			Fill: [4]byte{255, 198, 58, 255}, StrokeMilli: 2200,
@@ -1773,15 +1785,18 @@ func blockKartMinimapPath() []int64 {
 	points := blockKartTrackPoints()
 	path := make([]int64, 0, (len(points) + 1) * 2)
 	for _, point := range points {
-		path = append(path,
-			int64(1125000) + point[0] * 190000 / 940000,
-			int64(112000) - (point[2] - 15000) * 112000 / 740000,
-		)
+		x, y := blockKartMinimapPoint(point[0], point[2])
+		path = append(path, x, y)
 	}
 	if len(path) >= 2 {
 		path = append(path, path[0], path[1])
 	}
 	return path
+}
+
+func blockKartMinimapPoint(x int64, z int64) (int64, int64) {
+	return int64(1048000) + (x + 55000) * 190000 / 345000,
+		int64(43000) + (85000 - z) * 116000 / 408000
 }
 
 func blockKartRaceTimeText(milliseconds uint64) []byte {
