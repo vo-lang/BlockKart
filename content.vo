@@ -439,23 +439,23 @@ func (game *BlockKart) startAssets(context voplay.StartContext) error {
 func (game *BlockKart) buildStaticRenderPackets() [][]byte {
 	packets := [][]byte{}
 	environment := render3d.EncodeEnvironment(render3d.Environment{
-		FogColor: [3]uint16{31500, 48500, 59000}, FogStartMilli: 280000, FogEndMilli: 1250000,
-		ExposureMilli: 135, ToneMap: render3d.ToneMapAces, BloomThreshold: 56000, BloomStrength: 3200,
+		FogColor: [3]uint16{33500, 49500, 60500}, FogStartMilli: 260000, FogEndMilli: 1180000,
+		ExposureMilli: 90, ToneMap: render3d.ToneMapAces, BloomThreshold: 56000, BloomStrength: 3200,
 		AntiAlias: render3d.AntiAliasMsaa, MsaaSamples: 4,
 	})
 	sun := render3d.EncodeLight(render3d.RetainedLight{
-		Kind: render3d.LightDirectional, Color: [3]uint16{65535, 59600, 50000}, IntensityMilli: 1650,
+		Kind: render3d.LightDirectional, Color: [3]uint16{65535, 61000, 55500}, IntensityMilli: 1250,
 		CastsShadow: true,
 	})
 	skyFill := render3d.EncodeLight(render3d.RetainedLight{
-		Kind: render3d.LightDirectional, Color: [3]uint16{29000, 43000, 65535}, IntensityMilli: 420,
+		Kind: render3d.LightDirectional, Color: [3]uint16{33000, 44500, 65535}, IntensityMilli: 360,
 		CastsShadow: false,
 	})
 	if len(environment) == 0 || len(sun) == 0 || len(skyFill) == 0 {
 		return nil
 	}
-	sunTransform := blockKartLookAtMatrix(-360000, 620000, -440000, 0, 0, -120000)
-	fillTransform := blockKartLookAtMatrix(420000, 260000, 360000, 0, 70000, -120000)
+	sunTransform := blockKartLookAtMatrix(-320000, 520000, 420000, 0, 30000, -100000)
+	fillTransform := blockKartLookAtMatrix(420000, 280000, -360000, 0, 70000, -100000)
 	packets = append(
 		packets,
 		blockKartStaticRenderObject(10, environment),

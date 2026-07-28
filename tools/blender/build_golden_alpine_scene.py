@@ -21,10 +21,10 @@ from mathutils import Vector
 
 
 ROOT = Path(__file__).resolve().parents[2]
-BLEND_PATH = ROOT / "art/blender/blockkart_alpine_golden_scene_v9.blend"
-RENDER_PATH = ROOT / "docs/images/blockkart-blender-golden-scene-v9.png"
-REPORT_PATH = ROOT / "art/blender/blockkart_alpine_golden_scene_v9.json"
-GLB_PATH = ROOT / "art/exports/blockkart_alpine_golden_scene_v9.glb"
+BLEND_PATH = ROOT / "art/blender/blockkart_alpine_golden_scene_v10.blend"
+RENDER_PATH = ROOT / "docs/images/blockkart-blender-golden-scene-v10.png"
+REPORT_PATH = ROOT / "art/blender/blockkart_alpine_golden_scene_v10.json"
+GLB_PATH = ROOT / "art/exports/blockkart_alpine_golden_scene_v10.glb"
 SEED = 20260728
 random.seed(SEED)
 
@@ -498,7 +498,7 @@ def create_road(
     for index in range(len(ROAD_SAMPLES) - 1):
         for band in range(stride - 1):
             a = index * stride + band
-            faces.append((a, a + stride, a + stride + 1, a + 1))
+            faces.append((a, a + 1, a + stride + 1, a + stride))
             if band == 2:
                 face_materials.append(0)
             elif band in (1, 3):
@@ -1462,10 +1462,10 @@ scene.render.fps = 60
 scene.render.filepath = str(RENDER_PATH)
 scene.render.use_file_extension = True
 try:
-    scene.view_settings.look = "AgX - Medium High Contrast"
+    scene.view_settings.look = "AgX - Medium Low Contrast"
 except TypeError:
     pass
-scene.view_settings.exposure = 0.45
+scene.view_settings.exposure = 0.82
 
 world = bpy.data.worlds.new("Alpine race day world")
 scene.world = world
@@ -1491,7 +1491,7 @@ if hasattr(sky, "ground_albedo"):
     sky.ground_albedo = 0.24
 if hasattr(sky, "dust_density"):
     sky.dust_density = 1.8
-background.inputs["Strength"].default_value = 0.9
+background.inputs["Strength"].default_value = 1.28
 world_links.new(sky.outputs["Color"], background.inputs["Color"])
 world_links.new(background.outputs["Background"], world_output.inputs["Surface"])
 
@@ -1504,8 +1504,8 @@ source_collection = collection("_Linked source meshes")
 
 grass_material = procedural_surface_material(
     "Meadow grass",
-    (0.035, 0.11, 0.018, 1.0),
-    (0.13, 0.34, 0.045, 1.0),
+    (0.080, 0.16, 0.050, 1.0),
+    (0.24, 0.38, 0.115, 1.0),
     3.8,
     5.0,
     0.88,
@@ -1525,8 +1525,8 @@ curb_red_material = principled_material("Curb red", (0.62, 0.018, 0.012, 1.0), 0
 curb_white_material = principled_material("Curb white", (0.82, 0.86, 0.84, 1.0), 0.5)
 rock_material = procedural_surface_material(
     "Slate cliff",
-    (0.040, 0.044, 0.050, 1.0),
-    (0.19, 0.20, 0.21, 1.0),
+    (0.105, 0.115, 0.135, 1.0),
+    (0.32, 0.35, 0.40, 1.0),
     2.6,
     6.0,
     0.82,
@@ -1534,8 +1534,8 @@ rock_material = procedural_surface_material(
 )
 stone_material = procedural_surface_material(
     "Bridge stone",
-    (0.16, 0.14, 0.11, 1.0),
-    (0.45, 0.43, 0.37, 1.0),
+    (0.22, 0.19, 0.145, 1.0),
+    (0.52, 0.49, 0.42, 1.0),
     4.0,
     5.0,
     0.85,
@@ -1571,9 +1571,9 @@ sun_disc_material = principled_material(
     emission=(1.0, 0.28, 0.02),
     emission_strength=2.8,
 )
-trunk_material = principled_material("Pine trunk", (0.18, 0.075, 0.018, 1.0), 0.86)
-pine_dark_material = principled_material("Pine forest dark", (0.008, 0.065, 0.021, 1.0), 0.78)
-pine_light_material = principled_material("Pine forest light", (0.018, 0.135, 0.038, 1.0), 0.75)
+trunk_material = principled_material("Pine trunk", (0.25, 0.115, 0.040, 1.0), 0.86)
+pine_dark_material = principled_material("Pine forest dark", (0.060, 0.19, 0.080, 1.0), 0.78)
+pine_light_material = principled_material("Pine forest light", (0.10, 0.30, 0.125, 1.0), 0.75)
 water = water_material()
 waterfall_surface = waterfall_material()
 foam_material = principled_material(
@@ -2018,29 +2018,42 @@ look_at(camera, (1.0, 60.0, 5.8))
 scene.camera = camera
 
 sun_data = bpy.data.lights.new("Warm alpine sun", "SUN")
-sun_data.energy = 4.6
-sun_data.angle = math.radians(2.0)
+sun_data.energy = 4.0
+sun_data.angle = math.radians(3.5)
+sun_data.color = (1.0, 0.88, 0.70)
 sun = bpy.data.objects.new("Warm alpine sun", sun_data)
-sun.rotation_euler = (math.radians(38.0), math.radians(-22.0), math.radians(-132.0))
+sun.location = (-180.0, -180.0, 300.0)
+look_at(sun, (20.0, 110.0, 0.0))
 scene.collection.objects.link(sun)
 
 fill_sun_data = bpy.data.lights.new("Blue mountain bounce", "SUN")
-fill_sun_data.energy = 1.15
+fill_sun_data.energy = 1.55
 fill_sun_data.angle = math.radians(7.0)
-fill_sun_data.color = (0.42, 0.62, 1.0)
+fill_sun_data.color = (0.48, 0.66, 1.0)
 fill_sun = bpy.data.objects.new("Blue mountain bounce", fill_sun_data)
-fill_sun.rotation_euler = (math.radians(58.0), math.radians(12.0), math.radians(38.0))
+fill_sun.location = (260.0, -60.0, 170.0)
+look_at(fill_sun, (40.0, 130.0, 18.0))
 scene.collection.objects.link(fill_sun)
 
 area_data = bpy.data.lights.new("Cool sky fill", "AREA")
-area_data.energy = 2200.0
-area_data.color = (0.34, 0.56, 1.0)
+area_data.energy = 3400.0
+area_data.color = (0.72, 0.84, 1.0)
 area_data.shape = "DISK"
-area_data.size = 45.0
+area_data.size = 72.0
 area = bpy.data.objects.new("Cool sky fill", area_data)
-area.location = (-18.0, 32.0, 46.0)
-look_at(area, (0.0, 80.0, 0.0))
+area.location = (-30.0, -38.0, 88.0)
+look_at(area, (8.0, 72.0, 5.0))
 scene.collection.objects.link(area)
+
+camera_fill_data = bpy.data.lights.new("Camera-side ambient lift", "SUN")
+camera_fill_data.energy = 1.05
+camera_fill_data.angle = math.radians(10.0)
+camera_fill_data.color = (0.72, 0.84, 1.0)
+camera_fill_data.use_shadow = False
+camera_fill = bpy.data.objects.new("Camera-side ambient lift", camera_fill_data)
+camera_fill.location = camera.location
+look_at(camera_fill, (1.0, 60.0, 5.8))
+scene.collection.objects.link(camera_fill)
 
 try:
     scene.use_nodes = True
@@ -2067,11 +2080,11 @@ GLB_PATH.parent.mkdir(parents=True, exist_ok=True)
 bpy.ops.wm.save_as_mainfile(filepath=str(BLEND_PATH))
 gltf_material_state = begin_gltf_material_fallbacks(
     (
-        (grass_material, (0.07, 0.24, 0.035, 1.0)),
-        (asphalt_material, (0.052, 0.061, 0.072, 1.0)),
-        (shoulder_material, (0.22, 0.14, 0.06, 1.0)),
-        (rock_material, (0.13, 0.145, 0.16, 1.0)),
-        (stone_material, (0.28, 0.25, 0.20, 1.0)),
+        (grass_material, (0.15, 0.27, 0.10, 1.0)),
+        (asphalt_material, (0.13, 0.145, 0.17, 1.0)),
+        (shoulder_material, (0.31, 0.22, 0.12, 1.0)),
+        (rock_material, (0.27, 0.30, 0.35, 1.0)),
+        (stone_material, (0.39, 0.35, 0.285, 1.0)),
         (waterfall_surface, (0.025, 0.42, 0.68, 1.0)),
     )
 )
@@ -2098,7 +2111,7 @@ visible_meshes = [
     if obj.type == "MESH" and not obj.hide_render
 ]
 report = {
-    "schema": "blockkart.blenderGoldenScene.v9",
+    "schema": "blockkart.blenderGoldenScene.v10",
     "seed": SEED,
     "blender": bpy.app.version_string,
     "renderer": scene.render.engine,
