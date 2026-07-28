@@ -8,7 +8,7 @@ an art export is packaged into BlockKart.
 From this directory:
 
 ```sh
-cargo run --quiet -- ../../art/exports/blockkart_alpine_golden_scene_v11.glb
+cargo run --quiet -- ../../art/exports/blockkart_alpine_golden_scene_v12.glb
 ```
 
 The command exits non-zero when Voplay rejects either the document or its mesh

@@ -466,28 +466,20 @@ func (game *BlockKart) buildStaticRenderPackets() [][]byte {
 		Id uint64
 		Path string
 	}{
+		{12001, "assets/maps/primitive_track/grass_texture.png"},
 		{12002, "assets/maps/primitive_track/dirt_texture.png"},
 		{12003, "assets/maps/primitive_track/meadow_texture.png"},
 		{12004, "assets/maps/primitive_track/rock_texture.png"},
+		{12005, "assets/maps/primitive_track/terrain_splat_large.png"},
 		{12007, "assets/maps/primitive_track/dirt_normal.png"},
 		{12008, "assets/maps/primitive_track/dirt_mr.png"},
 		{12009, "assets/maps/primitive_track/rock_normal.png"},
 		{12010, "assets/maps/primitive_track/rock_mr.png"},
-		{12013, "assets/maps/primitive_track/meadow_normal.png"},
-		{12014, "assets/maps/primitive_track/meadow_mr.png"},
 		{12100, "assets/maps/golden_alpine/asphalt_albedo_v1.png"},
 	}
 	if !blockKartUseGoldenScene {
 		textures = append(
 			textures,
-			struct {
-				Id uint64
-				Path string
-			}{12001, "assets/maps/primitive_track/grass_texture.png"},
-			struct {
-				Id uint64
-				Path string
-			}{12005, "assets/maps/primitive_track/terrain_splat_large.png"},
 			struct {
 				Id uint64
 				Path string

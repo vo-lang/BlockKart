@@ -21,10 +21,10 @@ from mathutils import Vector
 
 
 ROOT = Path(__file__).resolve().parents[2]
-BLEND_PATH = ROOT / "art/blender/blockkart_alpine_golden_scene_v11.blend"
-RENDER_PATH = ROOT / "docs/images/blockkart-blender-golden-scene-v11.png"
-REPORT_PATH = ROOT / "art/blender/blockkart_alpine_golden_scene_v11.json"
-GLB_PATH = ROOT / "art/exports/blockkart_alpine_golden_scene_v11.glb"
+BLEND_PATH = ROOT / "art/blender/blockkart_alpine_golden_scene_v12.blend"
+RENDER_PATH = ROOT / "docs/images/blockkart-blender-golden-scene-v12.png"
+REPORT_PATH = ROOT / "art/blender/blockkart_alpine_golden_scene_v12.json"
+GLB_PATH = ROOT / "art/exports/blockkart_alpine_golden_scene_v12.glb"
 SEED = 20260728
 random.seed(SEED)
 
@@ -1234,36 +1234,42 @@ def create_skid_marks(
     material: bpy.types.Material,
     target: bpy.types.Collection,
 ) -> None:
-    for track_index, offset in enumerate((-1.1, 1.1)):
-        vertices = []
-        faces = []
-        for point_index in range(8, 119):
-            point = ROAD_SAMPLES[point_index]
-            previous = ROAD_SAMPLES[max(0, point_index - 1)]
-            following = ROAD_SAMPLES[min(len(ROAD_SAMPLES) - 1, point_index + 1)]
-            tx, ty = following[0] - previous[0], following[1] - previous[1]
-            length = max(0.001, math.hypot(tx, ty))
-            right_x, right_y = ty / length, -tx / length
-            wobble = math.sin(point_index * 0.16 + track_index) * 0.18
-            center_offset = offset + wobble
-            half_width = 0.13
-            for edge in (-half_width, half_width):
-                total_offset = center_offset + edge
-                vertices.append(
-                    (
-                        point[0] + right_x * total_offset,
-                        point[1] + right_y * total_offset,
-                        point[2] + 0.075,
+    for segment_index, (start, end) in enumerate(((24, 34), (61, 74), (101, 112))):
+        for track_index, offset in enumerate((-1.05, 1.05)):
+            vertices = []
+            faces = []
+            for point_index in range(start, end + 1):
+                point = ROAD_SAMPLES[point_index]
+                previous = ROAD_SAMPLES[max(0, point_index - 1)]
+                following = ROAD_SAMPLES[min(len(ROAD_SAMPLES) - 1, point_index + 1)]
+                tx, ty = following[0] - previous[0], following[1] - previous[1]
+                length = max(0.001, math.hypot(tx, ty))
+                right_x, right_y = ty / length, -tx / length
+                wobble = math.sin(point_index * 0.21 + track_index) * 0.14
+                center_offset = offset + wobble
+                half_width = 0.09
+                for edge in (-half_width, half_width):
+                    total_offset = center_offset + edge
+                    vertices.append(
+                        (
+                            point[0] + right_x * total_offset,
+                            point[1] + right_y * total_offset,
+                            point[2] + 0.075,
+                        )
                     )
-                )
-        for index in range(110):
-            base = index * 2
-            faces.append((base, base + 2, base + 3, base + 1))
-        mesh = bpy.data.meshes.new(f"Skid track {track_index} mesh")
-        mesh.from_pydata(vertices, [], faces)
-        mesh.materials.append(material)
-        obj = bpy.data.objects.new(f"Skid track {track_index}", mesh)
-        target.objects.link(obj)
+            for index in range(end - start):
+                base = index * 2
+                faces.append((base, base + 2, base + 3, base + 1))
+            mesh = bpy.data.meshes.new(
+                f"Corner skid segment {segment_index} track {track_index} mesh"
+            )
+            mesh.from_pydata(vertices, [], faces)
+            mesh.materials.append(material)
+            obj = bpy.data.objects.new(
+                f"Corner skid segment {segment_index} track {track_index}",
+                mesh,
+            )
+            target.objects.link(obj)
 
 
 def create_sky_dome(
@@ -1673,7 +1679,7 @@ green_material = principled_material("Rival green", (0.015, 0.42, 0.10, 1.0), 0.
 orange_material = principled_material("Rival orange", (0.95, 0.19, 0.015, 1.0), 0.28, metallic=0.22)
 purple_material = principled_material("Rival purple", (0.31, 0.025, 0.62, 1.0), 0.28, metallic=0.25)
 tire_material = principled_material("Kart tire", (0.006, 0.007, 0.009, 1.0), 0.7)
-skid_material = principled_material("Rubber skid marks", (0.003, 0.004, 0.005, 1.0), 0.86)
+skid_material = principled_material("Rubber skid marks", (0.022, 0.026, 0.030, 1.0), 0.86)
 helmet_material = principled_material("Driver helmet", (0.03, 0.06, 0.09, 1.0), 0.24, metallic=0.12)
 banner_blue_material = principled_material("Festival cyan", (0.015, 0.35, 0.88, 1.0), 0.45)
 banner_gold_material = principled_material("Festival gold", (1.0, 0.54, 0.03, 1.0), 0.43)
@@ -2195,7 +2201,7 @@ finally:
 bpy.ops.render.render(write_still=True)
 
 report = {
-    "schema": "blockkart.blenderGoldenScene.v11",
+    "schema": "blockkart.blenderGoldenScene.v12",
     "seed": SEED,
     "blender": bpy.app.version_string,
     "renderer": scene.render.engine,

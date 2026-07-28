@@ -198,7 +198,7 @@ fn material_textures(name: Option<&str>) -> [u64; 5] {
     } else if name.contains("road shoulder") {
         [12_002, 12_007, 12_008, 0, 0]
     } else if name.contains("meadow grass") {
-        [12_003, 12_013, 12_014, 0, 0]
+        [12_005, 12_001, 12_003, 12_002, 12_004]
     } else if name.contains("slate cliff") || name.contains("bridge stone") {
         [12_004, 12_009, 12_010, 0, 0]
     } else {
