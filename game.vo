@@ -835,9 +835,6 @@ func (game *BlockKart) frame(tick voplay.TickBatch, pulse []byte) (voplay.TickOu
 	if game.RenderWorldPublished && game.RenderAssetsPublished {
 		game.RenderPulseCounter++
 	}
-	if game.RenderWorldPublished && game.RenderAssetsPublished && game.RenderPulseCounter % 2 == 0 {
-		return voplay.TickOutput{AssetPackets: assetPackets}, nil
-	}
 	transform, ok := game.Transforms.Get(game.KartEntity)
 	if !ok {
 		return voplay.TickOutput{}, errors.New("blockkart: extract transform")
