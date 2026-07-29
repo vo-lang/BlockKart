@@ -1189,6 +1189,7 @@ func (game *BlockKart) kartRenderPackets(transform Transform, tick uint64) ([][]
 	return game.kartRenderPacketsStyled(
 		transform, tick, 102, game.Steering_milli, game.WheelSpin_milliradians,
 		game.ChassisLean_milliradians, game.ChassisPitch_milliradians,
+		true,
 	)
 }
 
@@ -1200,6 +1201,7 @@ func (game *BlockKart) kartRenderPacketsStyled(
 	wheelSpin_milliradians int32,
 	chassisLean_milliradians int32,
 	chassisPitch_milliradians int32,
+	includeWheels bool,
 ) ([][]byte, bool) {
 	bodyParts := []blockKartMeshPart{
 		{Material: primaryMaterial, Mesh: 10002},
@@ -1235,6 +1237,9 @@ func (game *BlockKart) kartRenderPacketsStyled(
 		return nil, false
 	}
 	packets = append(packets, bodyPacket)
+	if !includeWheels {
+		return packets, true
+	}
 	for _, location := range wheelLocations {
 		partTransform := blockKartAuthoredKartTransform(transform, location)
 		steer_milliradians := int32(0)
@@ -1273,6 +1278,14 @@ func (game *BlockKart) kartRenderPacketsStyled(
 func (game *BlockKart) rivalRenderObjects(tick uint64) ([]render.SnapshotObject, bool) {
 	materials := []uint64{127, 128, 129, 103, 104, 125, 117}
 	objects := make([]render.SnapshotObject, 0, len(materials) * 5)
+	playerTransform, playerOk := game.Transforms.Get(game.KartEntity)
+	if !playerOk {
+		return nil, false
+	}
+	const rivalCullDistance_milli int64 = 380000
+	const rivalWheelDistance_milli int64 = 120000
+	rivalCullDistanceSquared := rivalCullDistance_milli * rivalCullDistance_milli
+	rivalWheelDistanceSquared := rivalWheelDistance_milli * rivalWheelDistance_milli
 	for rivalIndex, material := range materials {
 		transform, steering, wheelSpin, lean, pitch, ok := game.rivalVisualState(
 			tick, rivalIndex,
@@ -1280,8 +1293,15 @@ func (game *BlockKart) rivalRenderObjects(tick uint64) ([]render.SnapshotObject,
 		if !ok {
 			return nil, false
 		}
+		deltaX := transform.X - playerTransform.X
+		deltaZ := transform.Z - playerTransform.Z
+		distanceSquared := deltaX * deltaX + deltaZ * deltaZ
+		if distanceSquared > rivalCullDistanceSquared {
+			continue
+		}
 		packets, encoded := game.kartRenderPacketsStyled(
 			transform, tick, material, steering, wheelSpin, lean, pitch,
+			distanceSquared <= rivalWheelDistanceSquared,
 		)
 		if !encoded {
 			return nil, false
@@ -1832,6 +1852,7 @@ func (game *BlockKart) restartRace() error {
 	game.WasDrifting = false
 	game.MiniTurbo_ticks = 0
 	game.StartFlash_ticks = 0
+	game.ElapsedNanosRemainder = 0
 	game.TouchPoints = map[uint32]BlockKartTouchPoint{}
 	game.BoostPressed = false
 	game.OffRoad = false

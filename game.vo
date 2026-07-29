@@ -20,7 +20,7 @@ const (
 )
 
 const (
-	blockKartTicksPerSecond uint32 = 20
+	blockKartTicksPerSecond uint32 = 60
 	blockKartCountdownTicks uint32 = 3 * blockKartTicksPerSecond
 	blockKartBoostTicks uint32 = 9 * blockKartTicksPerSecond
 	blockKartBoostCooldownTicks uint32 = 18 * blockKartTicksPerSecond
@@ -130,6 +130,7 @@ type BlockKart struct {
 	WasDrifting bool
 	MiniTurbo_ticks uint32
 	StartFlash_ticks uint32
+	ElapsedNanosRemainder uint64
 	TouchPoints map[uint32]BlockKartTouchPoint
 	Paused bool
 	CameraMode uint32
@@ -148,7 +149,6 @@ type BlockKart struct {
 	LastGrassAudioTick uint64
 	LastAudioControlTick uint64
 	LastAudioSnapshotRevision uint64
-	LastRenderDeadlineNanos uint64
 	RenderPulseCounter uint64
 	ConfigurationError error
 }
@@ -171,7 +171,7 @@ func ConfigureBlockKart(game *BlockKart, builder voplay.Builder) {
 	if game == nil {
 		return
 	}
-	if err := builder.SetFixedTick(50000000, 4); err != nil {
+	if err := builder.SetFixedTick(16666667, 4); err != nil {
 		game.ConfigurationError = err
 		return
 	}
@@ -838,10 +838,7 @@ func (game *BlockKart) frame(tick voplay.TickBatch, pulse []byte) (voplay.TickOu
 		game.RenderPulseCounter++
 	}
 	if game.RenderWorldPublished && game.RenderAssetsPublished &&
-		(game.RenderPulseCounter % 2 == 0 ||
-			game.LastRenderDeadlineNanos != 0 &&
-				framePulse.DeadlineNanos > game.LastRenderDeadlineNanos &&
-				framePulse.DeadlineNanos - game.LastRenderDeadlineNanos < 50000000) {
+		game.RenderPulseCounter % 2 == 0 {
 		game.RenderRevision++
 		noOpPacket, encoded := render.EncodeTransactionPacket(
 			game.Engine, 1, framePulse.PulseId, game.RenderRevision - 1, game.RenderRevision,
@@ -855,7 +852,6 @@ func (game *BlockKart) frame(tick voplay.TickBatch, pulse []byte) (voplay.TickOu
 			AssetPackets: assetPackets,
 		}, nil
 	}
-	game.LastRenderDeadlineNanos = framePulse.DeadlineNanos
 	transform, ok := game.Transforms.Get(game.KartEntity)
 	if !ok {
 		return voplay.TickOutput{}, errors.New("blockkart: extract transform")
