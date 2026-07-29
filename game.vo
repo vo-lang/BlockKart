@@ -86,6 +86,9 @@ type BlockKart struct {
 	RenderAssetsPublished bool
 	RenderAssetAcks map[uint64]uint64
 	RenderRevision uint64
+	RenderStateAwaitingAck bool
+	RenderStateCommitId uint64
+	RenderStateRevision uint64
 	KartMeshAsset uint64
 	BoostAudioAsset uint64
 	EngineAudioAsset uint64
@@ -832,13 +835,15 @@ func (game *BlockKart) frame(tick voplay.TickBatch, pulse []byte) (voplay.TickOu
 	if err := game.updateRenderMetrics(framePulse.Metrics); err != nil {
 		return voplay.TickOutput{}, err
 	}
+	if game.RenderStateAwaitingAck {
+		return voplay.TickOutput{AssetPackets: assetPackets}, nil
+	}
 	if game.RenderWorldPublished && !game.RenderAssetsPublished {
 		assetCount := len(game.RenderAssetPackets)
 		acknowledgedCount := len(game.RenderAssetAcks)
 		if int(game.RenderAssetCursor) == assetCount && acknowledgedCount >= assetCount {
 			game.RenderAssetsPublished = true
-		} else if game.RenderAssetCursor != 0 &&
-			acknowledgedCount < int(game.RenderAssetCursor) {
+		} else if game.RenderAssetCursor != 0 && acknowledgedCount < int(game.RenderAssetCursor) {
 			return voplay.TickOutput{AssetPackets: assetPackets}, nil
 		}
 	}
@@ -1014,6 +1019,9 @@ func (game *BlockKart) frame(tick voplay.TickBatch, pulse []byte) (voplay.TickOu
 			game.LastGrassAudioTick = tick.FirstTick
 		}
 	}
+	game.RenderStateAwaitingAck = true
+	game.RenderStateCommitId = framePulse.PulseId
+	game.RenderStateRevision = game.RenderRevision
 	return output, nil
 }
 
@@ -1040,6 +1048,16 @@ func (game *BlockKart) processEndpointReturns(tick voplay.TickBatch) error {
 		game.AudioAssetAcks = map[uint64]uint64{}
 	}
 	for _, packet := range tick.RenderReturns {
+		stateAck, stateAcked := render.DecodeStateAck(game.Engine, packet)
+		if stateAcked {
+			if game.RenderStateAwaitingAck && stateAck.CommitId == game.RenderStateCommitId &&
+				stateAck.Revision == game.RenderStateRevision {
+				game.RenderStateAwaitingAck = false
+			} else if game.RenderStateAwaitingAck && stateAck.Revision >= game.RenderStateRevision {
+				return errors.New("blockkart: unexpected render state acknowledgement")
+			}
+			continue
+		}
 		ack, ok := render.DecodeAssetAck(game.Engine, packet)
 		if !ok {
 			continue
