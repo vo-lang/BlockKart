@@ -427,9 +427,9 @@ func (vehicle *BlockKartVehicleController) stepTires(
 		counterSteer = blockKartVehicleClamp(-signedSteer, 0, 1)
 	}
 	if driftBlend > 0 {
-		driftLateralAcceleration := 37000.0
+		driftLateralAcceleration := 46000.0
 		if offRoad {
-			driftLateralAcceleration = 17500.0
+			driftLateralAcceleration = 20000.0
 		}
 		maximumLateralAcceleration +=
 			(driftLateralAcceleration - maximumLateralAcceleration) * driftBlend
@@ -451,12 +451,13 @@ func (vehicle *BlockKartVehicleController) stepTires(
 			-0.72, 0.72,
 		)
 		desiredYawRate += assistYawRate * roadAssist * driverBlend
+		maximumLateralAcceleration += 18000.0 * roadAssist
 	}
-	maximumYawRate := 1.55
+	maximumYawRate := 1.9
 	if absoluteSpeed > 3500 {
 		maximumYawRate = maximumLateralAcceleration / absoluteSpeed
-		if maximumYawRate > 1.55 {
-			maximumYawRate = 1.55
+		if maximumYawRate > 1.9 {
+			maximumYawRate = 1.9
 		}
 	}
 	desiredYawRate = blockKartVehicleClamp(
