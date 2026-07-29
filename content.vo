@@ -1143,18 +1143,18 @@ func (game *BlockKart) kartRenderPacketsStyled(
 		partTransform := blockKartAuthoredKartTransform(transform, location)
 		steer_milliradians := int32(0)
 		if location[2] < 0 {
-			steeringScale := 0.36
+			steeringScale := 0.84
 			if steering_milli > 0 {
 				if location[0] > 0 {
-					steeringScale = 0.42
+					steeringScale = 0.96
 				} else {
-					steeringScale = 0.30
+					steeringScale = 0.76
 				}
 			} else if steering_milli < 0 {
 				if location[0] < 0 {
-					steeringScale = 0.42
+					steeringScale = 0.96
 				} else {
-					steeringScale = 0.30
+					steeringScale = 0.76
 				}
 			}
 			steer_milliradians = int32(float64(steering_milli) * steeringScale)

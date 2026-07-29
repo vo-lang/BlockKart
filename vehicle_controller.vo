@@ -83,8 +83,11 @@ func (game *BlockKart) drive(tick voplay.TickBatch) error {
 		game.MiniTurbo_ticks--
 	}
 	boosting := control.Boost || state.Boost_ticks != 0 || miniTurbo
+	// Gameplay input is expressed in screen space. The authored kart and camera
+	// mirror the simulation's horizontal basis, so convert once at the vehicle
+	// boundary and keep the rest of the controller internally consistent.
 	steerTarget := blockKartVehicleClamp(
-		float64(control.Steer_milli) / 1000.0, -1, 1,
+		-float64(control.Steer_milli) / 1000.0, -1, 1,
 	)
 	throttle := blockKartVehicleClamp(
 		float64(control.Throttle_milli) / 1000.0, 0, 1,
@@ -109,7 +112,7 @@ func (game *BlockKart) drive(tick voplay.TickBatch) error {
 	for substep := uint32(0); substep < blockKartVehicleSubsteps; substep++ {
 		game.Vehicle.step(
 			steerTarget, throttle, brake, boosting, miniTurbo,
-			game.OffRoad, game.Drifting, game.DriftDirection,
+			game.OffRoad, game.Drifting, -game.DriftDirection,
 			roadHeadingError, roadOffsetRatio,
 			substepSeconds,
 		)
@@ -219,33 +222,37 @@ func (vehicle *BlockKartVehicleController) stepSteering(
 ) {
 	reversing := target != 0 && vehicle.Steer_command != 0 &&
 		(vehicle.Steer_command < 0) != (target < 0)
-	commandRate := 1.8
-	if target == 0 {
-		commandRate = 3.6
-	} else if reversing {
-		commandRate = 5.2
-	}
-	vehicle.Steer_command = blockKartVehicleApproach(
-		vehicle.Steer_command, target, commandRate * deltaSeconds,
-	)
 	speedRatio := blockKartVehicleClamp(
 		math.Abs(vehicle.Forward_speed) /
 			blockKartVehicleNormalMaximumSpeed,
 		0, 1,
 	)
-	maximumWheelAngle := 0.43 + (0.12 - 0.43) * speedRatio
-	if offRoad {
-		maximumWheelAngle = 0.34
+	commandRate := 4.6 - speedRatio * 1.2
+	if target == 0 {
+		commandRate = 6.8
+	} else if reversing {
+		commandRate = 8.4
 	}
-	wheelTarget := vehicle.Steer_command * maximumWheelAngle
+	vehicle.Steer_command = blockKartVehicleApproach(
+		vehicle.Steer_command, target, commandRate * deltaSeconds,
+	)
+	maximumWheelAngle := 0.46 + (0.14 - 0.46) * math.Sqrt(speedRatio)
+	if offRoad {
+		maximumWheelAngle *= 0.88
+	}
+	shapedCommand := math.Pow(math.Abs(vehicle.Steer_command), 1.12)
+	if vehicle.Steer_command < 0 {
+		shapedCommand = -shapedCommand
+	}
+	wheelTarget := shapedCommand * maximumWheelAngle
 	wheelReversing := wheelTarget != 0 &&
 		vehicle.Wheel_angle_radians != 0 &&
 		(vehicle.Wheel_angle_radians < 0) != (wheelTarget < 0)
-	wheelRate := 1.25
+	wheelRate := 3.4
 	if target == 0 {
-		wheelRate = 2.2
+		wheelRate = 5.2
 	} else if reversing || wheelReversing {
-		wheelRate = 2.5
+		wheelRate = 6.6
 	}
 	vehicle.Wheel_angle_radians = blockKartVehicleApproach(
 		vehicle.Wheel_angle_radians,
@@ -345,41 +352,48 @@ func (vehicle *BlockKartVehicleController) stepTires(
 			blockKartVehicleWheelbase *
 			math.Tan(vehicle.Wheel_angle_radians)
 	}
-	maximumLateralAcceleration := 16000.0
+	maximumLateralAcceleration := 21500.0
 	if offRoad {
-		maximumLateralAcceleration = 10500.0
+		maximumLateralAcceleration = 12500.0
 	}
 	if drifting {
-		maximumLateralAcceleration = 19000.0
+		maximumLateralAcceleration = 24500.0
 		desiredYawRate += float64(driftDirection) * 0.24
 	}
 	roadAssist := blockKartVehicleClamp(
 		(math.Abs(roadOffsetRatio) - 0.55) / 0.45,
 		0, 1,
 	)
-	if roadAssist > 0 && !drifting && vehicle.Forward_speed > 2500 {
+	driverOverride := 1.0 - blockKartVehicleClamp(
+		math.Abs(vehicle.Steer_command) * 1.35, 0, 1,
+	)
+	if roadAssist > 0 && driverOverride > 0 &&
+		!drifting && vehicle.Forward_speed > 2500 {
 		assistYawRate := blockKartVehicleClamp(
-			roadHeadingError * 0.62 - roadOffsetRatio * 0.32,
+			roadHeadingError * 0.72 - roadOffsetRatio * 0.38,
 			-0.58, 0.58,
 		)
-		desiredYawRate += assistYawRate * roadAssist
+		desiredYawRate += assistYawRate * roadAssist * driverOverride
 	}
-	maximumYawRate := 1.25
+	maximumYawRate := 1.35
 	if absoluteSpeed > 3500 {
 		maximumYawRate = maximumLateralAcceleration / absoluteSpeed
-		if maximumYawRate > 1.25 {
-			maximumYawRate = 1.25
+		if maximumYawRate > 1.35 {
+			maximumYawRate = 1.35
 		}
 	}
 	desiredYawRate = blockKartVehicleClamp(
 		desiredYawRate, -maximumYawRate, maximumYawRate,
 	)
-	yawAcceleration := 1.7
+	speedRatio := blockKartVehicleClamp(
+		absoluteSpeed / blockKartVehicleNormalMaximumSpeed, 0, 1,
+	)
+	yawAcceleration := 4.6 - speedRatio * 1.4
 	if desiredYawRate == 0 {
-		yawAcceleration = 3.2
+		yawAcceleration = 5.8
 	} else if vehicle.Yaw_rate != 0 &&
 		(vehicle.Yaw_rate < 0) != (desiredYawRate < 0) {
-		yawAcceleration = 4.8
+		yawAcceleration = 7.4
 	}
 	vehicle.Yaw_rate = blockKartVehicleApproach(
 		vehicle.Yaw_rate,
@@ -462,7 +476,7 @@ func (game *BlockKart) updateVehicleDrift(control KartControl) {
 
 func (game *BlockKart) publishVehiclePresentation(deltaSeconds float64) {
 	game.Steering_milli = int32(
-		game.Vehicle.Wheel_angle_radians * 1000.0,
+		-game.Vehicle.Wheel_angle_radians * 1000.0,
 	)
 	speedRatio := blockKartVehicleClamp(
 		math.Abs(game.Vehicle.Forward_speed) /
