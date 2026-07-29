@@ -40,10 +40,9 @@ func (game *BlockKart) trackProgressMilli(transform Transform) int64 {
 			continue
 		}
 		segmentLength := math.Sqrt(lengthSquared)
-		along := (
-			float64(transform.X-point.X)*dx +
-				float64(transform.Z-point.Z)*dz
-		) / lengthSquared
+		projection := float64(transform.X-point.X)*dx +
+			float64(transform.Z-point.Z)*dz
+		along := projection / lengthSquared
 		if along < 0 {
 			along = 0
 		}
