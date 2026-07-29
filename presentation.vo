@@ -72,7 +72,7 @@ func blockKartRivalSpeed(rivalIndex int) int64 {
 }
 
 func blockKartRivalOffset(rivalIndex int) int64 {
-	offsets := []int64{6000, 10200, 14600, 19200, 24000, 29000, 34200}
+	offsets := []int64{34000, 39200, 44600, 50200, 56000, 62000, 68200}
 	if rivalIndex < 0 || rivalIndex >= len(offsets) {
 		return offsets[0]
 	}
