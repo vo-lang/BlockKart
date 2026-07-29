@@ -838,17 +838,8 @@ func (game *BlockKart) frame(tick voplay.TickBatch, pulse []byte) (voplay.TickOu
 		game.RenderPulseCounter++
 	}
 	if game.RenderWorldPublished && game.RenderAssetsPublished &&
-		game.RenderPulseCounter % 2 == 0 {
-		game.RenderRevision++
-		noOpPacket, encoded := render.EncodeTransactionPacket(
-			game.Engine, 1, framePulse.PulseId, game.RenderRevision - 1, game.RenderRevision,
-			game.RenderControls.Revision, tick.FirstTick, []render.TransactionOp{},
-		)
-		if !encoded {
-			return voplay.TickOutput{}, errors.New("blockkart: encode retained no-op frame")
-		}
+		game.RenderPulseCounter % 3 != 1 {
 		return voplay.TickOutput{
-			RenderPackets: [][]byte{noOpPacket},
 			AssetPackets: assetPackets,
 		}, nil
 	}
