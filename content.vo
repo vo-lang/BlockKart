@@ -232,10 +232,27 @@ func (game *BlockKart) startGameplay(context voplay.StartContext) error {
 	}
 	for index := 3; index < len(points); index += 5 {
 		position := points[index]
+		nextPosition := points[(index + 1) % len(points)]
+		deltaX := float64(nextPosition[0] - position[0])
+		deltaZ := float64(nextPosition[2] - position[2])
+		segmentLength := math.Sqrt(deltaX * deltaX + deltaZ * deltaZ)
+		if segmentLength < 1 {
+			return errors.New("blockkart: moving obstacle road tangent")
+		}
+		side := 1.0
+		if index % 2 == 0 {
+			side = -1.0
+		}
+		rightX := deltaZ / segmentLength
+		rightZ := -deltaX / segmentLength
+		roadsideOffset := 10500.0 * side
 		entityId := uint64(40 + index / 5)
 		obstacle := MovingObstacle{
-			Origin_x: position[0], Origin_y: position[1] + 1400, Origin_z: position[2], Axis_x: 1000,
-			Axis_z: 0, Amplitude_milli: 9000,
+			Origin_x: position[0] + int64(rightX * roadsideOffset),
+			Origin_y: position[1] + 1100,
+			Origin_z: position[2] + int64(rightZ * roadsideOffset),
+			Axis_x: int32(rightX * 1000), Axis_z: int32(rightZ * 1000),
+			Amplitude_milli: 1800,
 			Period_ticks: 18 * blockKartTicksPerSecond, Phase_ticks: uint32(index * 57),
 		}
 		if !game.Transforms.Upsert(entityId, Transform{
@@ -252,7 +269,7 @@ func (game *BlockKart) startGameplay(context voplay.StartContext) error {
 			return errors.New("blockkart: moving obstacle body")
 		}
 		collider, ok := game.Physics.CreateCollider(physics3d.ColliderDesc{
-			Body: body, HalfExtent: [3]uint32{1800, 1400, 1800},
+			Body: body, HalfExtent: [3]uint32{1050, 1100, 1050},
 			Layer: blockKartLayerWorld, Mask: blockKartLayerKart,
 		})
 		if !ok {
@@ -313,6 +330,9 @@ func (game *BlockKart) applyGameplayContacts(state *KartState) error {
 	if state == nil {
 		return errors.New("blockkart: missing gameplay state")
 	}
+	if game.ObstacleHitCooldown_ticks != 0 {
+		game.ObstacleHitCooldown_ticks--
+	}
 	for _, contact := range game.Contacts {
 		var other physics3d.BodyRef
 		if contact.A == game.KartBody {
@@ -355,11 +375,11 @@ func (game *BlockKart) applyGameplayContacts(state *KartState) error {
 			}
 		}
 		for _, obstacle := range game.ObstacleEntities {
-			if obstacle.Body == other {
+			if obstacle.Body == other && game.ObstacleHitCooldown_ticks == 0 {
 				game.HitAudioPending = true
-				state.Speed_per_second = 0
+				state.Speed_per_second = state.Speed_per_second * 58 / 100
 				state.Boost_ticks = 0
-				return game.recoverToTrack()
+				game.ObstacleHitCooldown_ticks = blockKartTicksPerSecond / 2
 			}
 		}
 	}
@@ -503,8 +523,8 @@ func (game *BlockKart) buildStaticRenderPackets() [][]byte {
 	materials := []render3d.Material{
 		{Id: 100, BaseColor: [4]uint16{65535, 65535, 65535, 65535}, Roughness: 59000, Alpha: render3d.AlphaOpaque, Textures: [5]uint64{12005, 12001, 12003, 12002, 12004}, Revision: 1},
 		{Id: 101, BaseColor: [4]uint16{15000, 15500, 16000, 65535}, Roughness: 57000, Alpha: render3d.AlphaOpaque, Textures: [5]uint64{12004, 12009, 12010}, Revision: 1},
-		{Id: 102, BaseColor: [4]uint16{6000, 37000, 62000, 65535}, Metallic: 5000, Roughness: 30000, Alpha: render3d.AlphaOpaque, Revision: 1},
-		{Id: 103, BaseColor: [4]uint16{65535, 50000, 5000, 65535}, Metallic: 12000, Roughness: 18000, Emissive: [3]uint16{16000, 9000, 500}, Alpha: render3d.AlphaOpaque, Revision: 1},
+		{Id: 102, BaseColor: [4]uint16{2400, 17500, 52000, 65535}, Metallic: 12000, Roughness: 23000, Alpha: render3d.AlphaOpaque, Revision: 1},
+		{Id: 103, BaseColor: [4]uint16{65535, 25500, 2400, 65535}, Metallic: 12000, Roughness: 21000, Emissive: [3]uint16{8500, 2600, 200}, Alpha: render3d.AlphaOpaque, Revision: 1},
 		{Id: 104, BaseColor: [4]uint16{5000, 42000, 65535, 65535}, Roughness: 22000, Emissive: [3]uint16{1000, 10000, 18000}, Alpha: render3d.AlphaOpaque, Revision: 1},
 		{Id: 105, BaseColor: [4]uint16{56000, 9000, 5000, 65535}, Roughness: 46000, Alpha: render3d.AlphaOpaque, Revision: 1},
 		{Id: 106, BaseColor: [4]uint16{1800, 2100, 2400, 65535}, Roughness: 62000, Alpha: render3d.AlphaOpaque, Revision: 1},
@@ -1079,7 +1099,7 @@ func (game *BlockKart) kartRenderPacketsStyled(
 		{Material: primaryMaterial, Mesh: 10002},
 		{Material: 106, Mesh: 10003},
 		{Material: 103, Mesh: 10004},
-		{Material: 118, Mesh: 10005},
+		{Material: 103, Mesh: 10005},
 		{Material: 124, Mesh: 10006},
 		{Material: 107, Mesh: 10007},
 		{Material: 125, Mesh: 10013},
@@ -1090,11 +1110,11 @@ func (game *BlockKart) kartRenderPacketsStyled(
 		{Mesh: 10009, Material: 122},
 		{Mesh: 10010, Material: 103},
 		{Mesh: 10011, Material: 107},
-		{Mesh: 10012, Material: 118},
+		{Mesh: 10012, Material: 103},
 	}
 	wheelLocations := [][3]int64{
-		{-1320, -260, 1120}, {1320, -260, 1120},
-		{-1320, -260, -1230}, {1320, -260, -1230},
+		{-1320, -220, 1060}, {1320, -220, 1060},
+		{-1320, -220, -1180}, {1320, -220, -1180},
 	}
 	visualTransform := blockKartAuthoredKartTransform(transform, [3]int64{0, 0, 0})
 	packets := make([][]byte, 0, 1 + len(wheelLocations))
@@ -1134,7 +1154,7 @@ func (game *BlockKart) kartRenderPacketsStyled(
 			blockKartAuthoredWheelMatrix(
 				partTransform, steer_milliradians, wheelSpin_milliradians,
 			),
-			520, 520, 520,
+			480, 480, 480,
 		)
 		if len(packet) == 0 {
 			return nil, false
@@ -1474,9 +1494,9 @@ func (game *BlockKart) cameraPacket(kart Transform, tick uint64) []byte {
 		return nil
 	}
 	heading := float64(kart.Yaw_milliradians) / 1000.0
-	distance := 8200.0 + speedRatio * 2400.0
-	height := int64(4200.0 + speedRatio * 800.0)
-	lookAhead := 7600.0 + speedRatio * 7600.0
+	distance := 6800.0 + speedRatio * 2000.0
+	height := int64(3400.0 + speedRatio * 600.0)
+	lookAhead := 9000.0 + speedRatio * 7000.0
 	lateralLook := float64(game.Steering_milli) * 0.18
 	cameraSide := -float64(game.Steering_milli) * 0.035
 	if game.Drifting {
@@ -1516,7 +1536,7 @@ func (game *BlockKart) cameraPacket(kart Transform, tick uint64) []byte {
 	targetZ := kart.Z + int64(
 		math.Cos(heading) * lookAhead - math.Sin(heading) * lateralLook,
 	)
-	targetY := kart.Y + int64(1450.0 + speedRatio * 180.0)
+	targetY := kart.Y + int64(1050.0 + speedRatio * 160.0)
 	if game.CameraMode == 2 {
 		targetX = kart.X
 		targetZ = kart.Z
@@ -1626,6 +1646,7 @@ func (game *BlockKart) restartRace() error {
 	game.OffRoad = false
 	game.Drifting = false
 	game.HitAudioPending = false
+	game.ObstacleHitCooldown_ticks = 0
 	game.Paused = false
 	return game.respawn()
 }

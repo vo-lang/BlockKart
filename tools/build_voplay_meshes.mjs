@@ -347,110 +347,133 @@ function torusTemplate(majorSegments, minorSegments, majorRadius, minorRadius) {
 }
 
 function buildHeroKartMeshes() {
-  const box = beveledBoxTemplate(0.34);
-  const slimBox = beveledBoxTemplate(0.16);
-  const sphere = uvSphereTemplate(16, 10);
-  const cylinder = cylinderTemplate(12);
+  const box = beveledBoxTemplate(0.28);
+  const slimBox = beveledBoxTemplate(0.10);
+  const sphere = uvSphereTemplate(20, 12);
+  const cylinder = cylinderTemplate(16);
   const primary = mergeMeshes([
     meshFromTemplate(kartBodyTemplate(), [
-      sceneInstanceEuler([0, 0.10, 0.18], [2.08, 0.70, 2.48], [0, 0, 0]),
-      sceneInstanceEuler([0, 0.12, -1.20], [1.74, 0.52, 1.20], [0.05, 0, 0]),
-    ]),
-    meshFromTemplate(sphere, [
-      sceneInstanceEuler([-0.92, 0.20, -0.82], [0.76, 0.56, 1.16], [0, 0, 0]),
-      sceneInstanceEuler([0.92, 0.20, -0.82], [0.76, 0.56, 1.16], [0, 0, 0]),
-      sceneInstanceEuler([-0.92, 0.24, 0.86], [0.80, 0.62, 1.10], [0, 0, 0]),
-      sceneInstanceEuler([0.92, 0.24, 0.86], [0.80, 0.62, 1.10], [0, 0, 0]),
-      sceneInstanceEuler([0, 0.37, -1.26], [1.44, 0.48, 0.80], [0, 0, 0]),
+      sceneInstanceEuler([0, 0.06, 0.04], [1.72, 0.56, 2.32], [0, 0, 0]),
+      sceneInstanceEuler([0, 0.12, -1.20], [1.34, 0.44, 1.06], [0.05, 0, 0]),
     ]),
     meshFromTemplate(box, [
-      sceneInstanceEuler([-1.08, -0.02, 0.08], [0.34, 0.26, 1.62], [0, 0, 0]),
-      sceneInstanceEuler([1.08, -0.02, 0.08], [0.34, 0.26, 1.62], [0, 0, 0]),
+      sceneInstanceEuler([-0.94, 0.16, -0.18], [0.52, 0.42, 1.58], [0, 0.03, 0]),
+      sceneInstanceEuler([0.94, 0.16, -0.18], [0.52, 0.42, 1.58], [0, -0.03, 0]),
+      sceneInstanceEuler([-0.74, 0.28, 0.92], [0.62, 0.48, 0.72], [0, 0, 0]),
+      sceneInstanceEuler([0.74, 0.28, 0.92], [0.62, 0.48, 0.72], [0, 0, 0]),
+      sceneInstanceEuler([0, 0.16, -1.62], [1.64, 0.22, 0.26], [0, 0, 0]),
+    ]),
+    meshFromTemplate(sphere, [
+      sceneInstanceEuler([-0.94, 0.24, -0.26], [0.58, 0.48, 1.48], [0, 0, 0]),
+      sceneInstanceEuler([0.94, 0.24, -0.26], [0.58, 0.48, 1.48], [0, 0, 0]),
+      sceneInstanceEuler([-0.73, 0.35, 0.89], [0.67, 0.52, 0.70], [0, 0, 0]),
+      sceneInstanceEuler([0.73, 0.35, 0.89], [0.67, 0.52, 0.70], [0, 0, 0]),
     ]),
   ]);
   const rubber = mergeMeshes([
     meshFromTemplate(box, [
-      sceneInstanceEuler([0, 0.69, 0.52], [0.94, 0.94, 0.68], [-0.20, 0, 0]),
-      sceneInstanceEuler([0, -0.30, 0.12], [1.62, 0.16, 2.78], [0, 0, 0]),
-      sceneInstanceEuler([0, 0.18, -1.69], [1.06, 0.34, 0.16], [0, 0, 0]),
-      sceneInstanceEuler([-0.58, 0.26, 1.52], [0.36, 0.28, 0.20], [0, 0, 0]),
-      sceneInstanceEuler([0.58, 0.26, 1.52], [0.36, 0.28, 0.20], [0, 0, 0]),
+      sceneInstanceEuler([0, 0.68, 0.47], [0.82, 0.96, 0.46], [-0.18, 0, 0]),
+      sceneInstanceEuler([0, -0.28, 0.08], [1.88, 0.14, 2.78], [0, 0, 0]),
+      sceneInstanceEuler([0, 0.29, 1.20], [1.16, 0.56, 0.58], [0, 0, 0]),
+      sceneInstanceEuler([0, 0.70, 1.03], [0.42, 0.34, 0.46], [-0.08, 0, 0]),
+      sceneInstanceEuler([0, 0.08, -1.74], [2.12, 0.14, 0.16], [0, 0, 0]),
+      sceneInstanceEuler([0, 0.10, 1.65], [2.24, 0.15, 0.18], [0, 0, 0]),
+      sceneInstanceEuler([-1.14, 0.13, 0.03], [0.12, 0.14, 1.48], [0, 0, 0]),
+      sceneInstanceEuler([1.14, 0.13, 0.03], [0.12, 0.14, 1.48], [0, 0, 0]),
     ]),
-    meshFromTemplate(torusTemplate(12, 6, 0.34, 0.07), [
-      sceneInstanceEuler([0, 0.92, -0.16], [1.0, 1.0, 1.0], [0, Math.PI * 0.5, -0.18]),
+    meshFromTemplate(torusTemplate(18, 7, 0.29, 0.055), [
+      sceneInstanceEuler([0, 0.87, -0.27], [1.0, 1.0, 1.0], [0.24, Math.PI * 0.5, 0]),
     ]),
   ]);
   const gold = mergeMeshes([
     meshFromTemplate(slimBox, [
-      sceneInstanceEuler([0, 0.03, -1.80], [1.92, 0.20, 0.18], [0, 0, 0]),
-      sceneInstanceEuler([-1.20, 0.04, -0.12], [0.14, 0.18, 1.34], [0, 0, 0]),
-      sceneInstanceEuler([1.20, 0.04, -0.12], [0.14, 0.18, 1.34], [0, 0, 0]),
-      sceneInstanceEuler([0, 1.08, 1.48], [2.02, 0.18, 0.30], [0, 0, 0]),
-      sceneInstanceEuler([-0.88, 0.73, 1.38], [0.14, 0.70, 0.14], [0, 0, -0.16]),
-      sceneInstanceEuler([0.88, 0.73, 1.38], [0.14, 0.70, 0.14], [0, 0, 0.16]),
-      sceneInstanceEuler([0, 0.46, -1.52], [1.14, 0.10, 0.10], [0, 0, 0]),
-      sceneInstanceEuler([-0.67, 0.44, -1.31], [0.10, 0.12, 0.74], [0, 0.22, 0]),
-      sceneInstanceEuler([0.67, 0.44, -1.31], [0.10, 0.12, 0.74], [0, -0.22, 0]),
+      sceneInstanceEuler([0, 0.34, -1.47], [1.34, 0.08, 0.18], [0, 0, 0]),
+      sceneInstanceEuler([0, 0.38, -1.13], [0.24, 0.08, 0.84], [0, 0, 0]),
+      sceneInstanceEuler([-1.18, 0.22, -0.12], [0.10, 0.12, 1.46], [0, 0.02, 0]),
+      sceneInstanceEuler([1.18, 0.22, -0.12], [0.10, 0.12, 1.46], [0, -0.02, 0]),
+      sceneInstanceEuler([-0.96, 0.44, 0.58], [0.20, 0.055, 0.52], [0, 0, -0.04]),
+      sceneInstanceEuler([0.96, 0.44, 0.58], [0.20, 0.055, 0.52], [0, 0, 0.04]),
+      sceneInstanceEuler([0, 0.27, 1.66], [1.94, 0.12, 0.17], [0, 0, 0]),
+      sceneInstanceEuler([-0.70, 0.56, 1.32], [0.11, 0.52, 0.11], [0, 0, -0.10]),
+      sceneInstanceEuler([0.70, 0.56, 1.32], [0.11, 0.52, 0.11], [0, 0, 0.10]),
+      sceneInstanceEuler([0, 1.65, 0.59], [0.07, 0.34, 0.055], [0, 0, 0]),
     ]),
-    meshFromTemplate(torusTemplate(16, 5, 0.52, 0.035), [
-      sceneInstanceEuler([0, 0.33, -1.25], [1.32, 0.78, 1], [Math.PI * 0.5, 0, 0]),
-    ]),
-  ]);
-  const driver = mergeMeshes([
-    meshFromTemplate(driverTorsoTemplate(), [
-      sceneInstanceEuler([0, 0.88, 0.40], [0.80, 0.92, 0.58], [-0.16, 0, 0]),
-    ]),
-    meshFromTemplate(sphere, [
-      sceneInstanceEuler([0, 1.53, 0.35], [0.76, 0.80, 0.76], [0, 0, 0]),
-      sceneInstanceEuler([-0.35, 0.97, -0.14], [0.22, 0.22, 0.22], [0, 0, 0]),
-      sceneInstanceEuler([0.35, 0.97, -0.14], [0.22, 0.22, 0.22], [0, 0, 0]),
+    meshFromTemplate(torusTemplate(18, 6, 0.48, 0.025), [
+      sceneInstanceEuler([0, 0.43, -1.26], [1.24, 0.72, 1], [Math.PI * 0.5, 0, 0]),
     ]),
   ]);
-  const visor = meshFromTemplate(box, [
-    sceneInstanceEuler([0, 1.56, -0.03], [0.70, 0.25, 0.13], [-0.04, 0, 0]),
-    sceneInstanceEuler([0, 0.82, 0.12], [0.54, 0.18, 0.42], [-0.20, 0, 0]),
+  const driver = meshFromTemplate(sphere, [
+    sceneInstanceEuler([0, 1.44, 0.25], [0.66, 0.70, 0.68], [0, 0, 0]),
+    sceneInstanceEuler([-0.31, 0.91, -0.20], [0.20, 0.20, 0.20], [0, 0, 0]),
+    sceneInstanceEuler([0.31, 0.91, -0.20], [0.20, 0.20, 0.20], [0, 0, 0]),
+  ]);
+  const visor = meshFromTemplate(slimBox, [
+    sceneInstanceEuler([0, 1.45, -0.10], [0.62, 0.22, 0.10], [-0.07, 0, 0]),
+    sceneInstanceEuler([0, 0.74, 0.20], [0.56, 0.16, 0.40], [-0.18, 0, 0]),
+    sceneInstanceEuler([0, 0.45, 1.51], [0.72, 0.10, 0.08], [0, 0, 0]),
+    sceneInstanceEuler([0, 0.61, 1.51], [0.72, 0.08, 0.08], [0, 0, 0]),
   ]);
   const metal = mergeMeshes([
     meshFromTemplate(cylinder, [
-      sceneInstanceEuler([-0.76, 0.08, 1.68], [0.30, 0.92, 0.30], [Math.PI * 0.5, 0, 0]),
-      sceneInstanceEuler([0.76, 0.08, 1.68], [0.30, 0.92, 0.30], [Math.PI * 0.5, 0, 0]),
-      sceneInstanceEuler([0, -0.11, 1.10], [0.18, 1.95, 0.18], [0, 0, Math.PI * 0.5]),
-      sceneInstanceEuler([0, -0.11, -1.15], [0.16, 1.92, 0.16], [0, 0, Math.PI * 0.5]),
+      sceneInstanceEuler([-0.66, 0.18, 1.70], [0.25, 0.58, 0.25], [Math.PI * 0.5, 0, 0]),
+      sceneInstanceEuler([0.66, 0.18, 1.70], [0.25, 0.58, 0.25], [Math.PI * 0.5, 0, 0]),
+      sceneInstanceEuler([0, -0.11, 1.06], [0.15, 2.12, 0.15], [0, 0, Math.PI * 0.5]),
+      sceneInstanceEuler([0, -0.11, -1.18], [0.14, 2.08, 0.14], [0, 0, Math.PI * 0.5]),
     ]),
     meshFromTemplate(slimBox, [
-      sceneInstanceEuler([0, 0.30, 1.54], [0.88, 0.20, 0.18], [0, 0, 0]),
-      sceneInstanceEuler([0, 0.46, -1.58], [0.58, 0.12, 0.10], [0, 0, 0]),
+      sceneInstanceEuler([-0.72, -0.04, 0.94], [0.86, 0.08, 0.10], [0, -0.36, 0]),
+      sceneInstanceEuler([0.72, -0.04, 0.94], [0.86, 0.08, 0.10], [0, 0.36, 0]),
+      sceneInstanceEuler([-0.72, -0.04, -1.04], [0.86, 0.08, 0.10], [0, 0.36, 0]),
+      sceneInstanceEuler([0.72, -0.04, -1.04], [0.86, 0.08, 0.10], [0, -0.36, 0]),
+      sceneInstanceEuler([0, 0.36, 1.48], [0.90, 0.10, 0.10], [0, 0, 0]),
     ]),
   ]);
   const tailLights = meshFromTemplate(sphere, [
-    sceneInstanceEuler([-0.72, 0.48, 1.49], [0.30, 0.24, 0.14], [0, 0, 0]),
-    sceneInstanceEuler([0.72, 0.48, 1.49], [0.30, 0.24, 0.14], [0, 0, 0]),
+    sceneInstanceEuler([-0.70, 0.49, 1.54], [0.24, 0.18, 0.11], [0, 0, 0]),
+    sceneInstanceEuler([0.70, 0.49, 1.54], [0.24, 0.18, 0.11], [0, 0, 0]),
   ]);
-  const suitAccent = meshFromTemplate(slimBox, [
-    sceneInstanceEuler([0, 1.00, 0.10], [0.48, 0.24, 0.12], [-0.16, 0, 0]),
-    sceneInstanceEuler([0, 1.79, 0.36], [0.42, 0.09, 0.20], [0, 0, 0]),
+  const suitAccent = mergeMeshes([
+    meshFromTemplate(driverTorsoTemplate(), [
+      sceneInstanceEuler([0, 0.89, 0.32], [0.68, 0.84, 0.52], [-0.15, 0, 0]),
+    ]),
+    meshFromTemplate(sphere, [
+      sceneInstanceEuler([-0.28, 1.05, 0.14], [0.32, 0.28, 0.32], [0, 0, 0]),
+      sceneInstanceEuler([0.28, 1.05, 0.14], [0.32, 0.28, 0.32], [0, 0, 0]),
+      sceneInstanceEuler([0, 1.44, 0.25], [0.18, 0.715, 0.695], [0, 0, 0]),
+    ]),
+    meshFromTemplate(slimBox, [
+      sceneInstanceEuler([-0.25, 0.94, -0.10], [0.18, 0.16, 0.56], [0.48, 0, -0.08]),
+      sceneInstanceEuler([0.25, 0.94, -0.10], [0.18, 0.16, 0.56], [0.48, 0, 0.08]),
+      sceneInstanceEuler([0, 1.16, 0.55], [0.42, 0.11, 0.07], [-0.15, 0, 0]),
+    ]),
   ]);
 
-  const tire = meshFromTemplate(torusTemplate(16, 8, 0.34, 0.14), [
+  const tire = meshFromTemplate(torusTemplate(20, 10, 0.33, 0.12), [
     sceneInstanceEuler([0, 0, 0], [1.0, 1.0, 1.0], [0, 0, 0]),
   ]);
-  const rim = meshFromTemplate(torusTemplate(14, 6, 0.21, 0.055), [
-    sceneInstanceEuler([0, 0, 0], [1.0, 1.0, 1.0], [0, 0, 0]),
+  const rim = mergeMeshes([
+    meshFromTemplate(torusTemplate(18, 7, 0.215, 0.045), [
+      sceneInstanceEuler([0, 0, 0], [1.0, 1.0, 1.0], [0, 0, 0]),
+    ]),
+    meshFromTemplate(wheelTemplate(18), [
+      sceneInstanceEuler([-0.105, 0, 0], [0.035, 0.46, 0.46], [0, 0, 0]),
+      sceneInstanceEuler([0.105, 0, 0], [0.035, 0.46, 0.46], [0, 0, 0]),
+    ]),
   ]);
-  const hub = meshFromTemplate(wheelTemplate(14), [
-    sceneInstanceEuler([0, 0, 0], [0.18, 0.32, 0.32], [0, 0, 0]),
+  const hub = meshFromTemplate(wheelTemplate(18), [
+    sceneInstanceEuler([0, 0, 0], [0.22, 0.28, 0.28], [0, 0, 0]),
   ]);
-  const spokes = meshFromTemplate(slimBox, Array.from({ length: 6 }, (_, index) => {
-    const angle = index / 6 * Math.PI * 2;
+  const spokes = meshFromTemplate(slimBox, Array.from({ length: 8 }, (_, index) => {
+    const angle = index / 8 * Math.PI * 2;
     return sceneInstanceEuler(
-      [0, Math.cos(angle) * 0.15, Math.sin(angle) * 0.15],
-      [0.10, 0.08, 0.34],
+      [0, Math.cos(angle) * 0.14, Math.sin(angle) * 0.14],
+      [0.11, 0.055, 0.32],
       [angle, 0, 0],
     );
   }));
-  const wheelHighlight = meshFromTemplate(torusTemplate(14, 4, 0.255, 0.018), [
-    sceneInstanceEuler([-0.105, 0, 0], [1.0, 1.0, 1.0], [0, 0, 0]),
-    sceneInstanceEuler([0.105, 0, 0], [1.0, 1.0, 1.0], [0, 0, 0]),
+  const wheelHighlight = meshFromTemplate(torusTemplate(18, 5, 0.255, 0.014), [
+    sceneInstanceEuler([-0.112, 0, 0], [1.0, 1.0, 1.0], [0, 0, 0]),
+    sceneInstanceEuler([0.112, 0, 0], [1.0, 1.0, 1.0], [0, 0, 0]),
   ]);
 
   return [
