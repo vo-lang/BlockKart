@@ -832,6 +832,16 @@ func (game *BlockKart) frame(tick voplay.TickBatch, pulse []byte) (voplay.TickOu
 	if err := game.updateRenderMetrics(framePulse.Metrics); err != nil {
 		return voplay.TickOutput{}, err
 	}
+	if game.RenderWorldPublished && !game.RenderAssetsPublished {
+		assetCount := len(game.RenderAssetPackets)
+		acknowledgedCount := len(game.RenderAssetAcks)
+		if int(game.RenderAssetCursor) == assetCount && acknowledgedCount >= assetCount {
+			game.RenderAssetsPublished = true
+		} else if game.RenderAssetCursor != 0 &&
+			acknowledgedCount < int(game.RenderAssetCursor) {
+			return voplay.TickOutput{AssetPackets: assetPackets}, nil
+		}
+	}
 	if game.RenderWorldPublished && game.RenderAssetsPublished {
 		game.RenderPulseCounter++
 	}
@@ -934,7 +944,8 @@ func (game *BlockKart) frame(tick voplay.TickBatch, pulse []byte) (voplay.TickOu
 			output.RenderPackets = append(output.RenderPackets, game.RenderAssetPackets[game.RenderAssetCursor])
 			game.RenderAssetCursor++
 		}
-		if int(game.RenderAssetCursor) == len(game.RenderAssetPackets) {
+		if int(game.RenderAssetCursor) == len(game.RenderAssetPackets) &&
+			len(game.RenderAssetAcks) >= len(game.RenderAssetPackets) {
 			game.RenderAssetsPublished = true
 		}
 	}
