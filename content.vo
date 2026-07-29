@@ -333,49 +333,6 @@ func (game *BlockKart) updateDynamics(tick voplay.TickBatch) error {
 			}
 		}
 	}
-	if game.ObstacleHitCooldown_ticks == 0 && state.Countdown_ticks == 0 && !state.Finished {
-		for rivalIndex := 0; rivalIndex < int(blockKartRivalCount); rivalIndex++ {
-			rival, _, _, _, _, found := game.rivalVisualState(
-				game.RenderPulseCounter, rivalIndex,
-			)
-			if !found {
-				continue
-			}
-			deltaX := rival.X - transform.X
-			deltaZ := rival.Z - transform.Z
-			distanceSquared := float64(deltaX*deltaX + deltaZ*deltaZ)
-			if distanceSquared >= 7600000 {
-				continue
-			}
-			distance := math.Sqrt(distanceSquared)
-			if distance < 1 {
-				distance = 1
-			}
-			normalX := float64(deltaX) / distance
-			normalZ := float64(deltaZ) / distance
-			pushDistance := int64(2840.0 - distance)
-			if pushDistance < 160 {
-				pushDistance = 160
-			}
-			transform.X -= int64(normalX * float64(pushDistance))
-			transform.Z -= int64(normalZ * float64(pushDistance))
-			road := game.nearestRoadSample(*transform)
-			transform.Y = road.Y
-			impactSide := game.Vehicle.ApplyImpact(normalX, normalZ)
-			state.Speed_per_second = int64(game.Vehicle.Forward_speed)
-			if !game.Physics.Submit(physics3d.Command{
-				Kind: physics3d.CommandTeleport, Body: game.KartBody,
-				Value: [3]int64{transform.X, transform.Y, transform.Z},
-			}) || !game.Transforms.Upsert(game.KartEntity, *transform) {
-				return errors.New("blockkart: resolve rival impact")
-			}
-			game.HitAudioPending = true
-			game.CollisionShake_ticks = 7
-			game.CollisionShake_side_milli = int32(impactSide * 850.0)
-			game.ObstacleHitCooldown_ticks = blockKartTicksPerSecond / 3
-			break
-		}
-	}
 	return nil
 }
 
@@ -480,6 +437,49 @@ func (game *BlockKart) applyGameplayContacts(
 				game.CollisionShake_side_milli = int32(impactSide * 1000.0)
 				game.ObstacleHitCooldown_ticks = blockKartTicksPerSecond / 2
 			}
+		}
+	}
+	if game.ObstacleHitCooldown_ticks == 0 && state.Countdown_ticks == 0 && !state.Finished {
+		for rivalIndex := 0; rivalIndex < int(blockKartRivalCount); rivalIndex++ {
+			rival, _, _, _, _, found := game.rivalVisualState(
+				game.RenderPulseCounter, rivalIndex,
+			)
+			if !found {
+				continue
+			}
+			deltaX := rival.X - transform.X
+			deltaZ := rival.Z - transform.Z
+			distanceSquared := float64(deltaX*deltaX + deltaZ*deltaZ)
+			if distanceSquared >= 7600000 {
+				continue
+			}
+			distance := math.Sqrt(distanceSquared)
+			if distance < 1 {
+				distance = 1
+			}
+			normalX := float64(deltaX) / distance
+			normalZ := float64(deltaZ) / distance
+			pushDistance := int64(2840.0 - distance)
+			if pushDistance < 160 {
+				pushDistance = 160
+			}
+			transform.X -= int64(normalX * float64(pushDistance))
+			transform.Z -= int64(normalZ * float64(pushDistance))
+			road := game.nearestRoadSample(*transform)
+			transform.Y = road.Y
+			impactSide := game.Vehicle.ApplyImpact(normalX, normalZ)
+			state.Speed_per_second = int64(game.Vehicle.Forward_speed)
+			if !game.Physics.Submit(physics3d.Command{
+				Kind: physics3d.CommandTeleport, Body: game.KartBody,
+				Value: [3]int64{transform.X, transform.Y, transform.Z},
+			}) || !game.Transforms.Upsert(game.KartEntity, *transform) {
+				return errors.New("blockkart: resolve rival impact")
+			}
+			game.HitAudioPending = true
+			game.CollisionShake_ticks = 7
+			game.CollisionShake_side_milli = int32(impactSide * 850.0)
+			game.ObstacleHitCooldown_ticks = blockKartTicksPerSecond / 3
+			break
 		}
 	}
 	return nil

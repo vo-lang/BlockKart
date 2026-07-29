@@ -860,10 +860,6 @@ func (game *BlockKart) frame(tick voplay.TickBatch, pulse []byte) (voplay.TickOu
 	if !ok {
 		return voplay.TickOutput{}, errors.New("blockkart: extract transform")
 	}
-	state, ok := game.KartStates.Get(game.KartEntity)
-	if !ok {
-		return voplay.TickOutput{}, errors.New("blockkart: extract race state")
-	}
 	kartPackets, kartEncoded := game.kartRenderPackets(transform, tick.FirstTick)
 	if !kartEncoded {
 		return voplay.TickOutput{}, errors.New("blockkart: encode retained kart")

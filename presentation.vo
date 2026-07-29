@@ -117,7 +117,7 @@ func blockKartRankText(rank uint32) []byte {
 	if rank > 8 {
 		rank = 8
 	}
-	return []byte{byte(48 + rank), ' ', '/', ' ', '8'}
+	return []byte{byte(48 + rank), '/', '8'}
 }
 
 func blockKartBestTimeText(milliseconds uint64) []byte {
