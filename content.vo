@@ -48,6 +48,9 @@ type BlockKartRoadSample struct {
 	Z int64
 	Half_width_milli int64
 	Distance_milli int64
+	Signed_offset_milli int64
+	Tangent_x_milli int32
+	Tangent_z_milli int32
 }
 
 func blockKartCatmullRom(a int64, b int64, c int64, d int64, t float64) int64 {
@@ -93,6 +96,7 @@ func (game *BlockKart) nearestRoadSample(transform Transform) BlockKartRoadSampl
 		return BlockKartRoadSample{
 			X: transform.X, Y: transform.Y, Z: transform.Z,
 			Half_width_milli: 9000, Distance_milli: 1000000,
+			Tangent_z_milli: 1000,
 		}
 	}
 	bestSquared := float64(1.0e30)
@@ -130,6 +134,12 @@ func (game *BlockKart) nearestRoadSample(transform Transform) BlockKartRoadSampl
 			Z: int64(nearestZ),
 			Half_width_milli: from.Half_width_milli +
 				int64(float64(to.Half_width_milli - from.Half_width_milli) * along),
+			Signed_offset_milli: int64(
+				offsetX * dz / math.Sqrt(lengthSquared) -
+					offsetZ * dx / math.Sqrt(lengthSquared),
+			),
+			Tangent_x_milli: int32(dx / math.Sqrt(lengthSquared) * 1000.0),
+			Tangent_z_milli: int32(dz / math.Sqrt(lengthSquared) * 1000.0),
 		}
 	}
 	best.Distance_milli = int64(math.Sqrt(bestSquared))
@@ -1663,6 +1673,7 @@ func (game *BlockKart) respawn() error {
 	game.MiniTurbo_ticks = 0
 	game.StartFlash_ticks = 0
 	transform := blockKartStartTransform()
+	game.Vehicle.Reset(transform)
 	game.LastSafeTransform = transform
 	if game.Physics != nil && game.KartBody.Valid() &&
 		!game.Physics.Submit(physics3d.Command{
@@ -1706,6 +1717,7 @@ func (game *BlockKart) recoverToTrack() error {
 	transform.X = road.X
 	transform.Y = road.Y
 	transform.Z = road.Z
+	game.Vehicle.Reset(transform)
 	game.LastSafeTransform = transform
 	if game.Physics != nil && game.KartBody.Valid() &&
 		!game.Physics.Submit(physics3d.Command{
