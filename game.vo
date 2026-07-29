@@ -573,11 +573,11 @@ func (game *BlockKart) readInput(tick voplay.TickBatch) error {
 	leftActive := game.LeftPressed || leftTapped
 	rightActive := game.RightPressed || rightTapped
 	if leftActive == rightActive {
-		control.Steer_milli = -game.GamepadSteer
+		control.Steer_milli = game.GamepadSteer
 	} else if leftActive {
-		control.Steer_milli = 1000
-	} else {
 		control.Steer_milli = -1000
+	} else {
+		control.Steer_milli = 1000
 	}
 	if game.ThrottlePressed || throttleTapped {
 		control.Throttle_milli = 1000
@@ -673,7 +673,7 @@ func (game *BlockKart) applyTouchControls(control *KartControl) {
 	for _, point := range game.TouchPoints {
 		switch point.Role {
 			case 1:
-				steer := (centerX - int64(point.X)) * 1000 / radius
+				steer := (int64(point.X) - centerX) * 1000 / radius
 				vertical := (centerY - int64(point.Y)) * 1000 / radius
 				if steer < -1000 {
 					steer = -1000
@@ -758,7 +758,7 @@ func (game *BlockKart) drive(tick voplay.TickBatch) error {
 	}
 	roadBeforeDrive := game.nearestRoadSample(transform)
 	game.OffRoad = roadBeforeDrive.Distance_milli >
-		roadBeforeDrive.Half_width_milli + 5500
+		roadBeforeDrive.Half_width_milli + 800
 	deltaSeconds := float64(tick.FixedTickNanos) / 1000000000.0
 	if deltaSeconds <= 0 || deltaSeconds > 0.1 {
 		return errors.New("blockkart: invalid drive delta")
@@ -820,12 +820,12 @@ func (game *BlockKart) drive(tick voplay.TickBatch) error {
 	}
 	throttle := float64(control.Throttle_milli) / 1000.0
 	brake := float64(control.Brake_milli) / 1000.0
-	normalMaximumSpeed := 39000.0
-	boostMaximumSpeed := 47000.0
+	normalMaximumSpeed := 29000.0
+	boostMaximumSpeed := 38000.0
 	speedRatioBefore := blockKartClampFloat64(absoluteSpeed / normalMaximumSpeed, 0, 1)
-	engineAcceleration := 15500.0 * (1.0 - speedRatioBefore * 0.86)
-	if engineAcceleration < 2100 {
-		engineAcceleration = 2100
+	engineAcceleration := 10500.0 * (1.0 - speedRatioBefore * 0.78)
+	if engineAcceleration < 2300 {
+		engineAcceleration = 2300
 	}
 	acceleration := 0.0
 	if throttle > 0 {
@@ -862,9 +862,9 @@ func (game *BlockKart) drive(tick voplay.TickBatch) error {
 	}
 	if game.OffRoad {
 		if throttle > 0 && speed >= 0 {
-			acceleration -= engineAcceleration * throttle * 0.58
+			acceleration -= engineAcceleration * throttle * 0.34
 		}
-		acceleration -= speed * 0.62
+		acceleration -= speed * 1.15
 	}
 	nextSpeed := speed + acceleration * deltaSeconds
 	if throttle == 0 && brake == 0 &&
@@ -881,10 +881,17 @@ func (game *BlockKart) drive(tick voplay.TickBatch) error {
 	if nextSpeed < -10500 {
 		nextSpeed = -10500
 	}
+	if game.OffRoad && nextSpeed > 19000 {
+		offRoadBlend := blockKartClampFloat64(4.5 * deltaSeconds, 0, 1)
+		nextSpeed += (19000.0 - nextSpeed) * offRoadBlend
+	}
 	state.Speed_per_second = int64(nextSpeed)
 	absoluteSpeed = math.Abs(nextSpeed)
 	speedRatio := blockKartClampFloat64(absoluteSpeed / normalMaximumSpeed, 0, 1)
-	steeringLimit := int32(940.0 - speedRatio * 260.0)
+	steeringLimit := int32(1000.0 - speedRatio * 240.0)
+	if game.OffRoad {
+		steeringLimit = 900
+	}
 	if game.Drifting {
 		steeringLimit = 1000
 	}
@@ -895,13 +902,13 @@ func (game *BlockKart) drive(tick voplay.TickBatch) error {
 	if steeringTarget < -steeringLimit {
 		steeringTarget = -steeringLimit
 	}
-	steeringRate := 3000.0 - speedRatio * 650.0
+	steeringRate := 3600.0
 	steeringStep := int32(steeringRate * deltaSeconds)
 	if control.Steer_milli == 0 {
-		steeringStep = int32(7200.0 * deltaSeconds)
+		steeringStep = int32(6200.0 * deltaSeconds)
 	} else if game.Steering_milli != 0 &&
 		(game.Steering_milli < 0) != (control.Steer_milli < 0) {
-		steeringStep = int32(8200.0 * deltaSeconds)
+		steeringStep = int32(8500.0 * deltaSeconds)
 	}
 	if steeringStep < 1 {
 		steeringStep = 1
@@ -910,31 +917,29 @@ func (game *BlockKart) drive(tick voplay.TickBatch) error {
 		game.Steering_milli, steeringTarget, steeringStep,
 	)
 	steeringValue := float64(game.Steering_milli) / 1000.0
-	steeringCurve := math.Pow(math.Abs(steeringValue), 1.18)
+	steeringCurve := math.Pow(math.Abs(steeringValue), 1.25)
 	if steeringValue < 0 {
 		steeringCurve = -steeringCurve
 	}
-	maximumWheelAngle := 0.43 - speedRatio * 0.18
-	lowSpeedAuthority := blockKartClampFloat64(absoluteSpeed / 4200.0, 0, 1)
+	turnAuthority := blockKartClampFloat64(absoluteSpeed / 1200.0, 0, 1)
 	direction := 1.0
 	if nextSpeed < -250 {
 		direction = -1.0
 	}
-	desiredYawRate := direction * nextSpeed / 11400.0 *
-		math.Tan(steeringCurve * maximumWheelAngle) * lowSpeedAuthority
-	maximumYawRate := 0.98 - speedRatio * 0.26
-	steeringResponse := 7.8
+	turnRadius := 13000.0 + speedRatio * 7000.0
+	desiredYawRate := direction * absoluteSpeed / turnRadius *
+		steeringCurve * turnAuthority
+	steeringResponse := 12.5
 	if game.Drifting {
 		driftArc := float64(game.DriftDirection) * (0.40 + speedRatio * 0.62)
 		counterSteer := steeringCurve * (0.28 + speedRatio * 0.15)
 		desiredYawRate = (driftArc + counterSteer) * direction
-		maximumYawRate = 1.42
 		steeringResponse = 5.8
 	} else if control.Steer_milli == 0 {
-		steeringResponse = 11.5
+		steeringResponse = 15.0
 	}
 	desiredYawRate = blockKartClampFloat64(
-		desiredYawRate, -maximumYawRate, maximumYawRate,
+		desiredYawRate, -1.42, 1.42,
 	)
 	yawRate := float64(velocity.Yaw_per_second)
 	if yawRate != 0 && desiredYawRate != 0 &&
@@ -982,29 +987,17 @@ func (game *BlockKart) drive(tick voplay.TickBatch) error {
 	forwardZ := math.Cos(heading)
 	rightX := math.Cos(heading)
 	rightZ := -math.Sin(heading)
-	lateralSpeed := float64(velocity.X_per_second) * rightX +
-		float64(velocity.Z_per_second) * rightZ
-	grip := 18.5 - speedRatio * 2.5
+	lateralSpeed := 0.0
 	if game.Drifting {
-		grip = 3.2
-	}
-	if game.OffRoad {
-		grip = 4.2
-	}
-	if game.Drifting {
+		lateralSpeed = float64(velocity.X_per_second) * rightX +
+			float64(velocity.Z_per_second) * rightZ
 		driftCommit := float64(game.Steering_milli * game.DriftDirection) / 1000000.0
 		slipRatio := 0.235 + speedRatio * 0.055 + driftCommit * 0.025
 		driftLateralTarget := -float64(game.DriftDirection) * absoluteSpeed * slipRatio
 		slipBlend := blockKartClampFloat64(3.8 * deltaSeconds, 0, 1)
 		lateralSpeed += (driftLateralTarget - lateralSpeed) * slipBlend
-	} else {
-		gripRetention := 1.0 - grip * deltaSeconds
-		if gripRetention < 0 {
-			gripRetention = 0
-		}
-		lateralSpeed *= gripRetention
 	}
-	maximumLateralSpeed := absoluteSpeed * 0.30
+	maximumLateralSpeed := 0.0
 	if game.Drifting {
 		maximumLateralSpeed = absoluteSpeed * 0.40
 	}
