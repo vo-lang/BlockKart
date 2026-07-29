@@ -333,6 +333,49 @@ func (game *BlockKart) updateDynamics(tick voplay.TickBatch) error {
 			}
 		}
 	}
+	if game.ObstacleHitCooldown_ticks == 0 && state.Countdown_ticks == 0 && !state.Finished {
+		for rivalIndex := 0; rivalIndex < int(blockKartRivalCount); rivalIndex++ {
+			rival, _, _, _, _, found := game.rivalVisualState(
+				game.RenderPulseCounter, rivalIndex,
+			)
+			if !found {
+				continue
+			}
+			deltaX := rival.X - transform.X
+			deltaZ := rival.Z - transform.Z
+			distanceSquared := float64(deltaX*deltaX + deltaZ*deltaZ)
+			if distanceSquared >= 7600000 {
+				continue
+			}
+			distance := math.Sqrt(distanceSquared)
+			if distance < 1 {
+				distance = 1
+			}
+			normalX := float64(deltaX) / distance
+			normalZ := float64(deltaZ) / distance
+			pushDistance := int64(2840.0 - distance)
+			if pushDistance < 160 {
+				pushDistance = 160
+			}
+			transform.X -= int64(normalX * float64(pushDistance))
+			transform.Z -= int64(normalZ * float64(pushDistance))
+			road := game.nearestRoadSample(*transform)
+			transform.Y = road.Y
+			impactSide := game.Vehicle.ApplyImpact(normalX, normalZ)
+			state.Speed_per_second = int64(game.Vehicle.Forward_speed)
+			if !game.Physics.Submit(physics3d.Command{
+				Kind: physics3d.CommandTeleport, Body: game.KartBody,
+				Value: [3]int64{transform.X, transform.Y, transform.Z},
+			}) || !game.Transforms.Upsert(game.KartEntity, *transform) {
+				return errors.New("blockkart: resolve rival impact")
+			}
+			game.HitAudioPending = true
+			game.CollisionShake_ticks = 7
+			game.CollisionShake_side_milli = int32(impactSide * 850.0)
+			game.ObstacleHitCooldown_ticks = blockKartTicksPerSecond / 3
+			break
+		}
+	}
 	return nil
 }
 
@@ -522,16 +565,16 @@ func (game *BlockKart) startAssets(context voplay.StartContext) error {
 func (game *BlockKart) buildStaticRenderPackets() [][]byte {
 	packets := [][]byte{}
 	environment := render3d.EncodeEnvironment(render3d.Environment{
-		FogColor: [3]uint16{24500, 35000, 48500}, FogStartMilli: 340000, FogEndMilli: 1210000,
-		ExposureMilli: 0, ToneMap: render3d.ToneMapAces, BloomThreshold: 56000, BloomStrength: 3200,
+		FogColor: [3]uint16{30000, 44000, 61000}, FogStartMilli: 430000, FogEndMilli: 1480000,
+		ExposureMilli: 260, ToneMap: render3d.ToneMapAces, BloomThreshold: 47000, BloomStrength: 7200,
 		AntiAlias: render3d.AntiAliasMsaa, MsaaSamples: 4,
 	})
 	sun := render3d.EncodeLight(render3d.RetainedLight{
-		Kind: render3d.LightDirectional, Color: [3]uint16{65535, 57000, 45500}, IntensityMilli: 1850,
+		Kind: render3d.LightDirectional, Color: [3]uint16{65535, 62200, 55000}, IntensityMilli: 2250,
 		CastsShadow: true,
 	})
 	skyFill := render3d.EncodeLight(render3d.RetainedLight{
-		Kind: render3d.LightDirectional, Color: [3]uint16{26000, 39000, 65535}, IntensityMilli: 120,
+		Kind: render3d.LightDirectional, Color: [3]uint16{30000, 46500, 65535}, IntensityMilli: 230,
 		CastsShadow: false,
 	})
 	if len(environment) == 0 || len(sun) == 0 || len(skyFill) == 0 {
@@ -1228,7 +1271,7 @@ func (game *BlockKart) kartRenderPacketsStyled(
 }
 
 func (game *BlockKart) rivalRenderObjects(tick uint64) ([]render.SnapshotObject, bool) {
-	materials := []uint64{127, 128, 129}
+	materials := []uint64{127, 128, 129, 103, 104, 125, 117}
 	objects := make([]render.SnapshotObject, 0, len(materials) * 5)
 	for rivalIndex, material := range materials {
 		transform, steering, wheelSpin, lean, pitch, ok := game.rivalVisualState(
@@ -1262,22 +1305,20 @@ func (game *BlockKart) rivalVisualState(
 	if game == nil || len(game.TrackCenterline) < 4 {
 		return Transform{}, 0, 0, 0, 0, false
 	}
-	totalLength := int64(0)
-	for index, point := range game.TrackCenterline {
-		next := game.TrackCenterline[(index + 1) % len(game.TrackCenterline)]
-		totalLength += int64(math.Sqrt(
-			float64(next.X - point.X) * float64(next.X - point.X) +
-				float64(next.Z - point.Z) * float64(next.Z - point.Z),
-		))
-	}
+	totalLength := game.trackLengthMilli()
 	if totalLength <= 0 {
 		return Transform{}, 0, 0, 0, 0, false
 	}
-	speeds := []int64{24200, 25800, 27100}
-	offsets := []int64{18000, 38000, 61000}
-	laterals := []int64{-2400, 2200, 0}
-	travel := (int64(tick) * speeds[rivalIndex] / int64(blockKartTicksPerSecond) +
-		offsets[rivalIndex]) % totalLength
+	state, stateOk := game.KartStates.Get(game.KartEntity)
+	if !stateOk || rivalIndex < 0 || rivalIndex >= int(blockKartRivalCount) {
+		return Transform{}, 0, 0, 0, 0, false
+	}
+	raceDistance := blockKartRivalDistance(rivalIndex, state.Elapsed_millis)
+	travel := raceDistance % totalLength
+	laneMotion := math.Sin(
+		float64(state.Elapsed_millis)*0.00072+float64(rivalIndex)*1.73,
+	) * 540.0
+	lateralPosition := float64(blockKartRivalLateral(rivalIndex)) + laneMotion
 	for index, point := range game.TrackCenterline {
 		next := game.TrackCenterline[(index + 1) % len(game.TrackCenterline)]
 		dx := next.X - point.X
@@ -1295,11 +1336,10 @@ func (game *BlockKart) rivalVisualState(
 		}
 		along := float64(travel) / float64(segmentLength)
 		heading := math.Atan2(float64(dx), float64(dz))
-		lateral := float64(laterals[rivalIndex])
 		transform := Transform{
-			X: point.X + int64(float64(dx) * along + math.Cos(heading) * lateral),
+			X: point.X + int64(float64(dx)*along+math.Cos(heading)*lateralPosition),
 			Y: point.Y + int64(float64(dy) * along),
-			Z: point.Z + int64(float64(dz) * along - math.Sin(heading) * lateral),
+			Z: point.Z + int64(float64(dz)*along-math.Sin(heading)*lateralPosition),
 			Yaw_milliradians: int32(heading * 1000.0),
 		}
 		after := game.TrackCenterline[(index + 2) % len(game.TrackCenterline)]
@@ -1319,10 +1359,11 @@ func (game *BlockKart) rivalVisualState(
 			steering = -760
 		}
 		spin := blockKartWrapMilliRadians(int32(
-			(int64(tick) * speeds[rivalIndex] / int64(blockKartTicksPerSecond)) %
+			(raceDistance) %
 				2765 * 1000 / 440,
 		))
-		lean := int32(float64(steering) * 0.055)
+		lean := int32(float64(steering)*0.055 +
+			math.Sin(float64(tick)*0.18+float64(rivalIndex))*7.0)
 		pitch := int32(float64(dy) / float64(segmentLength) * 1000.0)
 		if pitch > 75 {
 			pitch = 75
@@ -1337,28 +1378,51 @@ func (game *BlockKart) rivalVisualState(
 
 func (game *BlockKart) effectRenderObjects(transform Transform, tick uint64) ([]render.SnapshotObject, bool) {
 	objects := []render.SnapshotObject{}
+	heading := float64(transform.Yaw_milliradians) / 1000.0
+	forwardX := math.Sin(heading)
+	forwardZ := math.Cos(heading)
+	rightX := math.Cos(heading)
+	rightZ := -math.Sin(heading)
 	if game.OffRoad || game.Drifting {
-		heading := float64(transform.Yaw_milliradians) / 1000.0
-		dustPosition := [3]int64{
-			transform.X - int64(math.Sin(heading) * 1200.0), transform.Y - 380,
-			transform.Z - int64(math.Cos(heading) * 1200.0),
+		spawn := uint32(3)
+		lifetime := uint32(23)
+		scale := uint32(112)
+		if game.OffRoad {
+			spawn = 6
+			lifetime = 29
+			scale = 155
 		}
-		dust := render3d.EncodeParticleEmitter(render3d.ParticleEmitter3d{
-			Id: 800001, Seed: tick + 7001, Mesh: game.KartMeshAsset, Material: 112, MaxParticles: 128,
-			SpawnPerTick: 4, LifetimeTicks: 24, Position: dustPosition,
-			VelocityMin: [3]int64{-2400, 300, -2400}, VelocityMax: [3]int64{2400, 2500, 2400},
-			StartScaleMilli: 130, EndScaleMilli: 24, Layers: 1,
-		})
-		object := blockKartEffectObject(dust, transform, tick)
-		if len(dust) == 0 || len(object) == 0 {
-			return nil, false
+		for wheel := 0; wheel < 2; wheel++ {
+			side := -1.0
+			if wheel == 1 {
+				side = 1.0
+			}
+			dustPosition := [3]int64{
+				transform.X - int64(forwardX*1320.0) + int64(rightX*side*1030.0),
+				transform.Y - 410,
+				transform.Z - int64(forwardZ*1320.0) + int64(rightZ*side*1030.0),
+			}
+			backwardX := int64(-forwardX * 2600.0)
+			backwardZ := int64(-forwardZ * 2600.0)
+			dust := render3d.EncodeParticleEmitter(render3d.ParticleEmitter3d{
+				Id: uint64(800010 + wheel), Seed: tick + uint64(7011 + wheel*37),
+				Mesh: game.KartMeshAsset, Material: 112, MaxParticles: 96,
+				SpawnPerTick: spawn, LifetimeTicks: lifetime, Position: dustPosition,
+				VelocityMin: [3]int64{backwardX - 1050, 280, backwardZ - 1050},
+				VelocityMax: [3]int64{backwardX + 1050, 2200, backwardZ + 1050},
+				StartScaleMilli: scale, EndScaleMilli: 28, Layers: 1,
+			})
+			object := blockKartEffectObject(dust, transform, tick)
+			if len(dust) == 0 || len(object) == 0 {
+				return nil, false
+			}
+			objects = append(objects, render.SnapshotObject{
+				Entity: voplay.Handle{Index: uint32(800010 + wheel), Generation: 1},
+				Bytes: object,
+			})
 		}
-		objects = append(objects, render.SnapshotObject{
-			Entity: voplay.Handle{Index: 800001, Generation: 1}, Bytes: object,
-		})
 	}
 	if game.Drifting && game.DriftStage != 0 {
-		heading := float64(transform.Yaw_milliradians) / 1000.0
 		sparkMaterial := uint64(123)
 		if game.DriftStage == 2 {
 			sparkMaterial = 104
@@ -1366,43 +1430,86 @@ func (game *BlockKart) effectRenderObjects(transform Transform, tick uint64) ([]
 		if game.DriftStage >= 3 {
 			sparkMaterial = 125
 		}
-		sparkPosition := [3]int64{
-			transform.X - int64(math.Sin(heading) * 1350.0), transform.Y - 260,
-			transform.Z - int64(math.Cos(heading) * 1350.0),
+		for wheel := 0; wheel < 2; wheel++ {
+			side := -1.0
+			if wheel == 1 {
+				side = 1.0
+			}
+			sparkPosition := [3]int64{
+				transform.X - int64(forwardX*1340.0) + int64(rightX*side*1080.0),
+				transform.Y - 290,
+				transform.Z - int64(forwardZ*1340.0) + int64(rightZ*side*1080.0),
+			}
+			backwardX := int64(-forwardX * 5700.0)
+			backwardZ := int64(-forwardZ * 5700.0)
+			sparks := render3d.EncodeParticleEmitter(render3d.ParticleEmitter3d{
+				Id: uint64(800020 + wheel), Seed: tick + uint64(8211 + wheel*53),
+				Mesh: game.KartMeshAsset, Material: sparkMaterial, MaxParticles: 80,
+				SpawnPerTick: 4 + game.DriftStage*2, LifetimeTicks: 12,
+				Position: sparkPosition,
+				VelocityMin: [3]int64{backwardX - 1700, 150, backwardZ - 1700},
+				VelocityMax: [3]int64{backwardX + 1700, 2100, backwardZ + 1700},
+				StartScaleMilli: 48 + game.DriftStage*8, EndScaleMilli: 5, Layers: 1,
+			})
+			object := blockKartEffectObject(sparks, transform, tick)
+			if len(sparks) == 0 || len(object) == 0 {
+				return nil, false
+			}
+			objects = append(objects, render.SnapshotObject{
+				Entity: voplay.Handle{Index: uint32(800020 + wheel), Generation: 1},
+				Bytes: object,
+			})
 		}
-		sparks := render3d.EncodeParticleEmitter(render3d.ParticleEmitter3d{
-			Id: 800003, Seed: tick + 8201, Mesh: game.KartMeshAsset, Material: sparkMaterial,
-			MaxParticles: 72, SpawnPerTick: 6 + game.DriftStage * 2, LifetimeTicks: 11,
-			Position: sparkPosition,
-			VelocityMin: [3]int64{-3600, 200, -3600}, VelocityMax: [3]int64{3600, 1800, 3600},
-			StartScaleMilli: 56, EndScaleMilli: 7, Layers: 1,
-		})
-		object := blockKartEffectObject(sparks, transform, tick)
-		if len(sparks) == 0 || len(object) == 0 {
-			return nil, false
-		}
-		objects = append(objects, render.SnapshotObject{
-			Entity: voplay.Handle{Index: 800003, Generation: 1}, Bytes: object,
-		})
 	}
 	if game.BoostPressed {
-		heading := float64(transform.Yaw_milliradians) / 1000.0
-		boostPosition := [3]int64{
-			transform.X - int64(math.Sin(heading) * 1700), transform.Y,
-			transform.Z - int64(math.Cos(heading) * 1700),
+		for exhaust := 0; exhaust < 2; exhaust++ {
+			side := -1.0
+			if exhaust == 1 {
+				side = 1.0
+			}
+			boostPosition := [3]int64{
+				transform.X - int64(forwardX*1690.0) + int64(rightX*side*540.0),
+				transform.Y - 40,
+				transform.Z - int64(forwardZ*1690.0) + int64(rightZ*side*540.0),
+			}
+			backwardX := int64(-forwardX * 8200.0)
+			backwardZ := int64(-forwardZ * 8200.0)
+			boost := render3d.EncodeParticleEmitter(render3d.ParticleEmitter3d{
+				Id: uint64(800030 + exhaust), Seed: tick + uint64(9011 + exhaust*61),
+				Mesh: game.KartMeshAsset, Material: 104, MaxParticles: 112,
+				SpawnPerTick: 9, LifetimeTicks: 14, Position: boostPosition,
+				VelocityMin: [3]int64{backwardX - 650, -180, backwardZ - 650},
+				VelocityMax: [3]int64{backwardX + 650, 780, backwardZ + 650},
+				StartScaleMilli: 94, EndScaleMilli: 9, Layers: 1,
+			})
+			object := blockKartEffectObject(boost, transform, tick)
+			if len(boost) == 0 || len(object) == 0 {
+				return nil, false
+			}
+			objects = append(objects, render.SnapshotObject{
+				Entity: voplay.Handle{Index: uint32(800030 + exhaust), Generation: 1},
+				Bytes: object,
+			})
 		}
-		boost := render3d.EncodeParticleEmitter(render3d.ParticleEmitter3d{
-			Id: 800002, Seed: tick + 9001, Mesh: game.KartMeshAsset, Material: 104, MaxParticles: 96,
-			SpawnPerTick: 8, LifetimeTicks: 16, Position: boostPosition,
-			VelocityMin: [3]int64{-900, -300, -900}, VelocityMax: [3]int64{900, 1200, 900},
-			StartScaleMilli: 110, EndScaleMilli: 15, Layers: 1,
+	}
+	if game.CollisionShake_ticks >= 4 {
+		impactPosition := [3]int64{
+			transform.X + int64(forwardX*1550.0), transform.Y + 380,
+			transform.Z + int64(forwardZ*1550.0),
+		}
+		impact := render3d.EncodeParticleEmitter(render3d.ParticleEmitter3d{
+			Id: 800040, Seed: tick + 10091, Mesh: game.KartMeshAsset, Material: 125,
+			MaxParticles: 128, SpawnPerTick: 14, LifetimeTicks: 13, Position: impactPosition,
+			VelocityMin: [3]int64{-6200, 900, -6200},
+			VelocityMax: [3]int64{6200, 7200, 6200},
+			StartScaleMilli: 68, EndScaleMilli: 7, Layers: 1,
 		})
-		object := blockKartEffectObject(boost, transform, tick)
-		if len(boost) == 0 || len(object) == 0 {
+		object := blockKartEffectObject(impact, transform, tick)
+		if len(impact) == 0 || len(object) == 0 {
 			return nil, false
 		}
 		objects = append(objects, render.SnapshotObject{
-			Entity: voplay.Handle{Index: 800002, Generation: 1}, Bytes: object,
+			Entity: voplay.Handle{Index: 800040, Generation: 1}, Bytes: object,
 		})
 	}
 	return objects, true
@@ -1545,7 +1652,7 @@ func (game *BlockKart) cameraPacket(kart Transform, tick uint64) []byte {
 			speedRatio = 1
 		}
 	}
-	verticalFov := uint32(50000 + speedRatio * 8500)
+	verticalFov := uint32(51000 + speedRatio * 12500)
 	camera := render3d.EncodeCamera(render3d.Camera3d{
 		Projection: render3d.CameraProjection{
 			Kind: render3d.CameraPerspective, VerticalFovMillidegrees: verticalFov, NearMilli: 80,
@@ -1568,12 +1675,13 @@ func (game *BlockKart) cameraPacket(kart Transform, tick uint64) []byte {
 				blockKartVehicleClamp(game.Vehicle.Yaw_rate * 0.10, -0.09, 0.09),
 		)
 	}
-	distance := 6800.0 + speedRatio * 2000.0
-	height := int64(3400.0 + speedRatio * 600.0)
-	lookAhead := 9000.0 + speedRatio * 7000.0
+	distance := 7100.0 + speedRatio * 2500.0
+	height := int64(3150.0 + speedRatio * 620.0)
+	lookAhead := 9400.0 + speedRatio * 9000.0
 	lateralLook := float64(game.Steering_milli) * 0.42 -
 		game.Vehicle.Yaw_rate * 520.0
-	cameraSide := -float64(game.Steering_milli) * 0.075
+	cameraSide := -float64(game.Steering_milli)*0.095 -
+		game.Vehicle.Lateral_speed*0.035
 	if game.Drifting {
 		lateralLook += float64(game.DriftDirection) * 720.0
 		cameraSide -= float64(game.DriftDirection) * 180.0

@@ -1205,7 +1205,7 @@ func (game *BlockKart) updateAudio(transform Transform, tick uint64) error {
 	return nil
 }
 
-func (game *BlockKart) hudPackets(includeStatic bool) []render.SnapshotObject {
+func (game *BlockKart) hudPacketsGenerationOne(includeStatic bool) []render.SnapshotObject {
 	state, ok := game.KartStates.Get(game.KartEntity)
 	if !ok {
 		return nil
