@@ -89,6 +89,16 @@ type BlockKart struct {
 	RenderStateAwaitingAck bool
 	RenderStateCommitId uint64
 	RenderStateRevision uint64
+	RenderLastTick uint64
+	RenderPresentationInitialized bool
+	RenderSteering_milli int32
+	RenderWheelSpin_milliradians int32
+	RenderChassisLean_milliradians int32
+	RenderChassisPitch_milliradians int32
+	RenderSuspensionHeave_milli int32
+	RenderCameraInitialized bool
+	RenderCameraTick uint64
+	RenderCameraMatrix [12]int64
 	KartMeshAsset uint64
 	BoostAudioAsset uint64
 	EngineAudioAsset uint64
@@ -935,6 +945,13 @@ func (game *BlockKart) frame(tick voplay.TickBatch, pulse []byte) (voplay.TickOu
 	if !renderEncoded {
 		return voplay.TickOutput{}, errors.New("blockkart: encode retained render update")
 	}
+	game.RenderLastTick = tick.FirstTick
+	game.RenderPresentationInitialized = true
+	game.RenderSteering_milli = game.Steering_milli
+	game.RenderWheelSpin_milliradians = game.WheelSpin_milliradians
+	game.RenderChassisLean_milliradians = game.ChassisLean_milliradians
+	game.RenderChassisPitch_milliradians = game.ChassisPitch_milliradians
+	game.RenderSuspensionHeave_milli = game.SuspensionHeave_milli
 	output := voplay.TickOutput{AssetPackets: assetPackets}
 	if !game.RenderControlPublished {
 		controlPacket, controlEncoded := game.RenderControls.EncodeSnapshotPacket(game.Engine, 1)

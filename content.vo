@@ -1200,6 +1200,10 @@ func (game *BlockKart) retainedGameplayMeshPartsObject(transform Transform, tick
 }
 
 func (game *BlockKart) retainedGameplayMeshPartsMatrixObject(transform Transform, tick uint64, parts []blockKartMeshPart, matrix [12]int64, halfX int64, halfY int64, halfZ int64) []byte {
+	return game.retainedGameplayMeshPartsMotionObject(transform, tick - 1, tick, parts, matrix, matrix, halfX, halfY, halfZ)
+}
+
+func (game *BlockKart) retainedGameplayMeshPartsMotionObject(transform Transform, previousTick uint64, tick uint64, parts []blockKartMeshPart, previousMatrix [12]int64, matrix [12]int64, halfX int64, halfY int64, halfZ int64) []byte {
 	components := make([]render.RenderComponent, 0, len(parts))
 	for _, part := range parts {
 		cacheKey := part.Mesh * 1000 + part.Material
@@ -1221,7 +1225,7 @@ func (game *BlockKart) retainedGameplayMeshPartsMatrixObject(transform Transform
 	return render.EncodeRetainedObject(render.RetainedObject{
 		Layers: 1,
 		Transform: render.TransformSample{
-			PreviousTick: tick - 1, CurrentTick: tick, Previous: matrix, Current: matrix,
+			PreviousTick: previousTick, CurrentTick: tick, Previous: previousMatrix, Current: matrix,
 		},
 		Bounds: render.Bounds3{
 			Min: [3]int64{transform.X - halfX, transform.Y - halfY, transform.Z - halfZ},
@@ -1232,10 +1236,51 @@ func (game *BlockKart) retainedGameplayMeshPartsMatrixObject(transform Transform
 }
 
 func (game *BlockKart) kartRenderPackets(transform Transform, tick uint64) ([][]byte, bool) {
-	return game.kartRenderPacketsStyled(transform, tick, 102, game.Steering_milli, game.WheelSpin_milliradians, game.ChassisLean_milliradians, game.ChassisPitch_milliradians, game.SuspensionHeave_milli, true)
+	previousTransform := transform
+	previousTick := tick
+	previousSteering := game.Steering_milli
+	previousWheelSpin := game.WheelSpin_milliradians
+	previousLean := game.ChassisLean_milliradians
+	previousPitch := game.ChassisPitch_milliradians
+	previousHeave := game.SuspensionHeave_milli
+	if game.RenderPresentationInitialized {
+		if pose, found := game.RenderPoses.Get(game.KartEntity); found {
+			decoded, decodedTransform := blockKartTransformFromBytes(pose.Current_transform)
+			if decodedTransform && !blockKartRenderTeleport(decoded, transform) {
+				previousTransform = decoded
+				previousTick = pose.Current_tick
+				previousSteering = game.RenderSteering_milli
+				previousWheelSpin = game.RenderWheelSpin_milliradians
+				previousLean = game.RenderChassisLean_milliradians
+				previousPitch = game.RenderChassisPitch_milliradians
+				previousHeave = game.RenderSuspensionHeave_milli
+			}
+		}
+	}
+	return game.kartRenderPacketsStyledMotion(
+		previousTransform, previousTick, transform, tick, 102,
+		previousSteering, game.Steering_milli,
+		previousWheelSpin, game.WheelSpin_milliradians,
+		previousLean, game.ChassisLean_milliradians,
+		previousPitch, game.ChassisPitch_milliradians,
+		previousHeave, game.SuspensionHeave_milli,
+		true,
+	)
 }
 
 func (game *BlockKart) kartRenderPacketsStyled(transform Transform, tick uint64, primaryMaterial uint64, steering_milli int32, wheelSpin_milliradians int32, chassisLean_milliradians int32, chassisPitch_milliradians int32, suspensionHeave_milli int32, includeWheels bool) ([][]byte, bool) {
+	return game.kartRenderPacketsStyledMotion(
+		transform, tick, transform, tick, primaryMaterial,
+		steering_milli, steering_milli,
+		wheelSpin_milliradians, wheelSpin_milliradians,
+		chassisLean_milliradians, chassisLean_milliradians,
+		chassisPitch_milliradians, chassisPitch_milliradians,
+		suspensionHeave_milli, suspensionHeave_milli,
+		includeWheels,
+	)
+}
+
+func (game *BlockKart) kartRenderPacketsStyledMotion(previousTransform Transform, previousTick uint64, transform Transform, tick uint64, primaryMaterial uint64, previousSteering_milli int32, steering_milli int32, previousWheelSpin_milliradians int32, wheelSpin_milliradians int32, previousChassisLean_milliradians int32, chassisLean_milliradians int32, previousChassisPitch_milliradians int32, chassisPitch_milliradians int32, previousSuspensionHeave_milli int32, suspensionHeave_milli int32, includeWheels bool) ([][]byte, bool) {
 	bodyParts := []blockKartMeshPart{
 		{Material: primaryMaterial, Mesh: 10002}, {Material: 106, Mesh: 10003},
 		{Material: 103, Mesh: 10004}, {Material: 103, Mesh: 10005}, {Material: 124, Mesh: 10006},
@@ -1249,10 +1294,18 @@ func (game *BlockKart) kartRenderPacketsStyled(transform Transform, tick uint64,
 		{-1320, -220, 1060}, {1320, -220, 1060}, {-1320, -220, -1180}, {1320, -220, -1180},
 	}
 	visualTransform := blockKartAuthoredKartTransform(transform, [3]int64{0, 0, 0})
+	previousVisualTransform := blockKartAuthoredKartTransform(previousTransform, [3]int64{0, 0, 0})
 	bodyTransform := visualTransform
 	bodyTransform.Y += int64(suspensionHeave_milli)
+	previousBodyTransform := previousVisualTransform
+	previousBodyTransform.Y += int64(previousSuspensionHeave_milli)
 	packets := make([][]byte, 0, 1 + len(wheelLocations))
-	bodyPacket := game.retainedGameplayMeshPartsMatrixObject(bodyTransform, tick, bodyParts, blockKartAuthoredBodyMatrix(bodyTransform, chassisLean_milliradians, chassisPitch_milliradians), 2250, 2200, 2250)
+	bodyPacket := game.retainedGameplayMeshPartsMotionObject(
+		bodyTransform, previousTick, tick, bodyParts,
+		blockKartAuthoredBodyMatrix(previousBodyTransform, previousChassisLean_milliradians, previousChassisPitch_milliradians),
+		blockKartAuthoredBodyMatrix(bodyTransform, chassisLean_milliradians, chassisPitch_milliradians),
+		2250, 2200, 2250,
+	)
 	if len(bodyPacket) == 0 {
 		return nil, false
 	}
@@ -1262,31 +1315,42 @@ func (game *BlockKart) kartRenderPacketsStyled(transform Transform, tick uint64,
 	}
 	for _, location := range wheelLocations {
 		partTransform := blockKartAuthoredKartTransform(transform, location)
-		steer_milliradians := int32(0)
-		if location[2] < 0 {
-			steeringScale := 0.84
-			if steering_milli > 0 {
-				if location[0] > 0 {
-					steeringScale = 0.96
-				} else {
-					steeringScale = 0.76
-				}
-			} else if steering_milli < 0 {
-				if location[0] < 0 {
-					steeringScale = 0.96
-				} else {
-					steeringScale = 0.76
-				}
-			}
-			steer_milliradians = int32(float64(steering_milli) * steeringScale)
-		}
-		packet := game.retainedGameplayMeshPartsMatrixObject(partTransform, tick, wheelMeshes, blockKartAuthoredWheelMatrix(partTransform, steer_milliradians, wheelSpin_milliradians), 480, 480, 480)
+		previousPartTransform := blockKartAuthoredKartTransform(previousTransform, location)
+		steer_milliradians := blockKartAuthoredWheelSteering(location, steering_milli)
+		previousSteer_milliradians := blockKartAuthoredWheelSteering(location, previousSteering_milli)
+		packet := game.retainedGameplayMeshPartsMotionObject(
+			partTransform, previousTick, tick, wheelMeshes,
+			blockKartAuthoredWheelMatrix(previousPartTransform, previousSteer_milliradians, previousWheelSpin_milliradians),
+			blockKartAuthoredWheelMatrix(partTransform, steer_milliradians, wheelSpin_milliradians),
+			480, 480, 480,
+		)
 		if len(packet) == 0 {
 			return nil, false
 		}
 		packets = append(packets, packet)
 	}
 	return packets, true
+}
+
+func blockKartAuthoredWheelSteering(location [3]int64, steering_milli int32) int32 {
+	if location[2] >= 0 {
+		return 0
+	}
+	steeringScale := 0.84
+	if steering_milli > 0 {
+		if location[0] > 0 {
+			steeringScale = 0.96
+		} else {
+			steeringScale = 0.76
+		}
+	} else if steering_milli < 0 {
+		if location[0] < 0 {
+			steeringScale = 0.96
+		} else {
+			steeringScale = 0.76
+		}
+	}
+	return int32(float64(steering_milli) * steeringScale)
 }
 
 func (game *BlockKart) rivalRenderObjects(tick uint64) ([]render.SnapshotObject, bool) {
@@ -1300,10 +1364,25 @@ func (game *BlockKart) rivalRenderObjects(tick uint64) ([]render.SnapshotObject,
 	const rivalWheelDistance_milli int64 = 120000
 	rivalCullDistanceSquared := rivalCullDistance_milli * rivalCullDistance_milli
 	rivalWheelDistanceSquared := rivalWheelDistance_milli * rivalWheelDistance_milli
+	previousTick := game.RenderLastTick
+	if !game.RenderPresentationInitialized || previousTick == 0 || previousTick > tick {
+		previousTick = tick
+	}
 	for rivalIndex, material := range materials {
+		rivalPreviousTick := previousTick
 		transform, steering, wheelSpin, lean, pitch, ok := game.rivalVisualState(tick, rivalIndex)
 		if !ok {
 			return nil, false
+		}
+		previousTransform, previousSteering, previousWheelSpin, previousLean, previousPitch, previousOk :=
+			game.rivalVisualState(rivalPreviousTick, rivalIndex)
+		if !previousOk || blockKartRenderTeleport(previousTransform, transform) {
+			previousTransform = transform
+			previousSteering = steering
+			previousWheelSpin = wheelSpin
+			previousLean = lean
+			previousPitch = pitch
+			rivalPreviousTick = tick
 		}
 		deltaX := transform.X - playerTransform.X
 		deltaZ := transform.Z - playerTransform.Z
@@ -1311,8 +1390,15 @@ func (game *BlockKart) rivalRenderObjects(tick uint64) ([]render.SnapshotObject,
 		if distanceSquared > rivalCullDistanceSquared {
 			continue
 		}
-		packets, encoded := game.kartRenderPacketsStyled(transform, tick, material, steering, wheelSpin, lean, pitch, 0, distanceSquared <=
-			rivalWheelDistanceSquared)
+		packets, encoded := game.kartRenderPacketsStyledMotion(
+			previousTransform, rivalPreviousTick, transform, tick, material,
+			previousSteering, steering,
+			previousWheelSpin, wheelSpin,
+			previousLean, lean,
+			previousPitch, pitch,
+			0, 0,
+			distanceSquared <= rivalWheelDistanceSquared,
+		)
 		if !encoded {
 			return nil, false
 		}
@@ -1724,16 +1810,35 @@ func (game *BlockKart) cameraPacket(kart Transform, tick uint64) []byte {
 		targetY = kart.Y
 	}
 	matrix := blockKartLookAtMatrix(transform.X, transform.Y, transform.Z, targetX, targetY, targetZ)
-	return render.EncodeRetainedObject(render.RetainedObject{
+	previousMatrix := matrix
+	previousTick := tick
+	if game.RenderCameraInitialized && game.RenderCameraTick <= tick {
+		deltaX := matrix[3] - game.RenderCameraMatrix[3]
+		deltaY := matrix[7] - game.RenderCameraMatrix[7]
+		deltaZ := matrix[11] - game.RenderCameraMatrix[11]
+		const maximumCameraInterpolationDistance_milli int64 = 24000
+		if deltaX * deltaX + deltaY * deltaY + deltaZ * deltaZ <=
+			maximumCameraInterpolationDistance_milli * maximumCameraInterpolationDistance_milli {
+			previousMatrix = game.RenderCameraMatrix
+			previousTick = game.RenderCameraTick
+		}
+	}
+	packet := render.EncodeRetainedObject(render.RetainedObject{
 		Layers: 1,
 		Transform: render.TransformSample{
-			PreviousTick: tick - 1, CurrentTick: tick, Previous: matrix, Current: matrix,
+			PreviousTick: previousTick, CurrentTick: tick, Previous: previousMatrix, Current: matrix,
 		},
 		Bounds: render.Bounds3{
 			Min: [3]int64{x - 1, transform.Y - 1, z - 1}, Max: [3]int64{x + 1, transform.Y + 1, z + 1},
 		},
 		Components: []render.RenderComponent{{Kind: 2, SchemaHash: 2, Bytes: camera}},
 	})
+	if len(packet) != 0 {
+		game.RenderCameraInitialized = true
+		game.RenderCameraTick = tick
+		game.RenderCameraMatrix = matrix
+	}
+	return packet
 }
 
 func blockKartLookAtMatrix(x int64, y int64, z int64, targetX int64, targetY int64, targetZ int64) [12]int64 {
@@ -1951,4 +2056,30 @@ func blockKartTransformBytes(value Transform) []byte {
 		}
 	}
 	return result
+}
+
+func blockKartTransformFromBytes(input []byte) (Transform, bool) {
+	if len(input) != 32 {
+		return Transform{}, false
+	}
+	return Transform{
+		X: int64(BlockKartReadU64(input, 0)),
+		Y: int64(BlockKartReadU64(input, 8)),
+		Z: int64(BlockKartReadU64(input, 16)),
+		Yaw_milliradians: int32(int64(BlockKartReadU64(input, 24))),
+	}, true
+}
+
+func blockKartRenderTeleport(previous Transform, current Transform) bool {
+	deltaX := current.X - previous.X
+	deltaY := current.Y - previous.Y
+	deltaZ := current.Z - previous.Z
+	const maximumInterpolatedDistance_milli int64 = 20000
+	if deltaX * deltaX + deltaY * deltaY + deltaZ * deltaZ >
+		maximumInterpolatedDistance_milli * maximumInterpolatedDistance_milli {
+		return true
+	}
+	headingDelta := blockKartVehicleWrapRadians(float64(current.Yaw_milliradians -
+		previous.Yaw_milliradians) / 1000.0)
+	return math.Abs(headingDelta) > 1.2
 }
