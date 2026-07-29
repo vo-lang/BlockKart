@@ -336,8 +336,11 @@ func (game *BlockKart) updateDynamics(tick voplay.TickBatch) error {
 	return nil
 }
 
-func (game *BlockKart) applyGameplayContacts(state *KartState) error {
-	if state == nil {
+func (game *BlockKart) applyGameplayContacts(
+	state *KartState,
+	transform *Transform,
+) error {
+	if state == nil || transform == nil {
 		return errors.New("blockkart: missing gameplay state")
 	}
 	if game.ObstacleHitCooldown_ticks != 0 {
@@ -386,9 +389,52 @@ func (game *BlockKart) applyGameplayContacts(state *KartState) error {
 		}
 		for _, obstacle := range game.ObstacleEntities {
 			if obstacle.Body == other && game.ObstacleHitCooldown_ticks == 0 {
+				obstacleTransform, found := game.Transforms.Get(obstacle.Entity)
+				if !found {
+					return errors.New("blockkart: obstacle impact transform")
+				}
+				deltaX := obstacleTransform.X - transform.X
+				deltaZ := obstacleTransform.Z - transform.Z
+				normalX := 0.0
+				normalZ := 0.0
+				pushDistance := int64(180)
+				if blockKartAbsInt64(deltaX) >= blockKartAbsInt64(deltaZ) {
+					normalX = 1
+					if deltaX < 0 {
+						normalX = -1
+					}
+					pushDistance += 1900 - blockKartAbsInt64(deltaX)
+				} else {
+					normalZ = 1
+					if deltaZ < 0 {
+						normalZ = -1
+					}
+					pushDistance += 2300 - blockKartAbsInt64(deltaZ)
+				}
+				if pushDistance < 180 {
+					pushDistance = 180
+				}
+				if pushDistance > 2600 {
+					pushDistance = 2600
+				}
+				transform.X -= int64(normalX) * pushDistance
+				transform.Z -= int64(normalZ) * pushDistance
+				road := game.nearestRoadSample(*transform)
+				transform.Y = road.Y
+				impactSide := game.Vehicle.ApplyImpact(normalX, normalZ)
+				state.Speed_per_second = int64(game.Vehicle.Forward_speed)
+				if !game.Physics.Submit(physics3d.Command{
+					Kind: physics3d.CommandTeleport, Body: game.KartBody,
+					Value: [3]int64{transform.X, transform.Y, transform.Z},
+				}) ||
+					!game.Transforms.Upsert(game.KartEntity, *transform) {
+					return errors.New("blockkart: resolve obstacle impact")
+				}
 				game.HitAudioPending = true
-				state.Speed_per_second = state.Speed_per_second * 58 / 100
 				state.Boost_ticks = 0
+				game.MiniTurbo_ticks = 0
+				game.CollisionShake_ticks = 8
+				game.CollisionShake_side_milli = int32(impactSide * 1000.0)
 				game.ObstacleHitCooldown_ticks = blockKartTicksPerSecond / 2
 			}
 		}
@@ -400,6 +446,13 @@ func blockKartHorizontalDistanceSquared(left Transform, right Transform) int64 {
 	x := left.X - right.X
 	z := left.Z - right.Z
 	return x * x + z * z
+}
+
+func blockKartAbsInt64(value int64) int64 {
+	if value < 0 {
+		return -value
+	}
+	return value
 }
 
 func (game *BlockKart) startAssets(context voplay.StartContext) error {
@@ -1504,11 +1557,23 @@ func (game *BlockKart) cameraPacket(kart Transform, tick uint64) []byte {
 		return nil
 	}
 	heading := float64(kart.Yaw_milliradians) / 1000.0
+	cameraHeading := heading
+	if game.Vehicle.Initialized {
+		cameraHeading = game.Vehicle.Camera_heading_radians
+	}
+	lookHeading := heading
+	if game.Vehicle.Initialized {
+		lookHeading = blockKartVehicleWrapRadians(
+			game.Vehicle.Heading_radians +
+				blockKartVehicleClamp(game.Vehicle.Yaw_rate * 0.10, -0.09, 0.09),
+		)
+	}
 	distance := 6800.0 + speedRatio * 2000.0
 	height := int64(3400.0 + speedRatio * 600.0)
 	lookAhead := 9000.0 + speedRatio * 7000.0
-	lateralLook := float64(game.Steering_milli) * 0.18
-	cameraSide := -float64(game.Steering_milli) * 0.035
+	lateralLook := float64(game.Steering_milli) * 0.42 -
+		game.Vehicle.Yaw_rate * 520.0
+	cameraSide := -float64(game.Steering_milli) * 0.075
 	if game.Drifting {
 		lateralLook += float64(game.DriftDirection) * 720.0
 		cameraSide -= float64(game.DriftDirection) * 180.0
@@ -1518,6 +1583,12 @@ func (game *BlockKart) cameraPacket(kart Transform, tick uint64) []byte {
 		cameraShake = math.Sin(float64(tick) * 1.91) * 38.0 * speedRatio
 	} else if game.OffRoad {
 		cameraShake = math.Sin(float64(tick) * 2.73) * 28.0 * speedRatio
+	}
+	if game.CollisionShake_ticks != 0 {
+		impactRatio := float64(game.CollisionShake_ticks) / 8.0
+		cameraShake += math.Sin(float64(tick) * 3.83) * 135.0 * impactRatio
+		cameraSide += float64(game.CollisionShake_side_milli) *
+			0.11 * impactRatio
 	}
 	if game.CameraMode == 1 {
 		distance = 4500
@@ -1532,19 +1603,21 @@ func (game *BlockKart) cameraPacket(kart Transform, tick uint64) []byte {
 		lateralLook = 0
 		cameraSide = 0
 	}
-	x := kart.X - int64(math.Sin(heading) * distance) +
-		int64(math.Cos(heading) * cameraSide + cameraShake)
-	z := kart.Z - int64(math.Cos(heading) * distance) -
-		int64(math.Sin(heading) * cameraSide)
+	x := kart.X - int64(math.Sin(cameraHeading) * distance) +
+		int64(math.Cos(cameraHeading) * cameraSide + cameraShake)
+	z := kart.Z - int64(math.Cos(cameraHeading) * distance) -
+		int64(math.Sin(cameraHeading) * cameraSide)
 	transform := Transform{
 		X: x, Y: kart.Y + height + int64(cameraShake * 0.35), Z: z,
 		Yaw_milliradians: kart.Yaw_milliradians,
 	}
 	targetX := kart.X + int64(
-		math.Sin(heading) * lookAhead + math.Cos(heading) * lateralLook,
+		math.Sin(lookHeading) * lookAhead +
+			math.Cos(lookHeading) * lateralLook,
 	)
 	targetZ := kart.Z + int64(
-		math.Cos(heading) * lookAhead - math.Sin(heading) * lateralLook,
+		math.Cos(lookHeading) * lookAhead -
+			math.Sin(lookHeading) * lateralLook,
 	)
 	targetY := kart.Y + int64(1050.0 + speedRatio * 160.0)
 	if game.CameraMode == 2 {
@@ -1657,6 +1730,8 @@ func (game *BlockKart) restartRace() error {
 	game.Drifting = false
 	game.HitAudioPending = false
 	game.ObstacleHitCooldown_ticks = 0
+	game.CollisionShake_ticks = 0
+	game.CollisionShake_side_milli = 0
 	game.Paused = false
 	return game.respawn()
 }
@@ -1672,6 +1747,8 @@ func (game *BlockKart) respawn() error {
 	game.WasDrifting = false
 	game.MiniTurbo_ticks = 0
 	game.StartFlash_ticks = 0
+	game.CollisionShake_ticks = 0
+	game.CollisionShake_side_milli = 0
 	transform := blockKartStartTransform()
 	game.Vehicle.Reset(transform)
 	game.LastSafeTransform = transform
@@ -1709,6 +1786,8 @@ func (game *BlockKart) recoverToTrack() error {
 	game.WasDrifting = false
 	game.MiniTurbo_ticks = 0
 	game.StartFlash_ticks = 0
+	game.CollisionShake_ticks = 0
+	game.CollisionShake_side_milli = 0
 	transform := game.LastSafeTransform
 	if transform.X == 0 && transform.Z == 0 {
 		transform = blockKartStartTransform()

@@ -141,6 +141,8 @@ type BlockKart struct {
 	Drifting bool
 	HitAudioPending bool
 	ObstacleHitCooldown_ticks uint32
+	CollisionShake_ticks uint32
+	CollisionShake_side_milli int32
 	LastBoostAudioTick uint64
 	LastSkidAudioTick uint64
 	LastGrassAudioTick uint64
@@ -794,7 +796,7 @@ func (game *BlockKart) syncRace(tick voplay.TickBatch) error {
 			}
 		}
 	}
-	if err := game.applyGameplayContacts(&state); err != nil {
+	if err := game.applyGameplayContacts(&state, &transform); err != nil {
 		return err
 	}
 	if state.Checkpoint >= uint32(len(game.TrackGates)) {
