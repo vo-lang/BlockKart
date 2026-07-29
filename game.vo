@@ -1050,10 +1050,15 @@ func (game *BlockKart) processEndpointReturns(tick voplay.TickBatch) error {
 	for _, packet := range tick.RenderReturns {
 		stateAck, stateAcked := render.DecodeStateAck(game.Engine, packet)
 		if stateAcked {
-			if game.RenderStateAwaitingAck && stateAck.CommitId == game.RenderStateCommitId &&
-				stateAck.Revision == game.RenderStateRevision {
+			if !game.RenderStateAwaitingAck {
+				continue
+			}
+			if stateAck.Revision == game.RenderStateRevision && stateAck.CommitId == game.RenderStateCommitId {
 				game.RenderStateAwaitingAck = false
-			} else if game.RenderStateAwaitingAck && stateAck.Revision >= game.RenderStateRevision {
+			} else if stateAck.Revision < game.RenderStateRevision {
+				game.RenderStateAwaitingAck = false
+				game.RenderWorldPublished = false
+			} else {
 				return errors.New("blockkart: unexpected render state acknowledgement")
 			}
 			continue
