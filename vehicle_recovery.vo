@@ -1,0 +1,84 @@
+package main
+
+import "math"
+
+const (
+	blockKartRecoveryOffTrackTicks uint32 = 150
+	blockKartRecoveryStuckTicks uint32 = 75
+	blockKartRecoveryWrongWayTicks uint32 = 150
+)
+
+// shouldRecoverVehicle applies a race-game recovery policy on top of the
+// continuous vehicle model. The road model remains authoritative: distance
+// from its reference line, player demand, velocity, and heading alignment are
+// the only recovery inputs. Brief excursions remain fully driveable; a kart
+// that is trapped, far outside the course, or persistently reversed is
+// returned to the last valid asphalt pose with useful forward momentum.
+func (game *BlockKart) shouldRecoverVehicle(road BlockKartRoadSample) bool {
+	if game == nil {
+		return false
+	}
+	speed := math.Abs(game.Vehicle.Forward_speed)
+	absoluteOffset := blockKartAbsInt64(road.Signed_offset_milli)
+	offTrack := road.Surface == blockKartRoadSurfaceGrass ||
+		absoluteOffset > road.Half_width_milli+1800
+	farOutside := absoluteOffset > road.Half_width_milli+22000
+	if offTrack {
+		game.OffTrack_ticks = blockKartRecoveryIncrement(game.OffTrack_ticks)
+	} else {
+		game.OffTrack_ticks = blockKartRecoveryDecay(game.OffTrack_ticks, 4)
+	}
+
+	control, hasControl := game.Controls.Get(game.KartEntity)
+	playerDemand := game.ThrottlePressed || game.GamepadThrottle > 180
+	if hasControl {
+		playerDemand = playerDemand || control.Throttle_milli > 180
+	}
+	trapped := playerDemand && speed < 2400 &&
+		(offTrack || game.ObstacleHitCooldown_ticks != 0)
+	if trapped {
+		game.Stuck_ticks = blockKartRecoveryIncrement(game.Stuck_ticks)
+	} else {
+		game.Stuck_ticks = blockKartRecoveryDecay(game.Stuck_ticks, 5)
+	}
+
+	headingX := math.Sin(game.Vehicle.Heading_radians)
+	headingZ := math.Cos(game.Vehicle.Heading_radians)
+	alignment := headingX*road.Tangent_x + headingZ*road.Tangent_z
+	wrongWay := alignment < -0.35 && speed > 3200
+	if wrongWay {
+		game.WrongWay_ticks = blockKartRecoveryIncrement(game.WrongWay_ticks)
+	} else {
+		game.WrongWay_ticks = blockKartRecoveryDecay(game.WrongWay_ticks, 6)
+	}
+
+	if farOutside && game.OffTrack_ticks >= 20 {
+		return true
+	}
+	return game.OffTrack_ticks >= blockKartRecoveryOffTrackTicks ||
+		game.Stuck_ticks >= blockKartRecoveryStuckTicks ||
+		game.WrongWay_ticks >= blockKartRecoveryWrongWayTicks
+}
+
+func (game *BlockKart) resetVehicleRecoveryState() {
+	if game == nil {
+		return
+	}
+	game.OffTrack_ticks = 0
+	game.Stuck_ticks = 0
+	game.WrongWay_ticks = 0
+}
+
+func blockKartRecoveryIncrement(value uint32) uint32 {
+	if value == ^uint32(0) {
+		return value
+	}
+	return value + 1
+}
+
+func blockKartRecoveryDecay(value uint32, amount uint32) uint32 {
+	if value <= amount {
+		return 0
+	}
+	return value - amount
+}

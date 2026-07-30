@@ -298,6 +298,19 @@ fn shadow_policy(plan: &GltfImportPlan, material: usize) -> Result<(bool, bool),
     if name.contains("water") || name.contains("foam") || material.alpha == GltfAlphaMode::Blend {
         return Ok((false, true));
     }
+    if name.contains("road asphalt")
+        || name.contains("road shoulder")
+        || name.contains("curb")
+        || name.contains("skid")
+        || name.contains("meadow grass")
+        || name.contains("flower")
+        || name.contains("tuft")
+        || name.contains("festival")
+        || name.contains("window")
+        || name.contains("cloud")
+    {
+        return Ok((false, true));
+    }
     Ok((true, true))
 }
 
@@ -397,6 +410,11 @@ fn generate_vo(
             [u16::MAX; 4]
         };
         let (alpha, cutoff) = alpha_expression(material.alpha);
+        // Opaque authored materials frequently arrive marked double-sided from
+        // Blender even when their geometry is closed. Back-face culling halves
+        // avoidable raster work on the production scene.
+        let double_sided =
+            material.double_sided && material.alpha != GltfAlphaMode::Opaque;
         writeln!(
             source,
             "\t\t{{Id: {id}, BaseColor: [4]uint16{{{}, {}, {}, {}}}, Metallic: {}, Roughness: {}, Emissive: [3]uint16{{{}, {}, {}}}, Alpha: {alpha}, AlphaCutoff: {cutoff}, DoubleSided: {}, Unlit: {}, Textures: [5]uint64{{{}, {}, {}, {}, {}}}, Revision: 1}},",
@@ -409,7 +427,7 @@ fn generate_vo(
             material.emissive_q16[0],
             material.emissive_q16[1],
             material.emissive_q16[2],
-            material.double_sided,
+            double_sided,
             material.unlit,
             textures[0],
             textures[1],

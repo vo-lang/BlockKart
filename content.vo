@@ -13,131 +13,6 @@ import (
 
 const blockKartUseGoldenScene = true
 
-func blockKartStartTransform() Transform {
-	return Transform{X: 0, Y: 1200, Z: 0, Yaw_milliradians: 3079}
-}
-
-func blockKartTrackPoints() [][3]int64 {
-	return [][3]int64{
-		{0, 0, 30000}, {0, 100, 0}, {2000, 1000, -32000}, {-6000, 2800, -64000}, {-31000, 5800, -94000},
-		{-50000, 9500, -126000}, {-45000, 14500, -160000}, {-22000, 19000, -194000},
-		{11000, 23000, -226000}, {42000, 27000, -258000}, {62000, 30000, -292000},
-		{150000, 32000, -318000}, {250000, 26000, -275000}, {285000, 18000, -180000},
-		{260000, 9000, -70000}, {190000, 3000, 35000}, {90000, 800, 80000},
-	}
-}
-
-func blockKartTrackHalfWidths() []int64 {
-	return []int64{
-		8200, 8200, 8200, 8200, 8200, 8200, 8200, 8200, 8200, 8200, 8200, 8200, 8200, 8200, 8200, 8200,
-		8200,
-	}
-}
-
-type BlockKartRoadPoint struct {
-	X int64
-	Y int64
-	Z int64
-	Half_width_milli int64
-}
-
-type BlockKartRoadSample struct {
-	X int64
-	Y int64
-	Z int64
-	Half_width_milli int64
-	Distance_milli int64
-	Signed_offset_milli int64
-	Tangent_x_milli int32
-	Tangent_z_milli int32
-}
-
-func blockKartCatmullRom(a int64, b int64, c int64, d int64, t float64) int64 {
-	t2 := t * t
-	t3 := t2 * t
-	return int64(0.5 *
-		(2.0 * float64(b) + float64(-a + c) * t + float64(2 * a - 5 * b + 4 * c - d) * t2 +
-			float64(-a + 3 * b - 3 * c + d) * t3))
-}
-
-func blockKartTrackCenterline() []BlockKartRoadPoint {
-	anchors := blockKartTrackPoints()
-	widths := blockKartTrackHalfWidths()
-	if len(anchors) < 4 || len(widths) != len(anchors) {
-		return nil
-	}
-	const samplesPerSegment = 18
-	result := make([]BlockKartRoadPoint, 0, len(anchors) * samplesPerSegment)
-	for index, b := range anchors {
-		a := anchors[(index - 1 + len(anchors)) % len(anchors)]
-		c := anchors[(index + 1) % len(anchors)]
-		d := anchors[(index + 2) % len(anchors)]
-		wa := widths[(index - 1 + len(widths)) % len(widths)]
-		wb := widths[index]
-		wc := widths[(index + 1) % len(widths)]
-		wd := widths[(index + 2) % len(widths)]
-		for sample := 0; sample < samplesPerSegment; sample++ {
-			t := float64(sample) / float64(samplesPerSegment)
-			result = append(result, BlockKartRoadPoint{
-				X: blockKartCatmullRom(a[0], b[0], c[0], d[0], t),
-				Y: blockKartCatmullRom(a[1], b[1], c[1], d[1], t),
-				Z: blockKartCatmullRom(a[2], b[2], c[2], d[2], t),
-				Half_width_milli: blockKartCatmullRom(wa, wb, wc, wd, t),
-			})
-		}
-	}
-	return result
-}
-
-func (game *BlockKart) nearestRoadSample(transform Transform) BlockKartRoadSample {
-	if game == nil || len(game.TrackCenterline) == 0 {
-		return BlockKartRoadSample{
-			X: transform.X, Y: transform.Y, Z: transform.Z, Half_width_milli: 9000, Distance_milli: 1000000,
-			Tangent_z_milli: 1000,
-		}
-	}
-	bestSquared := float64(1.0e30)
-	best := BlockKartRoadSample{}
-	x := float64(transform.X)
-	z := float64(transform.Z)
-	for index, from := range game.TrackCenterline {
-		to := game.TrackCenterline[(index + 1) % len(game.TrackCenterline)]
-		dx := float64(to.X - from.X)
-		dz := float64(to.Z - from.Z)
-		lengthSquared := dx * dx + dz * dz
-		if lengthSquared < 1 {
-			continue
-		}
-		along := ((x - float64(from.X)) * dx + (z - float64(from.Z)) * dz) / lengthSquared
-		if along < 0 {
-			along = 0
-		}
-		if along > 1 {
-			along = 1
-		}
-		nearestX := float64(from.X) + dx * along
-		nearestZ := float64(from.Z) + dz * along
-		offsetX := x - nearestX
-		offsetZ := z - nearestZ
-		distanceSquared := offsetX * offsetX + offsetZ * offsetZ
-		if distanceSquared >= bestSquared {
-			continue
-		}
-		bestSquared = distanceSquared
-		best = BlockKartRoadSample{
-			X: int64(nearestX), Y: from.Y + int64(float64(to.Y - from.Y) * along), Z: int64(nearestZ),
-			Half_width_milli: from.Half_width_milli +
-				int64(float64(to.Half_width_milli - from.Half_width_milli) * along),
-			Signed_offset_milli: int64(offsetX * dz / math.Sqrt(lengthSquared) -
-				offsetZ * dx / math.Sqrt(lengthSquared)),
-			Tangent_x_milli: int32(dx / math.Sqrt(lengthSquared) * 1000.0),
-			Tangent_z_milli: int32(dz / math.Sqrt(lengthSquared) * 1000.0),
-		}
-	}
-	best.Distance_milli = int64(math.Sqrt(bestSquared))
-	return best
-}
-
 type BlockKartPhysicsEntity struct {
 	Entity uint64
 	Body physics3d.BodyRef
@@ -404,7 +279,7 @@ func (game *BlockKart) applyGameplayContacts(state *KartState, transform *Transf
 				transform.X -= int64(normalX) * pushDistance
 				transform.Z -= int64(normalZ) * pushDistance
 				road := game.nearestRoadSample(*transform)
-				transform.Y = road.Y
+				transform.Y = road.Y + blockKartTrackRideHeightMilli
 				impactSide := game.Vehicle.ApplyImpact(normalX, normalZ)
 				state.Speed_per_second = int64(game.Vehicle.Forward_speed)
 				if !game.Physics.Submit(physics3d.Command{
@@ -448,7 +323,7 @@ func (game *BlockKart) applyGameplayContacts(state *KartState, transform *Transf
 			transform.X -= int64(normalX * float64(pushDistance))
 			transform.Z -= int64(normalZ * float64(pushDistance))
 			road := game.nearestRoadSample(*transform)
-			transform.Y = road.Y
+			transform.Y = road.Y + blockKartTrackRideHeightMilli
 			impactSide := game.Vehicle.ApplyImpact(normalX, normalZ)
 			state.Speed_per_second = int64(game.Vehicle.Forward_speed)
 			if !game.Physics.Submit(physics3d.Command{
@@ -546,7 +421,7 @@ func (game *BlockKart) buildStaticRenderPackets() [][]byte {
 	environment := render3d.EncodeEnvironment(render3d.Environment{
 		FogColor: [3]uint16{30000, 44000, 61000}, FogStartMilli: 430000, FogEndMilli: 1480000,
 		ExposureMilli: 260, ToneMap: render3d.ToneMapAces, BloomThreshold: 47000, BloomStrength: 7200,
-		AntiAlias: render3d.AntiAliasMsaa, MsaaSamples: 4,
+		AntiAlias: render3d.AntiAliasMsaa, MsaaSamples: 2,
 	})
 	sun := render3d.EncodeLight(render3d.RetainedLight{
 		Kind: render3d.LightDirectional, Color: [3]uint16{65535, 62200, 55000}, IntensityMilli: 2250,
@@ -1281,27 +1156,20 @@ func (game *BlockKart) kartRenderPacketsStyled(transform Transform, tick uint64,
 }
 
 func (game *BlockKart) kartRenderPacketsStyledMotion(previousTransform Transform, previousTick uint64, transform Transform, tick uint64, primaryMaterial uint64, previousSteering_milli int32, steering_milli int32, previousWheelSpin_milliradians int32, wheelSpin_milliradians int32, previousChassisLean_milliradians int32, chassisLean_milliradians int32, previousChassisPitch_milliradians int32, chassisPitch_milliradians int32, previousSuspensionHeave_milli int32, suspensionHeave_milli int32, includeWheels bool) ([][]byte, bool) {
-	bodyParts := []blockKartMeshPart{
-		{Material: primaryMaterial, Mesh: 10002}, {Material: 106, Mesh: 10003},
-		{Material: 103, Mesh: 10004}, {Material: 103, Mesh: 10005}, {Material: 124, Mesh: 10006},
-		{Material: 107, Mesh: 10007}, {Material: 125, Mesh: 10013}, {Material: 126, Mesh: 10014},
+	if len(game.KartBodyParts) != 8 || len(game.KartWheelParts) != 5 ||
+		len(game.KartWheelLocations) != 4 {
+		return nil, false
 	}
-	wheelMeshes := []blockKartMeshPart{
-		{Mesh: 10008, Material: 106}, {Mesh: 10009, Material: 122}, {Mesh: 10010, Material: 103},
-		{Mesh: 10011, Material: 107}, {Mesh: 10012, Material: 103},
-	}
-	wheelLocations := [][3]int64{
-		{-1320, -220, 1060}, {1320, -220, 1060}, {-1320, -220, -1180}, {1320, -220, -1180},
-	}
+	game.KartBodyParts[0].Material = primaryMaterial
 	visualTransform := blockKartAuthoredKartTransform(transform, [3]int64{0, 0, 0})
 	previousVisualTransform := blockKartAuthoredKartTransform(previousTransform, [3]int64{0, 0, 0})
 	bodyTransform := visualTransform
 	bodyTransform.Y += int64(suspensionHeave_milli)
 	previousBodyTransform := previousVisualTransform
 	previousBodyTransform.Y += int64(previousSuspensionHeave_milli)
-	packets := make([][]byte, 0, 1 + len(wheelLocations))
+	packets := make([][]byte, 0, 1 + len(game.KartWheelLocations))
 	bodyPacket := game.retainedGameplayMeshPartsMotionObject(
-		bodyTransform, previousTick, tick, bodyParts,
+		bodyTransform, previousTick, tick, game.KartBodyParts,
 		blockKartAuthoredBodyMatrix(previousBodyTransform, previousChassisLean_milliradians, previousChassisPitch_milliradians),
 		blockKartAuthoredBodyMatrix(bodyTransform, chassisLean_milliradians, chassisPitch_milliradians),
 		2250, 2200, 2250,
@@ -1313,13 +1181,18 @@ func (game *BlockKart) kartRenderPacketsStyledMotion(previousTransform Transform
 	if !includeWheels {
 		return packets, true
 	}
-	for _, location := range wheelLocations {
+	for wheelIndex, location := range game.KartWheelLocations {
 		partTransform := blockKartAuthoredKartTransform(transform, location)
 		previousPartTransform := blockKartAuthoredKartTransform(previousTransform, location)
+		if primaryMaterial == 102 {
+			wheelOffset := game.Vehicle.visualWheelOffset(wheelIndex)
+			partTransform.Y += wheelOffset
+			previousPartTransform.Y += wheelOffset
+		}
 		steer_milliradians := blockKartAuthoredWheelSteering(location, steering_milli)
 		previousSteer_milliradians := blockKartAuthoredWheelSteering(location, previousSteering_milli)
 		packet := game.retainedGameplayMeshPartsMotionObject(
-			partTransform, previousTick, tick, wheelMeshes,
+			partTransform, previousTick, tick, game.KartWheelParts,
 			blockKartAuthoredWheelMatrix(previousPartTransform, previousSteer_milliradians, previousWheelSpin_milliradians),
 			blockKartAuthoredWheelMatrix(partTransform, steer_milliradians, wheelSpin_milliradians),
 			480, 480, 480,
@@ -1360,11 +1233,11 @@ func (game *BlockKart) rivalRenderObjects(tick uint64) ([]render.SnapshotObject,
 	if !playerOk {
 		return nil, false
 	}
-	const rivalCullDistance_milli int64 = 380000
-	const rivalWheelDistance_milli int64 = 120000
+	const rivalCullDistance_milli int64 = 210000
+	const rivalWheelDistance_milli int64 = 80000
 	rivalCullDistanceSquared := rivalCullDistance_milli * rivalCullDistance_milli
 	rivalWheelDistanceSquared := rivalWheelDistance_milli * rivalWheelDistance_milli
-	previousTick := game.RenderLastTick
+	previousTick := game.RivalRenderTick
 	if !game.RenderPresentationInitialized || previousTick == 0 || previousTick > tick {
 		previousTick = tick
 	}
@@ -1429,56 +1302,26 @@ func (game *BlockKart) rivalVisualState(tick uint64, rivalIndex int) (Transform,
 	laneMotion := math.Sin(float64(state.Elapsed_millis) * 0.00072 + float64(rivalIndex) * 1.73) *
 		540.0
 	lateralPosition := float64(blockKartRivalLateral(rivalIndex)) + laneMotion
-	for index, point := range game.TrackCenterline {
-		next := game.TrackCenterline[(index + 1) % len(game.TrackCenterline)]
-		dx := next.X - point.X
-		dy := next.Y - point.Y
-		dz := next.Z - point.Z
-		segmentLength := int64(math.Sqrt(float64(dx) * float64(dx) + float64(dz) * float64(dz)))
-		if segmentLength <= 0 {
-			continue
-		}
-		if travel > segmentLength {
-			travel -= segmentLength
-			continue
-		}
-		along := float64(travel) / float64(segmentLength)
-		heading := math.Atan2(float64(dx), float64(dz))
-		transform := Transform{
-			X: point.X + int64(float64(dx) * along + math.Cos(heading) * lateralPosition),
-			Y: point.Y + int64(float64(dy) * along),
-			Z: point.Z + int64(float64(dz) * along - math.Sin(heading) * lateralPosition),
-			Yaw_milliradians: int32(heading * 1000.0),
-		}
-		after := game.TrackCenterline[(index + 2) % len(game.TrackCenterline)]
-		nextHeading := math.Atan2(float64(after.X - next.X), float64(after.Z - next.Z))
-		deltaHeading := nextHeading - heading
-		for deltaHeading > math.Pi {
-			deltaHeading -= math.Pi * 2
-		}
-		for deltaHeading < -math.Pi {
-			deltaHeading += math.Pi * 2
-		}
-		steering := int32(-deltaHeading * 1600.0)
-		if steering > 760 {
-			steering = 760
-		}
-		if steering < -760 {
-			steering = -760
-		}
-		spin := blockKartWrapMilliRadians(int32((raceDistance) % 2765 * 1000 / 440))
-		lean := int32(float64(steering) * 0.055 +
-			math.Sin(float64(tick) * 0.18 + float64(rivalIndex)) * 7.0)
-		pitch := int32(float64(dy) / float64(segmentLength) * 1000.0)
-		if pitch > 75 {
-			pitch = 75
-		}
-		if pitch < -75 {
-			pitch = -75
-		}
-		return transform, steering, spin, lean, pitch, true
+	sample := game.Track.SampleAtS(travel)
+	heading := math.Atan2(sample.Tangent_x, sample.Tangent_z)
+	transform := Transform{
+		X: sample.X + int64(sample.Right_x*lateralPosition),
+		Y: sample.Y + int64(sample.Right_y*lateralPosition) +
+			blockKartTrackRideHeightMilli,
+		Z: sample.Z + int64(sample.Right_z*lateralPosition),
+		Yaw_milliradians: int32(heading * 1000.0),
 	}
-	return Transform{}, 0, 0, 0, 0, false
+	steering := blockKartClampInt32(
+		int32(-sample.Curvature_per_meter*blockKartVehicleWheelbaseMeters*1000.0),
+		-760, 760,
+	)
+	spin := blockKartWrapMilliRadians(
+		int32(raceDistance%2765*1000/int64(blockKartVehicleWheelRadiusMilli)),
+	)
+	lean := int32(sample.Bank_radians*1000.0+float64(steering)*0.04+
+		math.Sin(float64(tick)*0.18+float64(rivalIndex))*6.0)
+	pitch := blockKartClampInt32(int32(math.Atan(sample.Grade)*1000.0), -95, 95)
+	return transform, steering, spin, lean, pitch, true
 }
 
 func (game *BlockKart) effectRenderObjects(transform Transform, tick uint64) ([]render.SnapshotObject, bool) {
@@ -1734,12 +1577,16 @@ func (game *BlockKart) cameraPacket(kart Transform, tick uint64) []byte {
 	speedRatio := 0.0
 	state, ok := game.KartStates.Get(game.KartEntity)
 	if ok {
-		speedRatio = math.Abs(float64(state.Speed_per_second)) / 42000.0
+		speedRatio = math.Abs(float64(state.Speed_per_second)) /
+			blockKartVehicleNormalMaximumSpeed
 		if speedRatio > 1 {
 			speedRatio = 1
 		}
 	}
-	verticalFov := uint32(51000 + speedRatio * 12500)
+	accelerationKick := blockKartVehicleClamp(
+		game.Vehicle.Longitudinal_acceleration/18000.0, -0.12, 0.22,
+	)
+	verticalFov := uint32(54000 + speedRatio*15000 + accelerationKick*7000)
 	camera := render3d.EncodeCamera(render3d.Camera3d{
 		Projection: render3d.CameraProjection{
 			Kind: render3d.CameraPerspective, VerticalFovMillidegrees: verticalFov, NearMilli: 80,
@@ -1760,11 +1607,13 @@ func (game *BlockKart) cameraPacket(kart Transform, tick uint64) []byte {
 		lookHeading = blockKartVehicleWrapRadians(game.Vehicle.Heading_radians +
 			blockKartVehicleClamp(game.Vehicle.Yaw_rate * 0.10, -0.09, 0.09))
 	}
-	distance := 7100.0 + speedRatio * 2500.0
-	height := int64(3150.0 + speedRatio * 620.0)
-	lookAhead := 9400.0 + speedRatio * 9000.0
-	lateralLook := float64(game.Steering_milli) * 0.42 - game.Vehicle.Yaw_rate * 520.0
-	cameraSide := -float64(game.Steering_milli) * 0.095 - game.Vehicle.Lateral_speed * 0.035
+	distance := 6700.0 + speedRatio*3200.0
+	height := int64(3000.0 + speedRatio*760.0)
+	lookAhead := 10800.0 + speedRatio*11200.0
+	lateralLook := float64(game.Steering_milli)*0.52 -
+		game.Vehicle.Yaw_rate*610.0
+	cameraSide := -float64(game.Steering_milli)*0.105 -
+		game.Vehicle.Lateral_speed*0.028
 	if game.Drifting {
 		lateralLook += float64(game.DriftDirection) * 720.0
 		cameraSide -= float64(game.DriftDirection) * 180.0
@@ -1936,6 +1785,13 @@ func (game *BlockKart) restartRace() error {
 	game.ObstacleHitCooldown_ticks = 0
 	game.CollisionShake_ticks = 0
 	game.CollisionShake_side_milli = 0
+	game.CachedRivalObjects = nil
+	game.CachedGameplayObjects = nil
+	game.CachedHudObjects = nil
+	game.RivalRenderTick = 0
+	game.GameplayRenderTick = 0
+	game.HudRenderTick = 0
+	game.resetVehicleRecoveryState()
 	game.Paused = false
 	return game.respawn()
 }
@@ -1954,6 +1810,7 @@ func (game *BlockKart) respawn() error {
 	game.StartFlash_ticks = 0
 	game.CollisionShake_ticks = 0
 	game.CollisionShake_side_milli = 0
+	game.resetVehicleRecoveryState()
 	transform := blockKartStartTransform()
 	game.Vehicle.Reset(transform)
 	game.LastSafeTransform = transform
@@ -1981,6 +1838,7 @@ func (game *BlockKart) respawn() error {
 }
 
 func (game *BlockKart) recoverToTrack() error {
+	entrySpeed := math.Abs(game.Vehicle.Forward_speed)
 	game.Steering_milli = 0
 	game.WheelSpin_milliradians = 0
 	game.ChassisLean_milliradians = 0
@@ -1994,16 +1852,28 @@ func (game *BlockKart) recoverToTrack() error {
 	game.StartFlash_ticks = 0
 	game.CollisionShake_ticks = 0
 	game.CollisionShake_side_milli = 0
+	game.resetVehicleRecoveryState()
 	transform := game.LastSafeTransform
 	if transform.X == 0 && transform.Z == 0 {
 		transform = blockKartStartTransform()
 	}
 	road := game.nearestRoadSample(transform)
 	transform.X = road.X
-	transform.Y = road.Y
+	transform.Y = road.Y + blockKartTrackRideHeightMilli
 	transform.Z = road.Z
+	transform.Yaw_milliradians = int32(math.Atan2(
+		road.Tangent_x, road.Tangent_z,
+	) * 1000.0)
 	game.Vehicle.Reset(transform)
+	rescueSpeed := blockKartVehicleClamp(entrySpeed*0.45, 7200, 10800)
+	game.Vehicle.Forward_speed = rescueSpeed
 	game.LastSafeTransform = transform
+	forwardX := math.Sin(game.Vehicle.Heading_radians)
+	forwardZ := math.Cos(game.Vehicle.Heading_radians)
+	velocity := Velocity{
+		X_per_second: int64(forwardX * rescueSpeed),
+		Z_per_second: int64(forwardZ * rescueSpeed),
+	}
 	if game.Physics != nil && game.KartBody.Valid() &&
 		!game.Physics.Submit(physics3d.Command{
 			Kind: physics3d.CommandTeleport, Body: game.KartBody,
@@ -2012,14 +1882,14 @@ func (game *BlockKart) recoverToTrack() error {
 		return errors.New("blockkart: submit recovery teleport")
 	}
 	if !game.Transforms.Upsert(game.KartEntity, transform) ||
-		!game.Velocities.Upsert(game.KartEntity, Velocity{}) {
+		!game.Velocities.Upsert(game.KartEntity, velocity) {
 		return errors.New("blockkart: recover kart")
 	}
 	state, ok := game.KartStates.Get(game.KartEntity)
 	if !ok {
 		return errors.New("blockkart: recover race state")
 	}
-	state.Speed_per_second = 0
+	state.Speed_per_second = int64(rescueSpeed)
 	state.Boost_ticks = 0
 	if !game.KartStates.Upsert(game.KartEntity, state) {
 		return errors.New("blockkart: reset recovery speed")

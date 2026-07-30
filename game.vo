@@ -66,6 +66,7 @@ type BlockKart struct {
 	PadEntities []BlockKartPhysicsEntity
 	ObstacleEntities []BlockKartPhysicsEntity
 	Contacts []physics3d.ContactEvent
+	Track BlockKartTrackModel
 	TrackCenterline []BlockKartRoadPoint
 	LastSafeTransform Transform
 	RenderControls *render.RenderControlStore
@@ -77,10 +78,23 @@ type BlockKart struct {
 	RenderWorldPublished bool
 	RenderLiveDynamicEntities map[uint32]bool
 	RenderLastDynamicPackets map[uint32][]byte
+	RenderDynamicSeen map[uint32]uint64
+	RenderSeenEpoch uint64
+	DynamicObjectScratch []render.SnapshotObject
+	TransactionOpScratch []render.TransactionOp
+	CachedRivalObjects []render.SnapshotObject
+	CachedGameplayObjects []render.SnapshotObject
+	CachedHudObjects []render.SnapshotObject
+	RivalRenderTick uint64
+	GameplayRenderTick uint64
+	HudRenderTick uint64
 	StaticRenderPackets [][]byte
 	MeshInstancePackets map[uint64][]byte
 	HudStaticPackets map[uint64][]byte
 	GameplayStaticPackets map[uint64][]byte
+	KartBodyParts []blockKartMeshPart
+	KartWheelParts []blockKartMeshPart
+	KartWheelLocations [][3]int64
 	RenderAssetPackets [][]byte
 	RenderAssetCursor uint32
 	RenderAssetsPublished bool
@@ -158,6 +172,9 @@ type BlockKart struct {
 	ObstacleHitCooldown_ticks uint32
 	CollisionShake_ticks uint32
 	CollisionShake_side_milli int32
+	OffTrack_ticks uint32
+	Stuck_ticks uint32
+	WrongWay_ticks uint32
 	LastBoostAudioTick uint64
 	LastSkidAudioTick uint64
 	LastGrassAudioTick uint64
@@ -230,9 +247,22 @@ func StartBlockKart(game *BlockKart, init BlockKartInit, context voplay.StartCon
 	game.Engine = context.Engine()
 	game.RenderLiveDynamicEntities = map[uint32]bool{}
 	game.RenderLastDynamicPackets = map[uint32][]byte{}
+	game.RenderDynamicSeen = map[uint32]uint64{}
 	game.MeshInstancePackets = map[uint64][]byte{}
 	game.HudStaticPackets = map[uint64][]byte{}
 	game.GameplayStaticPackets = map[uint64][]byte{}
+	game.KartBodyParts = []blockKartMeshPart{
+		{Material: 102, Mesh: 10002}, {Material: 106, Mesh: 10003}, {Material: 103, Mesh: 10004},
+		{Material: 103, Mesh: 10005}, {Material: 124, Mesh: 10006}, {Material: 107, Mesh: 10007},
+		{Material: 125, Mesh: 10013}, {Material: 126, Mesh: 10014},
+	}
+	game.KartWheelParts = []blockKartMeshPart{
+		{Mesh: 10008, Material: 106}, {Mesh: 10009, Material: 122}, {Mesh: 10010, Material: 103},
+		{Mesh: 10011, Material: 107}, {Mesh: 10012, Material: 103},
+	}
+	game.KartWheelLocations = [][3]int64{
+		{-1320, -220, 1060}, {1320, -220, 1060}, {-1320, -220, -1180}, {1320, -220, -1180},
+	}
 	var ok bool
 	game.Transforms, ok = NewTransformStore(512, 4096)
 	if !ok {
@@ -336,7 +366,8 @@ func (game *BlockKart) startWorld(context voplay.StartContext) error {
 	var ok bool
 	game.KartEntity = uint64(kart.Index)
 	startTransform := blockKartStartTransform()
-	game.TrackCenterline = blockKartTrackCenterline()
+	game.Track = blockKartBuildTrackModel()
+	game.TrackCenterline = blockKartTrackCenterline(game.Track)
 	if len(game.TrackCenterline) == 0 {
 		return errors.New("blockkart: build track centerline")
 	}
@@ -588,11 +619,11 @@ func (game *BlockKart) readInput(tick voplay.TickBatch) error {
 	leftActive := game.LeftPressed || leftTapped
 	rightActive := game.RightPressed || rightTapped
 	if leftActive == rightActive {
-		control.Steer_milli = game.GamepadSteer
+		control.Steer_milli = blockKartDriverSteerFromDevice(game.GamepadSteer)
 	} else if leftActive {
-		control.Steer_milli = -1000
-	} else {
 		control.Steer_milli = 1000
+	} else {
+		control.Steer_milli = -1000
 	}
 	if game.ThrottlePressed || throttleTapped {
 		control.Throttle_milli = 1000
@@ -696,7 +727,7 @@ func (game *BlockKart) applyTouchControls(control *KartControl) {
 				if steer > 1000 {
 					steer = 1000
 				}
-				control.Steer_milli = int32(steer)
+				control.Steer_milli = blockKartDriverSteerFromDevice(int32(steer))
 				if vertical > 0 {
 					if vertical > 1000 {
 						vertical = 1000
@@ -719,6 +750,16 @@ func (game *BlockKart) applyTouchControls(control *KartControl) {
 				control.Boost = true
 		}
 	}
+}
+
+// Device axes follow the usual left-negative/right-positive convention. The
+// renderer's chase-camera basis projects positive vehicle yaw toward the
+// driver's visible left, so the conversion happens once at the input boundary.
+// Every downstream system can then use positive steering for driver-left and
+// negative steering for driver-right.
+func blockKartDriverSteerFromDevice(value int32) int32 {
+	value = blockKartClampInt32(value, -1000, 1000)
+	return -value
 }
 
 func blockKartWrapMilliRadians(value int32) int32 {
@@ -761,8 +802,14 @@ func (game *BlockKart) stepPhysics(tick voplay.TickBatch) error {
 		transform.X = body.Position[0]
 		transform.Z = body.Position[2]
 		road := game.nearestRoadSample(transform)
-		transform.Y = road.Y
-		if road.Distance_milli <= road.Half_width_milli + 2500 {
+		deltaSeconds := float64(tick.FixedTickNanos) / 1000000000.0
+		game.Vehicle.stepSuspension(&game.Track, transform, deltaSeconds)
+		transform.Y = int64(game.Vehicle.Suspended_height_milli)
+		if game.shouldRecoverVehicle(road) {
+			return game.recoverToTrack()
+		}
+		if road.Surface != blockKartRoadSurfaceGrass &&
+			blockKartAbsInt64(road.Signed_offset_milli) <= road.Half_width_milli - 650 {
 			game.LastSafeTransform = transform
 		}
 		if transform.X < -650000 || transform.X > 650000 || transform.Z < -650000 || transform.Z > 650000 {
@@ -772,7 +819,7 @@ func (game *BlockKart) stepPhysics(tick voplay.TickBatch) error {
 			Kind: physics3d.CommandTeleport, Body: game.KartBody,
 			Value: [3]int64{transform.X, transform.Y, transform.Z},
 		}) {
-			return errors.New("blockkart: align kart body to road")
+			return errors.New("blockkart: align kart collision proxy to suspension")
 		}
 		if !game.Transforms.Upsert(game.KartEntity, transform) {
 			return errors.New("blockkart: publish physics transform")
@@ -868,9 +915,20 @@ func (game *BlockKart) frame(tick voplay.TickBatch, pulse []byte) (voplay.TickOu
 	if !kartEncoded {
 		return voplay.TickOutput{}, errors.New("blockkart: encode retained kart")
 	}
-	rivalObjects, rivalsEncoded := game.rivalRenderObjects(tick.FirstTick)
-	if !rivalsEncoded {
-		return voplay.TickOutput{}, errors.New("blockkart: encode rival karts")
+	coldPresentationCaches := game.RivalRenderTick == 0 || game.GameplayRenderTick == 0 ||
+		game.HudRenderTick == 0
+	presentationPhase := game.RenderPulseCounter % 8
+	rivalObjects := game.CachedRivalObjects
+	refreshRivals := coldPresentationCaches || presentationPhase == 0 || presentationPhase == 3 ||
+		presentationPhase == 6
+	if refreshRivals {
+		var rivalsEncoded bool
+		rivalObjects, rivalsEncoded = game.rivalRenderObjects(tick.FirstTick)
+		if !rivalsEncoded {
+			return voplay.TickOutput{}, errors.New("blockkart: encode rival karts")
+		}
+		game.CachedRivalObjects = rivalObjects
+		game.RivalRenderTick = tick.FirstTick
 	}
 	poseBytes := blockKartTransformBytes(transform)
 	previous, _ := game.RenderPoses.Get(game.KartEntity)
@@ -880,9 +938,15 @@ func (game *BlockKart) frame(tick voplay.TickBatch, pulse []byte) (voplay.TickOu
 	}) {
 		return voplay.TickOutput{}, errors.New("blockkart: publish render pose")
 	}
-	gameplayObjects, ok := game.gameplayRenderPackets(tick.FirstTick)
-	if !ok {
-		return voplay.TickOutput{}, errors.New("blockkart: encode gameplay entities")
+	gameplayObjects := game.CachedGameplayObjects
+	refreshGameplay := coldPresentationCaches || presentationPhase == 2 || presentationPhase == 5
+	if refreshGameplay {
+		gameplayObjects, ok = game.gameplayRenderPackets(tick.FirstTick)
+		if !ok {
+			return voplay.TickOutput{}, errors.New("blockkart: encode gameplay entities")
+		}
+		game.CachedGameplayObjects = gameplayObjects
+		game.GameplayRenderTick = tick.FirstTick
 	}
 	checkpointObjects := []render.SnapshotObject{}
 	effectObjects, ok := game.effectRenderObjects(transform, tick.FirstTick)
@@ -893,16 +957,18 @@ func (game *BlockKart) frame(tick voplay.TickBatch, pulse []byte) (voplay.TickOu
 	if len(camera) == 0 {
 		return voplay.TickOutput{}, errors.New("blockkart: encode camera")
 	}
-	hud := game.hudPackets(false)
-	if len(hud) == 0 {
-		return voplay.TickOutput{}, errors.New("blockkart: encode HUD")
+	hud := game.CachedHudObjects
+	refreshHud := coldPresentationCaches || presentationPhase == 1 || presentationPhase == 4 ||
+		presentationPhase == 7
+	if refreshHud {
+		hud = game.hudPackets(false)
+		if len(hud) == 0 {
+			return voplay.TickOutput{}, errors.New("blockkart: encode HUD")
+		}
+		game.CachedHudObjects = hud
+		game.HudRenderTick = tick.FirstTick
 	}
-	dynamicObjects := make([]render.SnapshotObject, 0, len(kartPackets) + len(rivalObjects) +
-		len(gameplayObjects) +
-		len(checkpointObjects) +
-		len(effectObjects) +
-		len(hud) +
-		1)
+	dynamicObjects := game.DynamicObjectScratch[:0]
 	for index, bytes := range kartPackets {
 		dynamicObjects = append(dynamicObjects, render.SnapshotObject{
 			Entity: voplay.Handle{Index: uint32(100 + index), Generation: 1}, Bytes: bytes,
@@ -917,6 +983,7 @@ func (game *BlockKart) frame(tick voplay.TickBatch, pulse []byte) (voplay.TickOu
 	})
 	dynamicObjects = append(dynamicObjects, hud...)
 	blockKartSortSnapshotObjects(dynamicObjects)
+	game.DynamicObjectScratch = dynamicObjects
 	game.RenderRevision++
 	renderPacket := []byte{}
 	renderEncoded := false
@@ -1143,9 +1210,15 @@ func blockKartDynamicEntitySet(objects []render.SnapshotObject) map[uint32]bool 
 }
 
 func (game *BlockKart) renderTransactionOps(objects []render.SnapshotObject) []render.TransactionOp {
-	current := blockKartDynamicEntitySet(objects)
-	ops := make([]render.TransactionOp, 0, len(objects) + len(game.RenderLiveDynamicEntities))
+	game.RenderSeenEpoch++
+	if game.RenderSeenEpoch == 0 {
+		game.RenderDynamicSeen = map[uint32]uint64{}
+		game.RenderSeenEpoch = 1
+	}
+	epoch := game.RenderSeenEpoch
+	ops := game.TransactionOpScratch[:0]
 	for _, object := range objects {
+		game.RenderDynamicSeen[object.Entity.Index] = epoch
 		previous := game.RenderLastDynamicPackets[object.Entity.Index]
 		if game.RenderLiveDynamicEntities[object.Entity.Index] &&
 			blockKartBytesEqual(previous, object.Bytes) {
@@ -1156,17 +1229,20 @@ func (game *BlockKart) renderTransactionOps(objects []render.SnapshotObject) []r
 			kind = render.TransactionSpawn
 		}
 		ops = append(ops, render.TransactionOp{Kind: kind, Entity: object.Entity, Bytes: object.Bytes})
+		game.RenderLiveDynamicEntities[object.Entity.Index] = true
 		game.RenderLastDynamicPackets[object.Entity.Index] = object.Bytes
 	}
 	for entity := range game.RenderLiveDynamicEntities {
-		if !current[entity] {
+		if game.RenderDynamicSeen[entity] != epoch {
 			ops = append(ops, render.TransactionOp{
 				Kind: render.TransactionDespawn, Entity: voplay.Handle{Index: entity, Generation: 1},
 			})
+			delete(game.RenderLiveDynamicEntities, entity)
 			delete(game.RenderLastDynamicPackets, entity)
+			delete(game.RenderDynamicSeen, entity)
 		}
 	}
-	game.RenderLiveDynamicEntities = current
+	game.TransactionOpScratch = ops
 	return ops
 }
 

@@ -7,17 +7,16 @@ import (
 )
 
 const (
-	blockKartVehicleSubsteps uint32 = 2
-	blockKartVehicleNormalMaximumSpeed float64 = 26000.0
-	blockKartVehicleBoostMaximumSpeed float64 = 34000.0
-	blockKartVehicleOffRoadMaximumSpeed float64 = 14000.0
-	blockKartVehicleReverseMaximumSpeed float64 = 8500.0
-	blockKartVehicleWheelbase float64 = 2350.0
+	blockKartVehicleSubsteps uint32 = 3
+	blockKartVehicleNormalMaximumSpeed float64 = 30000.0
+	blockKartVehicleBoostMaximumSpeed float64 = 36000.0
+	blockKartVehicleOffRoadMaximumSpeed float64 = 18000.0
+	blockKartVehicleReverseMaximumSpeed float64 = 9500.0
 )
 
-// BlockKartVehicleController owns the complete simulated state of the hero kart.
-// Control commands, wheel angle, rigid-body yaw, and tire slip are intentionally
-// separate so a digital input edge can never rotate or translate the kart directly.
+// BlockKartVehicleController stores the complete planar dynamics, road-contact,
+// suspension and camera state. Values exposed to the game use milli-units;
+// the dynamics integrator converts them to SI units at its boundary.
 type BlockKartVehicleController struct {
 	Initialized bool
 	Heading_radians float64
@@ -29,10 +28,25 @@ type BlockKartVehicleController struct {
 	Lateral_speed float64
 	Yaw_rate float64
 	Longitudinal_acceleration float64
+	Lateral_acceleration float64
+	Body_slip_radians float64
+	Front_slip_radians float64
+	Rear_slip_radians float64
+	Front_lateral_force_newtons float64
+	Rear_lateral_force_newtons float64
+	Drive_force_newtons float64
+	Front_normal_load_newtons float64
+	Rear_normal_load_newtons float64
+	Stability_yaw_moment_newton_meters float64
 	Drift_blend float64
+	Surface_friction float64
 	Suspended_height_milli float64
 	Suspension_velocity_milli_per_second float64
 	Suspension_offset_milli float64
+	Road_pitch_radians float64
+	Road_roll_radians float64
+	Wheel_compression_milli [4]float64
+	Wheel_visual_offset_milli [4]float64
 }
 
 func (vehicle *BlockKartVehicleController) Reset(transform Transform) {
@@ -49,10 +63,25 @@ func (vehicle *BlockKartVehicleController) Reset(transform Transform) {
 	vehicle.Lateral_speed = 0
 	vehicle.Yaw_rate = 0
 	vehicle.Longitudinal_acceleration = 0
+	vehicle.Lateral_acceleration = 0
+	vehicle.Body_slip_radians = 0
+	vehicle.Front_slip_radians = 0
+	vehicle.Rear_slip_radians = 0
+	vehicle.Front_lateral_force_newtons = 0
+	vehicle.Rear_lateral_force_newtons = 0
+	vehicle.Drive_force_newtons = 0
+	vehicle.Front_normal_load_newtons = blockKartVehicleMassKg * 9.81 * 0.53
+	vehicle.Rear_normal_load_newtons = blockKartVehicleMassKg * 9.81 * 0.47
+	vehicle.Stability_yaw_moment_newton_meters = 0
 	vehicle.Drift_blend = 0
+	vehicle.Surface_friction = 1.42
 	vehicle.Suspended_height_milli = float64(transform.Y)
 	vehicle.Suspension_velocity_milli_per_second = 0
 	vehicle.Suspension_offset_milli = 0
+	vehicle.Road_pitch_radians = 0
+	vehicle.Road_roll_radians = 0
+	vehicle.Wheel_compression_milli = [4]float64{}
+	vehicle.Wheel_visual_offset_milli = [4]float64{}
 }
 
 func (game *BlockKart) drive(tick voplay.TickBatch) error {
@@ -86,26 +115,23 @@ func (game *BlockKart) drive(tick voplay.TickBatch) error {
 		game.StartFlash_ticks--
 	}
 	road := game.nearestRoadSample(transform)
-	game.OffRoad = road.Distance_milli > road.Half_width_milli - 900
-	game.Vehicle.Forward_speed = float64(state.Speed_per_second)
+	game.OffRoad = road.Surface == blockKartRoadSurfaceGrass
 	game.updateVehicleDrift(control, deltaSeconds)
 	miniTurbo := game.MiniTurbo_ticks != 0
 	if game.MiniTurbo_ticks != 0 {
 		game.MiniTurbo_ticks--
 	}
 	boosting := control.Boost || state.Boost_ticks != 0 || miniTurbo
-	// Gameplay and simulation share the same steering sign: negative turns left
-	// and positive turns right. The authored kart's mirrored mesh basis is handled
-	// only by presentation and must never leak back into vehicle motion.
+	// Driver-left is positive throughout the vehicle model. Keyboard, gamepad
+	// and touch axes are converted once at the platform-input boundary.
 	steerTarget := blockKartVehicleSteeringInput(float64(control.Steer_milli) / 1000.0, -1, 1)
 	throttle := blockKartVehicleClamp(float64(control.Throttle_milli) / 1000.0, 0, 1)
 	brake := blockKartVehicleClamp(float64(control.Brake_milli) / 1000.0, 0, 1)
 	previousSpeed := game.Vehicle.Forward_speed
 	substepSeconds := deltaSeconds / float64(blockKartVehicleSubsteps)
 	for substep := uint32(0); substep < blockKartVehicleSubsteps; substep++ {
-		game.Vehicle.step(steerTarget, throttle, brake, boosting, miniTurbo, game.OffRoad, game.Drifting, game.DriftDirection, substepSeconds)
+		game.Vehicle.stepDynamics(road, steerTarget, throttle, brake, boosting, miniTurbo, game.Drifting, game.DriftDirection, substepSeconds)
 	}
-	game.Vehicle.stepSuspension(float64(transform.Y), deltaSeconds)
 	game.Vehicle.Longitudinal_acceleration = (game.Vehicle.Forward_speed - previousSpeed) /
 		deltaSeconds
 	transform.Yaw_milliradians = blockKartWrapMilliRadians(int32(game.Vehicle.Heading_radians * 1000.0))
@@ -118,6 +144,7 @@ func (game *BlockKart) drive(tick voplay.TickBatch) error {
 		rightX * game.Vehicle.Lateral_speed)
 	velocity.Z_per_second = int64(forwardZ * game.Vehicle.Forward_speed +
 		rightZ * game.Vehicle.Lateral_speed)
+	velocity.Y_per_second = 0
 	velocity.Yaw_per_second = int32(game.Vehicle.Yaw_rate * 1000.0)
 	state.Speed_per_second = int64(game.Vehicle.Forward_speed)
 	elapsedNanos := tick.FixedTickNanos + game.ElapsedNanosRemainder
@@ -129,6 +156,7 @@ func (game *BlockKart) drive(tick voplay.TickBatch) error {
 	if game.CollisionShake_ticks != 0 {
 		game.CollisionShake_ticks--
 	}
+	game.Vehicle.stepCamera(game.Drifting, deltaSeconds)
 	game.publishVehiclePresentation(deltaSeconds)
 	if !game.Transforms.Upsert(game.KartEntity, transform) ||
 		!game.Velocities.Upsert(game.KartEntity, velocity) ||
@@ -149,6 +177,7 @@ func (game *BlockKart) holdVehicle(velocity Velocity, transform Transform, state
 	game.Vehicle.Reset(transform)
 	state.Speed_per_second = 0
 	velocity.X_per_second = 0
+	velocity.Y_per_second = 0
 	velocity.Z_per_second = 0
 	velocity.Yaw_per_second = 0
 	game.BoostPressed = false
@@ -168,299 +197,42 @@ func (game *BlockKart) holdVehicle(velocity Velocity, transform Transform, state
 	return nil
 }
 
-func (vehicle *BlockKartVehicleController) step(steerTarget float64, throttle float64, brake float64, boosting bool, miniTurbo bool, offRoad bool, drifting bool, driftDirection int32, deltaSeconds float64) {
-	vehicle.stepSteering(steerTarget, offRoad, deltaSeconds)
-	vehicle.stepDriftBlend(drifting, deltaSeconds)
-	vehicle.stepLongitudinal(throttle, brake, boosting, miniTurbo, offRoad, drifting, deltaSeconds)
-	vehicle.stepTires(offRoad, drifting, driftDirection, throttle, brake, deltaSeconds)
-	vehicle.Heading_radians += vehicle.Yaw_rate * deltaSeconds
-	vehicle.Heading_radians = blockKartVehicleWrapRadians(vehicle.Heading_radians)
-	vehicle.stepCamera(drifting, deltaSeconds)
-}
-
-func (vehicle *BlockKartVehicleController) stepDriftBlend(drifting bool, deltaSeconds float64) {
-	target := 0.0
-	rate := 8.5
-	if drifting {
-		target = 1.0
-		rate = 6.5
-	}
-	vehicle.Drift_blend = blockKartVehicleApproach(vehicle.Drift_blend, target, rate * deltaSeconds)
-}
-
 func (vehicle *BlockKartVehicleController) stepCamera(drifting bool, deltaSeconds float64) {
-	speedForSlip := math.Max(math.Abs(vehicle.Forward_speed), 1200.0)
-	slipAngle := math.Atan2(vehicle.Lateral_speed, speedForSlip)
-	lookAhead := blockKartVehicleClamp(vehicle.Yaw_rate * 0.085 + slipAngle * 0.28, -0.13, 0.13)
-	target := blockKartVehicleWrapRadians(vehicle.Heading_radians + lookAhead)
-	maximumLag := 0.16
-	springFrequency := 12.5
-	if drifting || vehicle.Drift_blend > 0 {
-		maximumLag = 0.24
-		springFrequency = 9.0
+	speedMps := math.Abs(vehicle.Forward_speed) / 1000.0
+	speedForSlip := math.Max(speedMps, 1.5)
+	slipAngle := math.Atan2(vehicle.Lateral_speed / 1000.0, speedForSlip)
+	velocityLead := blockKartVehicleClamp(vehicle.Yaw_rate * 0.055 + slipAngle * 0.20, -0.09, 0.09)
+	target := blockKartVehicleWrapRadians(vehicle.Heading_radians + velocityLead)
+	maximumLag := 0.105
+	springFrequency := 15.0
+	if drifting || vehicle.Drift_blend > 0.2 {
+		maximumLag = 0.17
+		springFrequency = 11.5
 	}
 	error := blockKartVehicleWrapRadians(target - vehicle.Camera_heading_radians)
 	error = blockKartVehicleClamp(error, -maximumLag, maximumLag)
 	acceleration := error * springFrequency * springFrequency -
 		vehicle.Camera_yaw_velocity * 2.0 * springFrequency
 	vehicle.Camera_yaw_velocity += acceleration * deltaSeconds
-	vehicle.Camera_yaw_velocity = blockKartVehicleClamp(vehicle.Camera_yaw_velocity, -3.2, 3.2)
+	vehicle.Camera_yaw_velocity = blockKartVehicleClamp(vehicle.Camera_yaw_velocity, -4.2, 4.2)
 	vehicle.Camera_heading_radians = blockKartVehicleWrapRadians(vehicle.Camera_heading_radians +
 		vehicle.Camera_yaw_velocity * deltaSeconds)
-	remainingError := blockKartVehicleWrapRadians(target - vehicle.Camera_heading_radians)
-	if remainingError > maximumLag {
+	remaining := blockKartVehicleWrapRadians(target - vehicle.Camera_heading_radians)
+	if remaining > maximumLag {
 		vehicle.Camera_heading_radians = blockKartVehicleWrapRadians(target - maximumLag)
-		if vehicle.Camera_yaw_velocity < 0 {
-			vehicle.Camera_yaw_velocity = 0
-		}
-	} else if remainingError < -maximumLag {
+	} else if remaining < -maximumLag {
 		vehicle.Camera_heading_radians = blockKartVehicleWrapRadians(target + maximumLag)
-		if vehicle.Camera_yaw_velocity > 0 {
-			vehicle.Camera_yaw_velocity = 0
-		}
 	}
-}
-
-func (vehicle *BlockKartVehicleController) stepSteering(target float64, offRoad bool, deltaSeconds float64) {
-	reversing := target != 0 && vehicle.Steer_command != 0 &&
-		(vehicle.Steer_command < 0) != (target < 0)
-	speedRatio := blockKartVehicleClamp(math.Abs(vehicle.Forward_speed) /
-		blockKartVehicleNormalMaximumSpeed, 0, 1)
-	commandRate := 10.0 - speedRatio * 1.8
-	if target == 0 {
-		commandRate = 13.5
-	} else if reversing {
-		commandRate = 17.0
-	}
-	vehicle.Steer_command = blockKartVehicleApproach(vehicle.Steer_command, target, commandRate *
-		deltaSeconds)
-	speedBlend := speedRatio * speedRatio * (3.0 - 2.0 * speedRatio)
-	maximumWheelAngle := 0.46 + (0.205 - 0.46) * speedBlend
-	if offRoad {
-		maximumWheelAngle *= 0.96
-	}
-	shapedCommand := math.Pow(math.Abs(vehicle.Steer_command), 1.14)
-	if vehicle.Steer_command < 0 {
-		shapedCommand = -shapedCommand
-	}
-	wheelTarget := shapedCommand * maximumWheelAngle
-	wheelReversing := wheelTarget != 0 && vehicle.Wheel_angle_radians != 0 &&
-		(vehicle.Wheel_angle_radians < 0) != (wheelTarget < 0)
-	wheelRate := 8.5
-	if target == 0 {
-		wheelRate = 13.0
-	} else if reversing || wheelReversing {
-		wheelRate = 17.0
-	}
-	vehicle.Wheel_angle_radians = blockKartVehicleApproach(vehicle.Wheel_angle_radians, wheelTarget, wheelRate *
-		deltaSeconds)
-}
-
-func (vehicle *BlockKartVehicleController) stepLongitudinal(throttle float64, brake float64, boosting bool, miniTurbo bool, offRoad bool, drifting bool, deltaSeconds float64) {
-	speed := vehicle.Forward_speed
-	absoluteSpeed := math.Abs(speed)
-	speedRatio := blockKartVehicleClamp(absoluteSpeed / blockKartVehicleNormalMaximumSpeed, 0, 1)
-	engineAcceleration := 10800.0 * (1.0 - speedRatio * 0.70)
-	if engineAcceleration < 3000 {
-		engineAcceleration = 3000
-	}
-	surfaceDrive := 1.0
-	if offRoad {
-		surfaceDrive = 0.55
-	}
-	acceleration := 0.0
-	if throttle > 0 {
-		if speed < -300 {
-			acceleration += 19000.0 * throttle
-		} else {
-			acceleration += engineAcceleration * throttle * surfaceDrive
-		}
-	}
-	if brake > 0 {
-		if speed > 300 {
-			acceleration -= 21000.0 * brake
-		} else {
-			acceleration -= 7200.0 * brake
-		}
-	}
-	if boosting && speed >= 0 {
-		boostAcceleration := 5200.0
-		if miniTurbo {
-			boostAcceleration = 6800.0
-		}
-		acceleration += boostAcceleration
-	}
-	if throttle == 0 && brake == 0 {
-		rollingResistance := 750.0 + absoluteSpeed * 0.032
-		if speed > 0 {
-			acceleration -= rollingResistance
-		} else if speed < 0 {
-			acceleration += rollingResistance
-		}
-	} else {
-		acceleration -= speed * 0.035
-	}
-	corneringLoad := math.Abs(vehicle.Yaw_rate * speed)
-	cornerScrub := corneringLoad * (0.032 + math.Abs(vehicle.Steer_command) * 0.072)
-	if drifting {
-		cornerScrub *= 0.48
-	}
-	if speed > 0 {
-		acceleration -= cornerScrub
-	} else if speed < 0 {
-		acceleration += cornerScrub
-	}
-	if !boosting && speed > blockKartVehicleNormalMaximumSpeed {
-		acceleration -= (speed - blockKartVehicleNormalMaximumSpeed) * 0.85
-	}
-	if offRoad {
-		acceleration -= speed * 0.20
-		if speed > blockKartVehicleOffRoadMaximumSpeed {
-			acceleration -= (speed - blockKartVehicleOffRoadMaximumSpeed) * 1.10
-		}
-	}
-	nextSpeed := speed + acceleration * deltaSeconds
-	if throttle == 0 && brake == 0 && (speed > 0 && nextSpeed < 0 || speed < 0 && nextSpeed > 0) {
-		nextSpeed = 0
-	}
-	if nextSpeed > blockKartVehicleBoostMaximumSpeed {
-		nextSpeed = blockKartVehicleBoostMaximumSpeed
-	}
-	if nextSpeed < -blockKartVehicleReverseMaximumSpeed {
-		nextSpeed = -blockKartVehicleReverseMaximumSpeed
-	}
-	vehicle.Forward_speed = nextSpeed
-}
-
-func (vehicle *BlockKartVehicleController) stepTires(offRoad bool, drifting bool, driftDirection int32, throttle float64, brake float64, deltaSeconds float64) {
-	absoluteSpeed := math.Abs(vehicle.Forward_speed)
-	desiredYawRate := 0.0
-	if absoluteSpeed > 100 {
-		desiredYawRate = vehicle.Forward_speed / blockKartVehicleWheelbase *
-			math.Tan(vehicle.Wheel_angle_radians)
-	}
-	speedRatio := blockKartVehicleClamp(absoluteSpeed / blockKartVehicleNormalMaximumSpeed, 0, 1)
-	maximumLateralAcceleration := 33500.0 - speedRatio * 4500.0
-	if offRoad {
-		maximumLateralAcceleration = 19500.0 - speedRatio * 2500.0
-	}
-	driftBlend := vehicle.Drift_blend
-	driftCommit := 0.0
-	counterSteer := 0.0
-	if driftDirection != 0 {
-		signedSteer := vehicle.Steer_command * float64(driftDirection)
-		driftCommit = blockKartVehicleClamp(signedSteer, 0, 1)
-		counterSteer = blockKartVehicleClamp(-signedSteer, 0, 1)
-	}
-	if driftBlend > 0 {
-		driftLateralAcceleration := 46000.0
-		if offRoad {
-			driftLateralAcceleration = 20000.0
-		}
-		maximumLateralAcceleration += (driftLateralAcceleration - maximumLateralAcceleration) * driftBlend
-		driftYawAssist := 0.30 + driftCommit * 0.17 - counterSteer * 0.20
-		desiredYawRate += float64(driftDirection) * driftYawAssist * driftBlend
-	}
-	loadTransfer := blockKartVehicleClamp(brake * 0.20 - throttle * 0.055, -0.055, 0.20)
-	desiredYawRate *= 1.0 + loadTransfer
-	if driftBlend == 0 && absoluteSpeed > 1200 {
-		slipAngle := math.Atan2(vehicle.Lateral_speed, math.Max(absoluteSpeed, 1200.0))
-		stabilityStrength := 3.2 * (1.0 - math.Abs(vehicle.Steer_command) * 0.55)
-		desiredYawRate += blockKartVehicleClamp(slipAngle * stabilityStrength, -0.42, 0.42)
-	}
-	maximumYawRate := 2.05
-	if absoluteSpeed > 3500 {
-		maximumYawRate = maximumLateralAcceleration / absoluteSpeed
-		if maximumYawRate > 2.05 {
-			maximumYawRate = 2.05
-		}
-	}
-	desiredYawRate = blockKartVehicleClamp(desiredYawRate, -maximumYawRate, maximumYawRate)
-	yawAcceleration := 11.0 - speedRatio * 2.0
-	if math.Abs(vehicle.Steer_command) < 0.025 && driftBlend == 0 {
-		desiredYawRate = 0
-		yawAcceleration = 13.0
-	} else if vehicle.Yaw_rate != 0 && (vehicle.Yaw_rate < 0) != (desiredYawRate < 0) {
-		yawAcceleration = 15.0
-	}
-	if offRoad {
-		yawAcceleration *= 0.86
-	}
-	vehicle.Yaw_rate = blockKartVehicleApproach(vehicle.Yaw_rate, desiredYawRate, yawAcceleration *
-		deltaSeconds)
-	if driftBlend > 0 {
-		targetSlipAngle := -float64(driftDirection) *
-			(0.13 + driftCommit * 0.10 - counterSteer * 0.085) * driftBlend
-		targetSlip := math.Tan(targetSlipAngle) * absoluteSpeed
-		vehicle.Lateral_speed = blockKartVehicleApproach(vehicle.Lateral_speed, targetSlip, (13000.0 +
-			counterSteer * 10500.0) *
-			deltaSeconds)
-	} else {
-		gripAcceleration := 34000.0 - speedRatio * 6500.0
-		if offRoad {
-			gripAcceleration = 22000.0 - speedRatio * 2500.0
-		}
-		vehicle.Lateral_speed = blockKartVehicleApproach(vehicle.Lateral_speed, 0, gripAcceleration *
-			deltaSeconds)
-	}
-	maximumSlip := absoluteSpeed * 0.28
-	vehicle.Lateral_speed = blockKartVehicleClamp(vehicle.Lateral_speed, -maximumSlip, maximumSlip)
-}
-
-func (vehicle *BlockKartVehicleController) stepSuspension(roadHeight_milli float64, deltaSeconds float64) {
-	displacement := roadHeight_milli - vehicle.Suspended_height_milli
-	acceleration := displacement * 122.0 - vehicle.Suspension_velocity_milli_per_second * 18.5
-	acceleration = blockKartVehicleClamp(acceleration, -42000, 42000)
-	vehicle.Suspension_velocity_milli_per_second += acceleration * deltaSeconds
-	vehicle.Suspended_height_milli += vehicle.Suspension_velocity_milli_per_second * deltaSeconds
-	offset := vehicle.Suspended_height_milli - roadHeight_milli
-	if offset < -135 {
-		vehicle.Suspended_height_milli = roadHeight_milli - 135
-		if vehicle.Suspension_velocity_milli_per_second < 0 {
-			vehicle.Suspension_velocity_milli_per_second *= -0.16
-		}
-	} else if offset > 105 {
-		vehicle.Suspended_height_milli = roadHeight_milli + 105
-		if vehicle.Suspension_velocity_milli_per_second > 0 {
-			vehicle.Suspension_velocity_milli_per_second *= -0.16
-		}
-	}
-	vehicle.Suspension_offset_milli = vehicle.Suspended_height_milli - roadHeight_milli
-}
-
-func (vehicle *BlockKartVehicleController) ApplyImpact(obstacleDirectionX float64, obstacleDirectionZ float64) float64 {
-	if vehicle == nil {
-		return 0
-	}
-	heading := vehicle.Heading_radians
-	forwardX := math.Sin(heading)
-	forwardZ := math.Cos(heading)
-	rightX := math.Cos(heading)
-	rightZ := -math.Sin(heading)
-	forwardImpact := blockKartVehicleClamp(obstacleDirectionX * forwardX +
-		obstacleDirectionZ * forwardZ, -1, 1)
-	sideImpact := blockKartVehicleClamp(obstacleDirectionX * rightX + obstacleDirectionZ * rightZ, -1, 1)
-	retainedSpeed := 0.80 - math.Abs(forwardImpact) * 0.18
-	if retainedSpeed < 0.58 {
-		retainedSpeed = 0.58
-	}
-	vehicle.Forward_speed *= retainedSpeed
-	vehicle.Lateral_speed -= sideImpact * 2800.0
-	vehicle.Yaw_rate -= sideImpact * 0.34
-	vehicle.Yaw_rate = blockKartVehicleClamp(vehicle.Yaw_rate, -0.82, 0.82)
-	vehicle.Steer_command *= 0.72
-	vehicle.Wheel_angle_radians *= 0.78
-	vehicle.Drift_blend *= 0.45
-	return sideImpact
 }
 
 func (game *BlockKart) updateVehicleDrift(control KartControl, deltaSeconds float64) {
 	absoluteSpeed := math.Abs(game.Vehicle.Forward_speed)
-	driftEligible := control.Drift && absoluteSpeed > 10000 &&
-		(game.WasDrifting || math.Abs(float64(control.Steer_milli)) > 280)
+	steer := control.Steer_milli
+	driftEligible := control.Drift && absoluteSpeed > 9500 &&
+		(game.WasDrifting || math.Abs(float64(steer)) > 260)
 	if driftEligible {
 		if !game.WasDrifting {
-			if control.Steer_milli < 0 {
+			if steer < 0 {
 				game.DriftDirection = -1
 			} else {
 				game.DriftDirection = 1
@@ -468,9 +240,9 @@ func (game *BlockKart) updateVehicleDrift(control KartControl, deltaSeconds floa
 			game.DriftCharge_milli = 0
 		}
 		game.Drifting = true
-		chargePerSecond := 120.0 + absoluteSpeed / 180.0 + math.Abs(float64(control.Steer_milli)) / 12.0
-		if control.Steer_milli != 0 && (control.Steer_milli < 0) != (game.DriftDirection < 0) {
-			chargePerSecond += 100.0
+		chargePerSecond := 125.0 + absoluteSpeed / 170.0 + math.Abs(float64(steer)) / 11.0
+		if steer != 0 && (steer < 0) != (game.DriftDirection < 0) {
+			chargePerSecond += 105.0
 		}
 		chargeGain := uint32(chargePerSecond * deltaSeconds)
 		if chargeGain == 0 {
@@ -512,20 +284,26 @@ func (game *BlockKart) publishVehiclePresentation(deltaSeconds float64) {
 	game.Steering_milli = int32(-game.Vehicle.Wheel_angle_radians * 1000.0)
 	speedRatio := blockKartVehicleClamp(math.Abs(game.Vehicle.Forward_speed) /
 		blockKartVehicleNormalMaximumSpeed, 0, 1)
-	leanTarget := int32(-game.Vehicle.Yaw_rate * speedRatio * 78.0)
-	leanTarget = blockKartClampInt32(leanTarget, -82, 82)
-	game.ChassisLean_milliradians = blockKartApproachInt32(game.ChassisLean_milliradians, leanTarget, int32(250.0 *
+	dynamicRoll := -game.Vehicle.Lateral_acceleration / 1000.0 * 0.0065
+	leanRadians := game.Vehicle.Road_roll_radians + dynamicRoll
+	leanTarget := blockKartClampInt32(int32(leanRadians * 1000.0), -145, 145)
+	game.ChassisLean_milliradians = blockKartApproachInt32(game.ChassisLean_milliradians, leanTarget, int32(420.0 *
 		deltaSeconds))
-	pitchTarget := int32(game.Vehicle.Longitudinal_acceleration / 15000.0 * 46.0)
-	pitchTarget = blockKartClampInt32(pitchTarget, -54, 54)
-	game.ChassisPitch_milliradians = blockKartApproachInt32(game.ChassisPitch_milliradians, pitchTarget, int32(210.0 *
+	dynamicPitch := -game.Vehicle.Longitudinal_acceleration / 1000.0 * 0.0042
+	pitchRadians := game.Vehicle.Road_pitch_radians + dynamicPitch
+	pitchTarget := blockKartClampInt32(int32(pitchRadians * 1000.0), -115, 115)
+	game.ChassisPitch_milliradians = blockKartApproachInt32(game.ChassisPitch_milliradians, pitchTarget, int32(360.0 *
 		deltaSeconds))
 	suspensionTarget := int32(game.Vehicle.Suspension_offset_milli)
-	suspensionTarget = blockKartClampInt32(suspensionTarget, -135, 105)
-	game.SuspensionHeave_milli = blockKartApproachInt32(game.SuspensionHeave_milli, suspensionTarget, int32(900.0 *
+	suspensionTarget = blockKartClampInt32(suspensionTarget, -110, 95)
+	game.SuspensionHeave_milli = blockKartApproachInt32(game.SuspensionHeave_milli, suspensionTarget, int32(1100.0 *
 		deltaSeconds))
-	spinStep := int32(game.Vehicle.Forward_speed * deltaSeconds / 440.0 * 1000.0)
+	spinStep := int32(game.Vehicle.Forward_speed * deltaSeconds / blockKartVehicleWheelRadiusMilli *
+		1000.0)
 	game.WheelSpin_milliradians = blockKartWrapMilliRadians(game.WheelSpin_milliradians + spinStep)
+	if speedRatio < 0.02 {
+		game.WheelSpin_milliradians = blockKartWrapMilliRadians(game.WheelSpin_milliradians)
+	}
 }
 
 func blockKartVehicleApproach(current float64, target float64, maximumStep float64) float64 {
@@ -568,7 +346,7 @@ func blockKartVehicleClamp(value float64, minimum float64, maximum float64) floa
 func blockKartVehicleSteeringInput(value float64, minimum float64, maximum float64) float64 {
 	value = blockKartVehicleClamp(value, minimum, maximum)
 	magnitude := math.Abs(value)
-	const deadzone = 0.045
+	const deadzone = 0.035
 	if magnitude <= deadzone {
 		return 0
 	}

@@ -1,0 +1,204 @@
+package main
+
+import "math"
+
+type BlockKartVehicleAssistOutput struct {
+	Yaw_moment_newton_meters float64
+	Lateral_force_newtons float64
+	Rear_friction_scale float64
+	Countersteer_radians float64
+}
+
+func (vehicle *BlockKartVehicleController) stepSteering(
+	target float64,
+	surface uint32,
+	deltaSeconds float64,
+) {
+	speedRatio := blockKartVehicleClamp(
+		math.Abs(vehicle.Forward_speed)/blockKartVehicleNormalMaximumSpeed, 0, 1,
+	)
+	reversing := target != 0 && vehicle.Steer_command != 0 &&
+		(vehicle.Steer_command < 0) != (target < 0)
+	commandRate := 8.8 - speedRatio*1.5
+	if target == 0 {
+		commandRate = 12.8
+	} else if reversing {
+		commandRate = 16.5
+	}
+	vehicle.Steer_command = blockKartVehicleApproach(
+		vehicle.Steer_command, target, commandRate*deltaSeconds,
+	)
+	speedBlend := speedRatio*speedRatio*(3.0-2.0*speedRatio)
+	maximumWheelAngle := blockKartVehicleLerp(0.49, 0.235, speedBlend)
+	if surface == blockKartRoadSurfaceGrass {
+		maximumWheelAngle *= 0.90
+	}
+	shaped := math.Pow(math.Abs(vehicle.Steer_command), 1.08)
+	if vehicle.Steer_command < 0 {
+		shaped = -shaped
+	}
+	wheelTarget := shaped * maximumWheelAngle
+	wheelRate := 7.5
+	if target == 0 {
+		wheelRate = 11.5
+	} else if reversing {
+		wheelRate = 14.0
+	}
+	vehicle.Wheel_angle_radians = blockKartVehicleApproach(
+		vehicle.Wheel_angle_radians, wheelTarget, wheelRate*deltaSeconds,
+	)
+}
+
+func (vehicle *BlockKartVehicleController) stepDriftBlend(
+	drifting bool,
+	deltaSeconds float64,
+) {
+	target := 0.0
+	rate := 5.8
+	if drifting {
+		target = 1.0
+		rate = 4.7
+	}
+	vehicle.Drift_blend = blockKartVehicleApproach(
+		vehicle.Drift_blend, target, rate*deltaSeconds,
+	)
+}
+
+func (vehicle *BlockKartVehicleController) computeAssists(
+	longitudinalSpeed float64,
+	lateralSpeed float64,
+	yawRate float64,
+	road BlockKartRoadSample,
+	throttle float64,
+	brake float64,
+	drifting bool,
+	driftDirection int32,
+) BlockKartVehicleAssistOutput {
+	output := BlockKartVehicleAssistOutput{Rear_friction_scale: 1.0}
+	absoluteSpeed := math.Abs(longitudinalSpeed)
+	speedBlend := blockKartVehicleSmoothstep(3.5, 13.0, absoluteSpeed)
+	desiredYaw := 0.0
+	if absoluteSpeed > 0.25 {
+		desiredYaw = longitudinalSpeed / blockKartVehicleWheelbaseMeters *
+			math.Tan(vehicle.Wheel_angle_radians)
+	}
+	beta := math.Atan2(lateralSpeed, math.Max(absoluteSpeed, 1.0))
+	yawError := desiredYaw - yawRate
+	steerCommit := math.Abs(vehicle.Steer_command)
+	stabilityFade := (1.0-steerCommit*0.38) * speedBlend
+	yawMoment := yawError * blockKartVehicleYawInertiaKgM2 * 3.2 * stabilityFade
+	slipMoment := -beta * blockKartVehicleYawInertiaKgM2 * 2.7 * stabilityFade
+	maximumMoment := 430.0 * road.Friction
+	output.Yaw_moment_newton_meters =
+		blockKartVehicleClamp(yawMoment+slipMoment, -maximumMoment, maximumMoment)
+	lateralDamping := -lateralSpeed * blockKartVehicleMassKg *
+		0.72 * stabilityFade
+	maximumLateralAssist := blockKartVehicleMassKg *
+		blockKartVehicleGravity * road.Friction * 0.16
+	output.Lateral_force_newtons = blockKartVehicleClamp(
+		lateralDamping, -maximumLateralAssist, maximumLateralAssist,
+	)
+	guideYawMoment, guideLateralForce := vehicle.computeRoadGuidance(
+		longitudinalSpeed, lateralSpeed, yawRate, road, drifting,
+	)
+	output.Yaw_moment_newton_meters += guideYawMoment
+	output.Lateral_force_newtons += guideLateralForce
+	if drifting || vehicle.Drift_blend > 0 {
+		commit := 0.0
+		counter := 0.0
+		if driftDirection != 0 {
+			signedSteer := vehicle.Steer_command * float64(driftDirection)
+			commit = blockKartVehicleClamp(signedSteer, 0, 1)
+			counter = blockKartVehicleClamp(-signedSteer, 0, 1)
+		}
+		driftBlend := vehicle.Drift_blend
+		output.Rear_friction_scale = blockKartVehicleLerp(
+			1.0, 0.63+counter*0.14, driftBlend,
+		)
+		targetYaw := float64(driftDirection) *
+			(0.58+commit*0.30-counter*0.18) * speedBlend
+		driftMoment := (targetYaw-yawRate) *
+			blockKartVehicleYawInertiaKgM2 * 1.55 * driftBlend
+		output.Yaw_moment_newton_meters +=
+			blockKartVehicleClamp(driftMoment, -330, 330)
+		output.Countersteer_radians =
+			blockKartVehicleClamp(-beta*0.24, -0.075, 0.075) *
+				driftBlend * counter
+		output.Lateral_force_newtons *= 1.0 - driftBlend*0.72
+	}
+	if road.Surface == blockKartRoadSurfaceGrass {
+		output.Yaw_moment_newton_meters *= 0.56
+		output.Lateral_force_newtons *= 0.45
+		output.Rear_friction_scale =
+			math.Min(output.Rear_friction_scale, 0.90)
+	}
+	if brake > 0.4 {
+		output.Yaw_moment_newton_meters *= 0.85
+	}
+	if throttle == 0 && absoluteSpeed < 2.0 {
+		output.Yaw_moment_newton_meters *= absoluteSpeed / 2.0
+	}
+	output.Yaw_moment_newton_meters = blockKartVehicleClamp(
+		output.Yaw_moment_newton_meters, -maximumMoment, maximumMoment,
+	)
+	return output
+}
+
+// computeRoadGuidance is a deliberately bounded Stanley-style path follower.
+// It combines reference-line heading error with nonlinear cross-track error,
+// then feeds the result into yaw moment and lateral-force assists. Player
+// steering continuously removes its authority; it grows near a track edge and
+// on grass so a brief key tap cannot throw the kart irrecoverably off course.
+func (vehicle *BlockKartVehicleController) computeRoadGuidance(
+	longitudinalSpeed float64,
+	lateralSpeed float64,
+	yawRate float64,
+	road BlockKartRoadSample,
+	drifting bool,
+) (float64, float64) {
+	absoluteSpeed := math.Abs(longitudinalSpeed)
+	halfWidthMeters := math.Max(float64(road.Half_width_milli)/1000.0, 1.0)
+	offsetMeters := float64(road.Signed_offset_milli) / 1000.0
+	edgeRatio := blockKartVehicleSmoothstep(
+		0.42, 1.08, math.Abs(offsetMeters)/halfWidthMeters,
+	)
+	driverCommit := blockKartVehicleClamp(math.Abs(vehicle.Steer_command), 0, 1)
+	authority := (0.32 + edgeRatio*0.60) * (1.0-driverCommit*0.74)
+	if road.Surface == blockKartRoadSurfaceGrass {
+		authority = math.Max(authority, 0.76*(1.0-driverCommit*0.48))
+	}
+	if drifting || vehicle.Drift_blend > 0.15 {
+		authority *= blockKartVehicleLerp(1.0, 0.25, vehicle.Drift_blend)
+	}
+	authority = blockKartVehicleClamp(authority, 0, 0.94)
+
+	roadHeading := math.Atan2(road.Tangent_x, road.Tangent_z)
+	headingError := blockKartVehicleWrapRadians(
+		roadHeading - vehicle.Heading_radians,
+	)
+	crossTrackAngle := math.Atan2(
+		-1.65*offsetMeters,
+		absoluteSpeed+4.5,
+	)
+	pathError := blockKartVehicleClamp(
+		headingError+crossTrackAngle, -0.50, 0.50,
+	)
+	desiredYawRate := longitudinalSpeed*road.Curvature_per_meter +
+		pathError*(1.75+edgeRatio*1.55)
+	yawMoment := (desiredYawRate-yawRate) *
+		blockKartVehicleYawInertiaKgM2 * 3.0 * authority
+	maximumYawMoment := 620.0 * math.Max(road.Friction, 0.55)
+	yawMoment = blockKartVehicleClamp(
+		yawMoment, -maximumYawMoment, maximumYawMoment,
+	)
+
+	centerForce := -offsetMeters*235.0 -
+		lateralSpeed*blockKartVehicleMassKg*0.24
+	centerForce *= authority
+	maximumCenterForce := blockKartVehicleMassKg *
+		blockKartVehicleGravity * math.Max(road.Friction, 0.55) * 0.20
+	centerForce = blockKartVehicleClamp(
+		centerForce, -maximumCenterForce, maximumCenterForce,
+	)
+	return yawMoment, centerForce
+}
