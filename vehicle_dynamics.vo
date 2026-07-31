@@ -55,7 +55,6 @@ func (vehicle *BlockKartVehicleController) stepDynamics(road BlockKartRoadSample
 		blockKartVehicleRearAxleMeters * rearLateral +
 		assist.Yaw_moment_newton_meters) /
 		blockKartVehicleYawInertiaKgM2
-	dynamicBlend := blockKartVehicleSmoothstep(2.5, 7.0, math.Abs(u))
 	kinematicYaw := 0.0
 	if math.Abs(delta) > 0.0001 {
 		kinematicYaw = u / blockKartVehicleWheelbaseMeters * math.Tan(delta)
@@ -64,8 +63,14 @@ func (vehicle *BlockKartVehicleController) stepDynamics(road BlockKartRoadSample
 	u += du * deltaSeconds
 	v += dv * deltaSeconds
 	r += dr * deltaSeconds
-	v = blockKartVehicleLerp(kinematicLateral, v, dynamicBlend)
-	r = blockKartVehicleLerp(kinematicYaw, r, dynamicBlend)
+	// Below walking speed the dynamic tyre equations become ill-conditioned.
+	// Blend toward their kinematic limit with a time-scaled correction. The
+	// previous per-substep state replacement changed its effective strength
+	// with substep count and produced an abrupt handling transition at 7 m/s.
+	kinematicAuthority := 1.0 - blockKartVehicleSmoothstep(1.5, 4.0, math.Abs(u))
+	kinematicAmount := blockKartVehicleClamp(kinematicAuthority*16.0*deltaSeconds, 0, 1)
+	v = blockKartVehicleLerp(v, kinematicLateral, kinematicAmount)
+	r = blockKartVehicleLerp(r, kinematicYaw, kinematicAmount)
 	if math.Abs(u) < 0.12 && throttle == 0 && brake == 0 {
 		u = 0
 		v = 0
@@ -126,23 +131,7 @@ func (vehicle *BlockKartVehicleController) longitudinalForce(speedMps float64, t
 	} else if road.Surface == blockKartRoadSurfaceGrass {
 		engineForce *= 0.62
 	}
-	cornerThrottle := 1.0
-	cornerBrake := 0.0
-	if speedMps > 0 && road.Corner_speed_limit_meters_per_second > 0 {
-		cornerLimit := road.Corner_speed_limit_meters_per_second
-		cornerThrottle = 1.0 - blockKartVehicleSmoothstep(
-			cornerLimit-0.5,
-			cornerLimit+2.0,
-			absoluteSpeed,
-		)
-		cornerBrake = blockKartVehicleSmoothstep(
-			cornerLimit+0.75,
-			cornerLimit+6.0,
-			absoluteSpeed,
-		)
-	}
-	force := throttle * engineForce * cornerThrottle
-	force -= cornerBrake * 6200.0
+	force := throttle * engineForce
 	if brake > 0 {
 		if speedMps > 0.45 {
 			force -= brake * 9200.0

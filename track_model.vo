@@ -61,8 +61,6 @@ type BlockKartRoadSample struct {
 	Surface uint32
 	Friction float64
 	Curvature_per_meter float64
-	Preview_curvature_per_meter float64
-	Corner_speed_limit_meters_per_second float64
 	Grade float64
 	Bank_radians float64
 	Tangent_x float64
@@ -500,52 +498,6 @@ func (model *BlockKartTrackModel) SampleAtS(s int64) BlockKartTrackSample {
 		Grade: blockKartTrackLerp(from.Grade, to.Grade, amount),
 		Bank_radians: blockKartTrackLerp(from.Bank_radians, to.Bank_radians, amount),
 	}
-}
-
-// PrepareDrivingReference samples the road far enough ahead to cover a
-// one-second steering decision plus the braking distance of a fast kart. The
-// resulting corner speed is derived from a 1.35 g grip budget and is consumed
-// as a soft throttle/brake envelope by the vehicle model.
-func (model *BlockKartTrackModel) PrepareDrivingReference(
-	road *BlockKartRoadSample,
-	speedMetersPerSecond float64,
-) {
-	if model == nil || road == nil || len(model.Samples) == 0 ||
-		model.Total_length_milli <= 0 {
-		return
-	}
-	speedMetersPerSecond = math.Abs(speedMetersPerSecond)
-	lookAheadMeters := blockKartTrackClamp(
-		16.0+speedMetersPerSecond*1.55,
-		24.0,
-		64.0,
-	)
-	previewCurvature := road.Curvature_per_meter
-	maximumAbsoluteCurvature := math.Abs(previewCurvature)
-	for step := 1; step <= 5; step++ {
-		amount := float64(step) / 5.0
-		sample := model.SampleAtS(
-			road.S_milli + int64(lookAheadMeters*amount*1000.0),
-		)
-		absoluteCurvature := math.Abs(sample.Curvature_per_meter)
-		if absoluteCurvature > maximumAbsoluteCurvature {
-			maximumAbsoluteCurvature = absoluteCurvature
-			previewCurvature = sample.Curvature_per_meter
-		}
-	}
-	road.Preview_curvature_per_meter = previewCurvature
-	const cornerLateralAcceleration = 13.25
-	cornerSpeed := 30.0
-	if maximumAbsoluteCurvature > 0.001 {
-		cornerSpeed = math.Sqrt(
-			cornerLateralAcceleration / maximumAbsoluteCurvature,
-		)
-	}
-	road.Corner_speed_limit_meters_per_second = blockKartTrackClamp(
-		cornerSpeed,
-		11.25,
-		30.0,
-	)
 }
 
 func (game *BlockKart) nearestRoadSample(transform Transform) BlockKartRoadSample {

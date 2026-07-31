@@ -36,10 +36,12 @@ Measured on keyboard with assists enabled:
 
 - Straight acceleration: lateral displacement stays within 0.35 m over 100 m.
 - Constant-radius turn at 50 km/h: yaw rate reaches 90% of its steady value in
-  0.12-0.30 s and has less than 8% overshoot.
+  0.05-0.17 s and has less than 8% overshoot.
 - Slalom: five 16 m gates can be cleared without leaving the 8 m lane.
-- Full steering reversal at 50 km/h changes yaw direction in 0.18-0.42 s with
-  no single-tick heading jump above 0.06 rad.
+- Full steering reversal at 60 km/h changes yaw direction within 6 ticks
+  (0.10 s), with no single-tick heading jump above 0.06 rad.
+- Releasing steering after a full reversal settles yaw within 30 ticks
+  (0.50 s), without a delayed post-release yaw peak.
 - Braking from 80 km/h remains directionally stable and stops within 24-36 m.
 - Grass excursion remains steerable and can return to the road within 3 s.
 - A barrier impact cannot permanently trap the kart or rotate it by more than
@@ -55,8 +57,8 @@ Measured on keyboard with assists enabled:
   through the 5-14 degree range during drift initiation.
 - Countersteer can arrest a drift; releasing drift produces a readable,
   bounded grip recovery.
-- Camera yaw lag stays within 0.04-0.11 rad in grip driving and 0.04-0.18 rad
-  while drifting.
+- Camera yaw error is zero in grip driving and stays within 0.18 rad while
+  drifting.
 - Acceleration, braking, slip, curb contact, grass, boost, and collision each
   have distinct visual and audio feedback.
 
@@ -86,6 +88,8 @@ Every vehicle-model change records before/after telemetry for:
 6. `impact`: 55 km/h shallow-angle barrier contact and recovery.
 7. `drift`: 60 km/h initiation, sustained steering, countersteer, and release.
 8. `steer-release`: 50 km/h constant steering followed by a clean release.
+9. `flat-correction`: 60 km/h full left, immediate full right, then release
+   on a uniform high-grip plane.
 
 Required telemetry:
 
@@ -103,9 +107,9 @@ Required telemetry:
 
 Press `B` to start the next isolated handling scenario. The runner cycles
 through `straight`, `circle-left`, `circle-right`, `slalom`, `recovery`, and
-`impact`, `drift`, then `steer-release`, uses the shipping vehicle controller
-at the shipping 60 Hz fixed step, and displays its result in the F3 telemetry
-panel.
+`impact`, `drift`, `steer-release`, then `flat-correction`. It uses the
+shipping vehicle controller at the shipping 60 Hz fixed step and displays its
+result in the F3 telemetry panel.
 
 The result is a hard pass only when every scenario-specific threshold and the
 per-tick heading-jump threshold pass. The failure mask is additive:
@@ -115,18 +119,22 @@ per-tick heading-jump threshold pass. The failure mask is additive:
 - `64`: grip slip; `128`: yaw overshoot; `256`: slalom reversal count;
 - `512`: grass recovery; `1024`: barrier-impact recovery;
 - `2048`: drift control and grip recovery;
-- `4096`: steering and chase-camera release settlement.
+- `4096`: steering and chase-camera release settlement;
+- `8192`: flat-plane steering reversal and release settlement.
 
 Reference result for the current asphalt and grass setup:
 
 - 0-60 km/h: 150 ticks (2.50 s); 80-0 km/h: 28.68 m.
-- Constant left/right: 7-tick yaw response, 7.1% overshoot, 0.034 rad peak slip.
-- Slalom: passing reversal count and 0.059 rad peak slip.
-- Grass-to-road recovery: 173 ticks (2.88 s).
+- Constant left/right: 6-tick yaw response, 0.1% overshoot, 0.021 rad peak
+  slip.
+- Slalom: passing reversal count and 0.014 rad peak slip.
+- Grass-to-road recovery: 169 ticks (2.82 s).
 - Shallow barrier-impact recovery: 10 ticks (0.17 s).
-- Drift: 0.235 rad peak slip and 8-tick grip recovery after release.
-- Steering release: 13-tick (0.22 s) vehicle/camera settlement with zero
+- Drift: 0.214 rad peak slip and 33-tick grip recovery after release.
+- Steering release: 8-tick (0.13 s) vehicle/camera settlement with zero
   yaw-direction or camera-error reversals.
+- Flat correction: 4-tick (0.067 s) yaw reversal, 10-tick (0.17 s) release
+  settlement, and 0.029 rad peak grip slip.
 
 ## Playability gate
 

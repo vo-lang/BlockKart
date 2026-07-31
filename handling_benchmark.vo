@@ -14,6 +14,7 @@ const (
 	blockKartHandlingScenarioImpact uint32 = 6
 	blockKartHandlingScenarioDrift uint32 = 7
 	blockKartHandlingScenarioSteerRelease uint32 = 8
+	blockKartHandlingScenarioFlatCorrection uint32 = 9
 	blockKartHandlingFailureAcceleration uint32 = 1
 	blockKartHandlingFailureStraightLine uint32 = 2
 	blockKartHandlingFailureBraking uint32 = 4
@@ -27,6 +28,7 @@ const (
 	blockKartHandlingFailureImpact uint32 = 1024
 	blockKartHandlingFailureDrift uint32 = 2048
 	blockKartHandlingFailureSteerRelease uint32 = 4096
+	blockKartHandlingFailureFlatCorrection uint32 = 8192
 )
 
 // BlockKartHandlingBenchmark runs the vehicle model against an isolated flat
@@ -85,6 +87,12 @@ type BlockKartHandlingBenchmark struct {
 	Last_release_camera_sign int32
 	Peak_camera_heading_error_radians float64
 	Maximum_camera_heading_step_radians float64
+	Correction_reverse_tick uint32
+	Correction_yaw_cross_tick uint32
+	Correction_release_tick uint32
+	Correction_settle_tick uint32
+	Correction_release_yaw_rate float64
+	Correction_post_release_peak_yaw_rate float64
 }
 
 func (benchmark *BlockKartHandlingBenchmark) StartNext() {
@@ -92,7 +100,7 @@ func (benchmark *BlockKartHandlingBenchmark) StartNext() {
 		return
 	}
 	scenario := benchmark.Scenario + 1
-	if scenario < blockKartHandlingScenarioStraightBrake || scenario > blockKartHandlingScenarioSteerRelease {
+	if scenario < blockKartHandlingScenarioStraightBrake || scenario > blockKartHandlingScenarioFlatCorrection {
 		scenario = blockKartHandlingScenarioStraightBrake
 	}
 	benchmark.Start(scenario)
@@ -102,7 +110,7 @@ func (benchmark *BlockKartHandlingBenchmark) Start(scenario uint32) {
 	if benchmark == nil {
 		return
 	}
-	if scenario < blockKartHandlingScenarioStraightBrake || scenario > blockKartHandlingScenarioSteerRelease {
+	if scenario < blockKartHandlingScenarioStraightBrake || scenario > blockKartHandlingScenarioFlatCorrection {
 		scenario = blockKartHandlingScenarioStraightBrake
 	}
 	*benchmark = BlockKartHandlingBenchmark{Active: true, Scenario: scenario}
@@ -132,6 +140,8 @@ func (benchmark *BlockKartHandlingBenchmark) ScenarioName() []byte {
 			return []byte("DRIFT CONTROL")
 		case blockKartHandlingScenarioSteerRelease:
 			return []byte("STEER RELEASE")
+		case blockKartHandlingScenarioFlatCorrection:
+			return []byte("FLAT CORRECTION")
 		default:
 			return []byte("IDLE")
 	}
@@ -156,6 +166,8 @@ func (benchmark *BlockKartHandlingBenchmark) DurationTicks() uint32 {
 			return 540
 		case blockKartHandlingScenarioSteerRelease:
 			return 480
+		case blockKartHandlingScenarioFlatCorrection:
+			return 360
 		default:
 			return 0
 	}
@@ -222,6 +234,14 @@ func (benchmark *BlockKartHandlingBenchmark) Control() KartControl {
 				steer = 700
 			}
 			return benchmark.cruiseControl(13.8889, steer)
+		case blockKartHandlingScenarioFlatCorrection:
+			steer := int32(0)
+			if benchmark.Tick >= 180 && benchmark.Tick < 210 {
+				steer = 1000
+			} else if benchmark.Tick >= 210 && benchmark.Tick < 240 {
+				steer = -1000
+			}
+			return benchmark.cruiseControl(16.6667, steer)
 		default:
 			return KartControl{}
 	}
@@ -473,6 +493,33 @@ func (benchmark *BlockKartHandlingBenchmark) sample() {
 			benchmark.Steer_release_recovery_tick = benchmark.Tick + 1
 		}
 	}
+	if benchmark.Scenario == blockKartHandlingScenarioFlatCorrection {
+		if benchmark.Tick == 210 {
+			benchmark.Correction_reverse_tick = benchmark.Tick + 1
+		}
+		if benchmark.Tick >= 210 && benchmark.Correction_yaw_cross_tick == 0 &&
+			benchmark.Vehicle.Yaw_rate <= 0 {
+			benchmark.Correction_yaw_cross_tick = benchmark.Tick + 1
+		}
+		if benchmark.Tick == 239 {
+			benchmark.Correction_release_yaw_rate = yaw
+		}
+		if benchmark.Tick == 240 {
+			benchmark.Correction_release_tick = benchmark.Tick + 1
+		}
+		if benchmark.Tick >= 240 {
+			benchmark.Correction_post_release_peak_yaw_rate = math.Max(
+				benchmark.Correction_post_release_peak_yaw_rate,
+				yaw,
+			)
+			if benchmark.Correction_settle_tick == 0 &&
+				math.Abs(benchmark.Vehicle.Wheel_angle_radians) <= 0.012 &&
+				yaw <= 0.05 &&
+				math.Abs(benchmark.Vehicle.Lateral_speed) <= 250 {
+				benchmark.Correction_settle_tick = benchmark.Tick + 1
+			}
+		}
+	}
 }
 
 func (benchmark *BlockKartHandlingBenchmark) finish() {
@@ -548,6 +595,19 @@ func (benchmark *BlockKartHandlingBenchmark) finish() {
 				benchmark.Maximum_camera_heading_step_radians > 0.06 {
 				benchmark.Failure_mask |= blockKartHandlingFailureSteerRelease
 			}
+		case blockKartHandlingScenarioFlatCorrection:
+			reversedWithinWindow := benchmark.Correction_reverse_tick != 0 &&
+				benchmark.Correction_yaw_cross_tick >= benchmark.Correction_reverse_tick &&
+				benchmark.Correction_yaw_cross_tick <= benchmark.Correction_reverse_tick + 6
+			settledWithinWindow := benchmark.Correction_release_tick != 0 &&
+				benchmark.Correction_settle_tick >= benchmark.Correction_release_tick &&
+				benchmark.Correction_settle_tick <= benchmark.Correction_release_tick + 30
+			releasePeakBound := benchmark.Correction_release_yaw_rate*1.05 + 0.01
+			if !reversedWithinWindow || !settledWithinWindow ||
+				benchmark.Correction_post_release_peak_yaw_rate > releasePeakBound ||
+				benchmark.Peak_slip_radians > 0.087 {
+				benchmark.Failure_mask |= blockKartHandlingFailureFlatCorrection
+			}
 	}
 	if benchmark.Maximum_heading_step_radians > 0.06 {
 		benchmark.Failure_mask |= blockKartHandlingFailureHeadingStep
@@ -556,7 +616,7 @@ func (benchmark *BlockKartHandlingBenchmark) finish() {
 }
 
 func (benchmark *BlockKartHandlingBenchmark) evaluateCircle() {
-	if benchmark.Steer_response_ticks < 7 || benchmark.Steer_response_ticks > 25 {
+	if benchmark.Steer_response_ticks < 3 || benchmark.Steer_response_ticks > 10 {
 		benchmark.Failure_mask |= blockKartHandlingFailureResponse
 	}
 	if benchmark.Peak_slip_radians > 0.244 {

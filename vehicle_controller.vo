@@ -119,10 +119,6 @@ func (game *BlockKart) drive(tick voplay.TickBatch) error {
 		game.StartFlash_ticks--
 	}
 	road := game.nearestRoadSample(transform)
-	game.Track.PrepareDrivingReference(
-		&road,
-		math.Abs(game.Vehicle.Forward_speed)/1000.0,
-	)
 	game.OffRoad = road.Surface == blockKartRoadSurfaceGrass
 	game.updateVehicleDrift(control, deltaSeconds)
 	miniTurbo := game.MiniTurbo_ticks != 0
@@ -206,47 +202,42 @@ func (game *BlockKart) holdVehicle(velocity Velocity, transform Transform, state
 }
 
 func (vehicle *BlockKartVehicleController) stepCamera(drifting bool, road BlockKartRoadSample, deltaSeconds float64) {
-	// The chase rig has one authoritative yaw state. A monotonic first-order
-	// pursuit cannot overshoot after steering release, and deriving the look
-	// direction from this same state keeps orbit and aim from fighting.
 	driftLead := 0.0
 	if drifting || vehicle.Drift_blend > 0.2 {
 		driftLead = blockKartVehicleClamp(vehicle.Body_slip_radians * 0.24, -0.055, 0.055) *
 			vehicle.Drift_blend
 	}
 	target := blockKartVehicleWrapRadians(vehicle.Heading_radians + driftLead)
-	maximumLag := 0.105
-	followRate := 13.0
-	if drifting || vehicle.Drift_blend > 0.2 {
-		maximumLag = 0.17
-		followRate = 9.5
-	}
-	error := blockKartVehicleWrapRadians(target - vehicle.Camera_heading_radians)
-	if error > maximumLag {
-		vehicle.Camera_heading_radians = blockKartVehicleWrapRadians(target - maximumLag)
-		error = maximumLag
-	} else if error < -maximumLag {
-		vehicle.Camera_heading_radians = blockKartVehicleWrapRadians(target + maximumLag)
-		error = -maximumLag
-	}
-	followAmount := blockKartVehicleClamp(followRate * deltaSeconds, 0, 1)
-	vehicle.Camera_heading_radians = blockKartVehicleWrapRadians(vehicle.Camera_heading_radians +
-		error * followAmount)
-
-	// A single, low-amplitude focus offset provides corner anticipation. It is
-	// filtered here and reused for both camera position and aim.
-	focusTarget := vehicle.Steer_command * 260.0
-	if drifting || vehicle.Drift_blend > 0.2 {
-		focusTarget += blockKartVehicleClamp(vehicle.Body_slip_radians * 2100.0, -420.0, 420.0) *
+	if !drifting && vehicle.Drift_blend <= 0.2 {
+		// Grip driving uses the kart heading directly. Steering feel must be
+		// proven without an independent chase-yaw state adding another delayed
+		// response for the player to correct.
+		vehicle.Camera_heading_radians = vehicle.Heading_radians
+		vehicle.Camera_focus_offset_milli = 0
+	} else {
+		maximumLag := 0.17
+		followRate := 9.5
+		error := blockKartVehicleWrapRadians(target - vehicle.Camera_heading_radians)
+		if error > maximumLag {
+			vehicle.Camera_heading_radians = blockKartVehicleWrapRadians(target - maximumLag)
+			error = maximumLag
+		} else if error < -maximumLag {
+			vehicle.Camera_heading_radians = blockKartVehicleWrapRadians(target + maximumLag)
+			error = -maximumLag
+		}
+		followAmount := blockKartVehicleClamp(followRate * deltaSeconds, 0, 1)
+		vehicle.Camera_heading_radians = blockKartVehicleWrapRadians(vehicle.Camera_heading_radians +
+			error * followAmount)
+		focusTarget := blockKartVehicleClamp(vehicle.Body_slip_radians * 2100.0, -420.0, 420.0) *
 			vehicle.Drift_blend
+		focusRate := 10.0
+		if math.Abs(focusTarget) < math.Abs(vehicle.Camera_focus_offset_milli) {
+			focusRate = 15.0
+		}
+		focusAmount := blockKartVehicleClamp(focusRate * deltaSeconds, 0, 1)
+		vehicle.Camera_focus_offset_milli += (focusTarget - vehicle.Camera_focus_offset_milli) *
+			focusAmount
 	}
-	focusRate := 10.0
-	if math.Abs(focusTarget) < math.Abs(vehicle.Camera_focus_offset_milli) {
-		focusRate = 15.0
-	}
-	focusAmount := blockKartVehicleClamp(focusRate * deltaSeconds, 0, 1)
-	vehicle.Camera_focus_offset_milli += (focusTarget - vehicle.Camera_focus_offset_milli) *
-		focusAmount
 	halfWidthMeters := math.Max(float64(road.Half_width_milli) / 1000.0, 1.0)
 	offsetMeters := math.Abs(float64(road.Signed_offset_milli)) / 1000.0
 	edgeTarget := blockKartVehicleSmoothstep(0.55, 0.92, offsetMeters / halfWidthMeters)
@@ -328,8 +319,10 @@ func (game *BlockKart) publishVehiclePresentation(deltaSeconds float64) {
 	// Road bank remains readable while acceleration contributes only a brief,
 	// tightly bounded load-transfer cue.
 	roadRoll := blockKartVehicleClamp(game.Vehicle.Road_roll_radians, -0.085, 0.085)
-	dynamicRoll := -game.Vehicle.Lateral_acceleration / 1000.0 * 0.0024
-	leanRadians := roadRoll + dynamicRoll
+	// Grip-driving validation keeps the body planted. A later presentation
+	// pass may derive load-transfer animation from suspension state once the
+	// planar controller has been accepted in isolation.
+	leanRadians := roadRoll
 	leanTarget := blockKartClampInt32(int32(leanRadians * 1000.0), -95, 95)
 	game.ChassisLean_milliradians = blockKartApproachInt32(game.ChassisLean_milliradians, leanTarget, int32(900.0 *
 		deltaSeconds))

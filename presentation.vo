@@ -524,6 +524,19 @@ func (game *BlockKart) hudPackets(includeStatic bool) []render.SnapshotObject {
 			responseValue = uint64(game.HandlingBenchmark.Steer_release_tick)
 			stopLabel = []byte("SETTLE TICK ")
 			stopValue = uint64(game.HandlingBenchmark.Steer_release_recovery_tick)
+		} else if game.HandlingBenchmark.Scenario == blockKartHandlingScenarioFlatCorrection {
+			responseLabel = []byte("REVERSE DT  ")
+			if game.HandlingBenchmark.Correction_yaw_cross_tick >=
+				game.HandlingBenchmark.Correction_reverse_tick {
+				responseValue = uint64(game.HandlingBenchmark.Correction_yaw_cross_tick -
+					game.HandlingBenchmark.Correction_reverse_tick)
+			}
+			stopLabel = []byte("SETTLE DT   ")
+			if game.HandlingBenchmark.Correction_settle_tick >=
+				game.HandlingBenchmark.Correction_release_tick {
+				stopValue = uint64(game.HandlingBenchmark.Correction_settle_tick -
+					game.HandlingBenchmark.Correction_release_tick)
+			}
 		}
 		if game.HandlingBenchmark.Steady_yaw_samples != 0 {
 			steadyYaw := game.HandlingBenchmark.Steady_yaw_sum /
