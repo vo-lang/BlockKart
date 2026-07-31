@@ -38,7 +38,10 @@ func (vehicle *BlockKartVehicleController) stepSteering(target float64, surface 
 		wheelTarget = blockKartVehicleClamp(wheelTarget, -0.52, 0.52)
 	}
 	if surface == blockKartRoadSurfaceGrass {
-		wheelTarget *= 0.96
+		// Low-friction surfaces need more geometric steer angle to reach the
+		// requested curvature because available cornering stiffness is lower.
+		wheelTarget *= 1.08
+		wheelTarget = blockKartVehicleClamp(wheelTarget, -0.52, 0.52)
 	}
 	reversing := target != 0 && vehicle.Wheel_angle_radians != 0 &&
 		(vehicle.Wheel_angle_radians < 0) != (target < 0)
@@ -77,24 +80,12 @@ func (vehicle *BlockKartVehicleController) stepDriftBlend(drifting bool, deltaSe
 
 func (vehicle *BlockKartVehicleController) computeAssists(longitudinalSpeed float64, lateralSpeed float64, yawRate float64, road BlockKartRoadSample, throttle float64, brake float64, drifting bool, driftDirection int32) BlockKartVehicleAssistOutput {
 	output := BlockKartVehicleAssistOutput{Rear_friction_scale: 1.0}
+	if !drifting && vehicle.Drift_blend <= 0 {
+		return output
+	}
 	absoluteSpeed := math.Abs(longitudinalSpeed)
 	speedBlend := blockKartVehicleSmoothstep(3.5, 13.0, absoluteSpeed)
-	desiredYaw := vehicle.Desired_yaw_rate
 	beta := math.Atan2(lateralSpeed, math.Max(absoluteSpeed, 1.0))
-	yawError := desiredYaw - yawRate
-	steerCommit := math.Abs(vehicle.Steer_command)
-	stabilityFade := (1.0 - steerCommit * 0.10) * speedBlend
-	yawMoment := yawError * blockKartVehicleYawInertiaKgM2 * 4.6 * stabilityFade
-	slipMoment := -beta * blockKartVehicleYawInertiaKgM2 * 3.8 * stabilityFade
-	maximumMoment := 560.0 * road.Friction
-	output.Yaw_moment_newton_meters = blockKartVehicleClamp(yawMoment + slipMoment, -maximumMoment, maximumMoment)
-	lateralDamping := -lateralSpeed * blockKartVehicleMassKg * 1.05 * stabilityFade
-	maximumLateralAssist := blockKartVehicleMassKg * blockKartVehicleGravity * road.Friction * 0.16
-	output.Lateral_force_newtons = blockKartVehicleClamp(
-		lateralDamping,
-		-maximumLateralAssist,
-		maximumLateralAssist,
-	)
 	if drifting || vehicle.Drift_blend > 0 {
 		commit := 0.0
 		counter := 0.0
@@ -126,6 +117,7 @@ func (vehicle *BlockKartVehicleController) computeAssists(longitudinalSpeed floa
 		output.Countersteer_radians = blockKartVehicleClamp(-beta * 0.18, -0.060, 0.060) * driftBlend *
 			counter
 	}
+	maximumMoment := 560.0 * road.Friction
 	if road.Surface == blockKartRoadSurfaceGrass {
 		// Steering grip falls on grass, while differential yaw control retains
 		// enough authority for the driver to unwind an excursion. Lateral

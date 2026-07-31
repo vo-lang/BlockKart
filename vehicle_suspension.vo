@@ -5,7 +5,9 @@ import "math"
 const (
 	blockKartVehicleHalfTrackMeters float64 = 0.79
 	blockKartVehicleSuspensionRestMilli float64 = 720.0
-	blockKartVehicleSuspensionTravelMilli float64 = 170.0
+	// A racing kart has no sprung four-corner suspension. This small envelope
+	// represents tyre compliance and chassis flex only.
+	blockKartVehicleSuspensionTravelMilli float64 = 62.0
 )
 
 func (vehicle *BlockKartVehicleController) stepSuspension(
@@ -41,18 +43,14 @@ func (vehicle *BlockKartVehicleController) stepSuspension(
 		contact := track.Query(int64(wheelX[index]), int64(wheelZ[index]))
 		roadHeight[index] = float64(contact.Y)
 	}
-	frontHeight := (roadHeight[0] + roadHeight[1]) * 0.5
-	rearHeight := (roadHeight[2] + roadHeight[3]) * 0.5
-	leftHeight := (roadHeight[0] + roadHeight[2]) * 0.5
-	rightHeight := (roadHeight[1] + roadHeight[3]) * 0.5
-	averageHeight := (frontHeight + rearHeight) * 0.5
-	targetHeight := averageHeight + blockKartVehicleSuspensionRestMilli
+	centerContact := track.Query(transform.X, transform.Z)
+	targetHeight := float64(centerContact.Y) + blockKartVehicleSuspensionRestMilli
 	if !vehicle.Initialized || vehicle.Suspended_height_milli == 0 {
 		vehicle.Suspended_height_milli = targetHeight
 	}
 	displacement := targetHeight - vehicle.Suspended_height_milli
-	springAcceleration := displacement*92.0 -
-		vehicle.Suspension_velocity_milli_per_second*18.0
+	springAcceleration := displacement*150.0 -
+		vehicle.Suspension_velocity_milli_per_second*25.0
 	springAcceleration =
 		blockKartVehicleClamp(springAcceleration, -52000, 52000)
 	vehicle.Suspension_velocity_milli_per_second +=
@@ -74,14 +72,17 @@ func (vehicle *BlockKartVehicleController) stepSuspension(
 	}
 	vehicle.Suspension_offset_milli =
 		vehicle.Suspended_height_milli - targetHeight
-	vehicle.Road_pitch_radians = math.Atan2(
-		frontHeight-rearHeight,
-		blockKartVehicleWheelbaseMeters*1000.0,
-	)
-	vehicle.Road_roll_radians = math.Atan2(
-		rightHeight-leftHeight,
-		blockKartVehicleHalfTrackMeters*2000.0,
-	)
+	// Body attitude follows the continuous centerline road frame. Computing it
+	// from four independently quantized height queries made the whole chassis
+	// rock when a wheel crossed a sample boundary.
+	vehicle.Road_pitch_radians = math.Atan(centerContact.Grade)
+	vehicle.Road_roll_radians = centerContact.Bank_radians
+	wheelResponse := 1.0 - math.Exp(-24.0*deltaSeconds)
+	insideRearLift := blockKartVehicleSmoothstep(
+		3.2,
+		10.5,
+		math.Abs(vehicle.Lateral_acceleration)/1000.0,
+	) * 18.0 * (1.0 - vehicle.Drift_blend)
 	for index := 0; index < 4; index++ {
 		nominalWheelCenter := vehicle.Suspended_height_milli - 220.0
 		desiredWheelCenter := roadHeight[index] + blockKartVehicleWheelRadiusMilli
@@ -91,9 +92,18 @@ func (vehicle *BlockKartVehicleController) stepSuspension(
 			-blockKartVehicleSuspensionTravelMilli,
 			blockKartVehicleSuspensionTravelMilli,
 		)
-		vehicle.Wheel_compression_milli[index] =
-			blockKartVehicleClamp(-visualOffset, -95, 145)
-		vehicle.Wheel_visual_offset_milli[index] = visualOffset
+		if index == 2 && vehicle.Lateral_acceleration > 0 {
+			visualOffset += insideRearLift
+		} else if index == 3 && vehicle.Lateral_acceleration < 0 {
+			visualOffset += insideRearLift
+		}
+		vehicle.Wheel_visual_offset_milli[index] +=
+			(visualOffset-vehicle.Wheel_visual_offset_milli[index])*wheelResponse
+		vehicle.Wheel_compression_milli[index] = blockKartVehicleClamp(
+			-vehicle.Wheel_visual_offset_milli[index],
+			-blockKartVehicleSuspensionTravelMilli,
+			blockKartVehicleSuspensionTravelMilli,
+		)
 	}
 }
 

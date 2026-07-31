@@ -318,12 +318,12 @@ func (game *BlockKart) publishVehiclePresentation(deltaSeconds float64) {
 	// A kart has short suspension travel and responds as one planted mass.
 	// Road bank remains readable while acceleration contributes only a brief,
 	// tightly bounded load-transfer cue.
-	roadRoll := blockKartVehicleClamp(game.Vehicle.Road_roll_radians, -0.085, 0.085)
+	roadRoll := blockKartVehicleClamp(game.Vehicle.Road_roll_radians, -0.055, 0.055)
 	// Grip-driving validation keeps the body planted. A later presentation
 	// pass may derive load-transfer animation from suspension state once the
 	// planar controller has been accepted in isolation.
 	leanRadians := roadRoll
-	leanTarget := blockKartClampInt32(int32(leanRadians * 1000.0), -95, 95)
+	leanTarget := blockKartClampInt32(int32(leanRadians * 1000.0), -58, 58)
 	game.ChassisLean_milliradians = blockKartApproachInt32(game.ChassisLean_milliradians, leanTarget, int32(900.0 *
 		deltaSeconds))
 	roadPitch := blockKartVehicleClamp(game.Vehicle.Road_pitch_radians, -0.050, 0.050)

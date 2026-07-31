@@ -15,6 +15,7 @@ const (
 	blockKartHandlingScenarioDrift uint32 = 7
 	blockKartHandlingScenarioSteerRelease uint32 = 8
 	blockKartHandlingScenarioFlatCorrection uint32 = 9
+	blockKartHandlingScenarioStaticSteer uint32 = 10
 	blockKartHandlingFailureAcceleration uint32 = 1
 	blockKartHandlingFailureStraightLine uint32 = 2
 	blockKartHandlingFailureBraking uint32 = 4
@@ -29,6 +30,7 @@ const (
 	blockKartHandlingFailureDrift uint32 = 2048
 	blockKartHandlingFailureSteerRelease uint32 = 4096
 	blockKartHandlingFailureFlatCorrection uint32 = 8192
+	blockKartHandlingFailureStaticSteer uint32 = 16384
 )
 
 // BlockKartHandlingBenchmark runs the vehicle model against an isolated flat
@@ -100,7 +102,7 @@ func (benchmark *BlockKartHandlingBenchmark) StartNext() {
 		return
 	}
 	scenario := benchmark.Scenario + 1
-	if scenario < blockKartHandlingScenarioStraightBrake || scenario > blockKartHandlingScenarioFlatCorrection {
+	if scenario < blockKartHandlingScenarioStraightBrake || scenario > blockKartHandlingScenarioStaticSteer {
 		scenario = blockKartHandlingScenarioStraightBrake
 	}
 	benchmark.Start(scenario)
@@ -110,7 +112,7 @@ func (benchmark *BlockKartHandlingBenchmark) Start(scenario uint32) {
 	if benchmark == nil {
 		return
 	}
-	if scenario < blockKartHandlingScenarioStraightBrake || scenario > blockKartHandlingScenarioFlatCorrection {
+	if scenario < blockKartHandlingScenarioStraightBrake || scenario > blockKartHandlingScenarioStaticSteer {
 		scenario = blockKartHandlingScenarioStraightBrake
 	}
 	*benchmark = BlockKartHandlingBenchmark{Active: true, Scenario: scenario}
@@ -142,6 +144,8 @@ func (benchmark *BlockKartHandlingBenchmark) ScenarioName() []byte {
 			return []byte("STEER RELEASE")
 		case blockKartHandlingScenarioFlatCorrection:
 			return []byte("FLAT CORRECTION")
+		case blockKartHandlingScenarioStaticSteer:
+			return []byte("STATIC STEER")
 		default:
 			return []byte("IDLE")
 	}
@@ -168,6 +172,8 @@ func (benchmark *BlockKartHandlingBenchmark) DurationTicks() uint32 {
 			return 480
 		case blockKartHandlingScenarioFlatCorrection:
 			return 360
+		case blockKartHandlingScenarioStaticSteer:
+			return 240
 		default:
 			return 0
 	}
@@ -242,6 +248,14 @@ func (benchmark *BlockKartHandlingBenchmark) Control() KartControl {
 				steer = -1000
 			}
 			return benchmark.cruiseControl(16.6667, steer)
+		case blockKartHandlingScenarioStaticSteer:
+			steer := int32(0)
+			if benchmark.Tick >= 30 && benchmark.Tick < 100 {
+				steer = 1000
+			} else if benchmark.Tick >= 100 && benchmark.Tick < 170 {
+				steer = -1000
+			}
+			return KartControl{Steer_milli: steer}
 		default:
 			return KartControl{}
 	}
@@ -607,6 +621,16 @@ func (benchmark *BlockKartHandlingBenchmark) finish() {
 				benchmark.Correction_post_release_peak_yaw_rate > releasePeakBound ||
 				benchmark.Peak_slip_radians > 0.087 {
 				benchmark.Failure_mask |= blockKartHandlingFailureFlatCorrection
+			}
+		case blockKartHandlingScenarioStaticSteer:
+			// Steering changes wheel geometry only. With zero contact-patch
+			// velocity, the chassis must not gain yaw, lateral velocity, slip,
+			// or displacement from a fabricated tyre force.
+			if benchmark.Peak_yaw_rate_radians_per_second > 0.000001 ||
+				benchmark.Peak_slip_radians > 0.000001 ||
+				math.Abs(benchmark.Vehicle.Lateral_speed) > 0.001 ||
+				benchmark.Maximum_lateral_drift_meters > 0.000001 {
+				benchmark.Failure_mask |= blockKartHandlingFailureStaticSteer
 			}
 	}
 	if benchmark.Maximum_heading_step_radians > 0.06 {

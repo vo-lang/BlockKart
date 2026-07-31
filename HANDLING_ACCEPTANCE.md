@@ -90,6 +90,9 @@ Every vehicle-model change records before/after telemetry for:
 8. `steer-release`: 50 km/h constant steering followed by a clean release.
 9. `flat-correction`: 60 km/h full left, immediate full right, then release
    on a uniform high-grip plane.
+10. `static-steer`: full left, full right, then release with zero longitudinal
+    velocity; wheel angle may change while chassis yaw, slip, and displacement
+    remain zero.
 
 Required telemetry:
 
@@ -107,7 +110,7 @@ Required telemetry:
 
 Press `B` to start the next isolated handling scenario. The runner cycles
 through `straight`, `circle-left`, `circle-right`, `slalom`, `recovery`, and
-`impact`, `drift`, `steer-release`, then `flat-correction`. It uses the
+`impact`, `drift`, `steer-release`, `flat-correction`, then `static-steer`. It uses the
 shipping vehicle controller at the shipping 60 Hz fixed step and displays its
 result in the F3 telemetry panel.
 
@@ -120,21 +123,24 @@ per-tick heading-jump threshold pass. The failure mask is additive:
 - `512`: grass recovery; `1024`: barrier-impact recovery;
 - `2048`: drift control and grip recovery;
 - `4096`: steering and chase-camera release settlement;
-- `8192`: flat-plane steering reversal and release settlement.
+- `8192`: flat-plane steering reversal and release settlement;
+- `16384`: fabricated stationary yaw, slip, or lateral displacement.
 
 Reference result for the current asphalt and grass setup:
 
 - 0-60 km/h: 150 ticks (2.50 s); 80-0 km/h: 28.68 m.
-- Constant left/right: 6-tick yaw response, 0.1% overshoot, 0.021 rad peak
+- Constant left/right: 6-tick yaw response, 0.1% overshoot, 0.028 rad peak
   slip.
-- Slalom: passing reversal count and 0.014 rad peak slip.
-- Grass-to-road recovery: 169 ticks (2.82 s).
+- Slalom: passing reversal count and 0.016 rad peak slip.
+- Grass-to-road recovery: 165 ticks (2.75 s).
 - Shallow barrier-impact recovery: 10 ticks (0.17 s).
-- Drift: 0.214 rad peak slip and 33-tick grip recovery after release.
-- Steering release: 8-tick (0.13 s) vehicle/camera settlement with zero
+- Drift: 0.134 rad peak slip and 9-tick grip recovery after release.
+- Steering release: 9-tick (0.15 s) vehicle/camera settlement with zero
   yaw-direction or camera-error reversals.
-- Flat correction: 4-tick (0.067 s) yaw reversal, 10-tick (0.17 s) release
-  settlement, and 0.029 rad peak grip slip.
+- Flat correction: 4-tick (0.067 s) yaw reversal, 11-tick (0.18 s) release
+  settlement, and 0.025 rad peak grip slip.
+- Static steering: wheel angle reaches the command while yaw, lateral speed,
+  slip, and displacement remain exactly zero.
 
 ## Playability gate
 
