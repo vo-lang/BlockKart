@@ -228,7 +228,7 @@ func (vehicle *BlockKartVehicleController) stepCamera(drifting bool, deltaSecond
 func (game *BlockKart) updateVehicleDrift(control KartControl, deltaSeconds float64) {
 	absoluteSpeed := math.Abs(game.Vehicle.Forward_speed)
 	steer := control.Steer_milli
-	driftEligible := control.Drift && absoluteSpeed > 9500 &&
+	driftEligible := control.Drift && !game.OffRoad && absoluteSpeed > 9500 &&
 		(game.WasDrifting || math.Abs(float64(steer)) > 260)
 	if driftEligible {
 		if !game.WasDrifting {
@@ -240,9 +240,11 @@ func (game *BlockKart) updateVehicleDrift(control KartControl, deltaSeconds floa
 			game.DriftCharge_milli = 0
 		}
 		game.Drifting = true
-		chargePerSecond := 125.0 + absoluteSpeed / 170.0 + math.Abs(float64(steer)) / 11.0
+		slip := math.Abs(game.Vehicle.Body_slip_radians)
+		slipQuality := blockKartVehicleClamp(1.0 - math.Abs(slip - 0.14) / 0.14, 0.35, 1.0)
+		chargePerSecond := (125.0 + absoluteSpeed / 170.0 + math.Abs(float64(steer)) / 11.0) * slipQuality
 		if steer != 0 && (steer < 0) != (game.DriftDirection < 0) {
-			chargePerSecond += 105.0
+			chargePerSecond += 105.0 * math.Max(slipQuality, 0.55)
 		}
 		chargeGain := uint32(chargePerSecond * deltaSeconds)
 		if chargeGain == 0 {
@@ -264,7 +266,9 @@ func (game *BlockKart) updateVehicleDrift(control KartControl, deltaSeconds floa
 		}
 	} else {
 		game.Drifting = false
-		if game.WasDrifting {
+		releaseControlled := !game.OffRoad && absoluteSpeed > 8000 &&
+			math.Abs(game.Vehicle.Body_slip_radians) <= 0.26
+		if game.WasDrifting && releaseControlled {
 			if game.DriftCharge_milli >= 1520 {
 				game.MiniTurbo_ticks = blockKartTicksPerSecond * 3 / 2
 			} else if game.DriftCharge_milli >= 980 {

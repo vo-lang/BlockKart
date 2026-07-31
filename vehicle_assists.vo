@@ -104,13 +104,23 @@ func (vehicle *BlockKartVehicleController) computeAssists(longitudinalSpeed floa
 			counter = blockKartVehicleClamp(-signedSteer, 0, 1)
 		}
 		driftBlend := vehicle.Drift_blend
-		output.Rear_friction_scale = blockKartVehicleLerp(1.0, 0.63 + counter * 0.14, driftBlend)
-		targetYaw := float64(driftDirection) * (0.58 + commit * 0.30 - counter * 0.18) * speedBlend
-		driftMoment := (targetYaw - yawRate) * blockKartVehicleYawInertiaKgM2 * 1.55 * driftBlend
-		output.Yaw_moment_newton_meters += blockKartVehicleClamp(driftMoment, -330, 330)
-		output.Countersteer_radians = blockKartVehicleClamp(-beta * 0.24, -0.075, 0.075) * driftBlend *
+		output.Rear_friction_scale = blockKartVehicleLerp(1.0, 0.78 + counter * 0.10, driftBlend)
+		// Drift control tracks a bounded body-slip target. Steering into the
+		// drift grows the target; countersteer continuously unwinds it. This
+		// gives the player authority over the slide instead of switching
+		// between two fixed friction presets.
+		targetSlip := float64(driftDirection) * (0.10 + commit * 0.08 - counter * 0.075) * speedBlend
+		targetLateralSpeed := math.Tan(targetSlip) * math.Max(absoluteSpeed, 4.0)
+		slipControlForce := (targetLateralSpeed - lateralSpeed) * blockKartVehicleMassKg * 2.15 *
+			driftBlend
+		maximumSlipControlForce := blockKartVehicleMassKg * blockKartVehicleGravity * road.Friction * 0.20
+		output.Lateral_force_newtons *= 1.0 - driftBlend * 0.68
+		output.Lateral_force_newtons += blockKartVehicleClamp(slipControlForce, -maximumSlipControlForce, maximumSlipControlForce)
+		targetYaw := float64(driftDirection) * (0.72 + commit * 0.32 - counter * 0.42) * speedBlend
+		driftMoment := (targetYaw - yawRate) * blockKartVehicleYawInertiaKgM2 * 2.10 * driftBlend
+		output.Yaw_moment_newton_meters += blockKartVehicleClamp(driftMoment, -390, 390)
+		output.Countersteer_radians = blockKartVehicleClamp(-beta * 0.18, -0.060, 0.060) * driftBlend *
 			counter
-		output.Lateral_force_newtons *= 1.0 - driftBlend * 0.72
 	}
 	if road.Surface == blockKartRoadSurfaceGrass {
 		// Steering grip falls on grass, while differential braking and the

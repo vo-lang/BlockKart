@@ -12,6 +12,7 @@ const (
 	blockKartHandlingScenarioSlalom uint32 = 4
 	blockKartHandlingScenarioRecovery uint32 = 5
 	blockKartHandlingScenarioImpact uint32 = 6
+	blockKartHandlingScenarioDrift uint32 = 7
 	blockKartHandlingFailureAcceleration uint32 = 1
 	blockKartHandlingFailureStraightLine uint32 = 2
 	blockKartHandlingFailureBraking uint32 = 4
@@ -23,6 +24,7 @@ const (
 	blockKartHandlingFailureSlalom uint32 = 256
 	blockKartHandlingFailureRecovery uint32 = 512
 	blockKartHandlingFailureImpact uint32 = 1024
+	blockKartHandlingFailureDrift uint32 = 2048
 )
 
 // BlockKartHandlingBenchmark runs the vehicle model against an isolated flat
@@ -67,6 +69,10 @@ type BlockKartHandlingBenchmark struct {
 	Impact_tick uint32
 	Impact_recovery_tick uint32
 	Peak_impact_heading_step_radians float64
+	Drift_countersteer_slip_sum float64
+	Drift_countersteer_samples uint32
+	Drift_release_tick uint32
+	Drift_recovery_tick uint32
 }
 
 func (benchmark *BlockKartHandlingBenchmark) StartNext() {
@@ -74,7 +80,7 @@ func (benchmark *BlockKartHandlingBenchmark) StartNext() {
 		return
 	}
 	scenario := benchmark.Scenario + 1
-	if scenario < blockKartHandlingScenarioStraightBrake || scenario > blockKartHandlingScenarioImpact {
+	if scenario < blockKartHandlingScenarioStraightBrake || scenario > blockKartHandlingScenarioDrift {
 		scenario = blockKartHandlingScenarioStraightBrake
 	}
 	benchmark.Start(scenario)
@@ -84,7 +90,7 @@ func (benchmark *BlockKartHandlingBenchmark) Start(scenario uint32) {
 	if benchmark == nil {
 		return
 	}
-	if scenario < blockKartHandlingScenarioStraightBrake || scenario > blockKartHandlingScenarioImpact {
+	if scenario < blockKartHandlingScenarioStraightBrake || scenario > blockKartHandlingScenarioDrift {
 		scenario = blockKartHandlingScenarioStraightBrake
 	}
 	*benchmark = BlockKartHandlingBenchmark{Active: true, Scenario: scenario}
@@ -109,6 +115,8 @@ func (benchmark *BlockKartHandlingBenchmark) ScenarioName() []byte {
 			return []byte("GRASS RECOVERY")
 		case blockKartHandlingScenarioImpact:
 			return []byte("BARRIER IMPACT")
+		case blockKartHandlingScenarioDrift:
+			return []byte("DRIFT CONTROL")
 		default:
 			return []byte("IDLE")
 	}
@@ -128,6 +136,8 @@ func (benchmark *BlockKartHandlingBenchmark) DurationTicks() uint32 {
 		case blockKartHandlingScenarioRecovery:
 			return 720
 		case blockKartHandlingScenarioImpact:
+			return 540
+		case blockKartHandlingScenarioDrift:
 			return 540
 		default:
 			return 0
@@ -176,6 +186,19 @@ func (benchmark *BlockKartHandlingBenchmark) Control() KartControl {
 			return benchmark.cruiseControl(13.8889, steer)
 		case blockKartHandlingScenarioImpact:
 			return benchmark.cruiseControl(15.2778, 0)
+		case blockKartHandlingScenarioDrift:
+			steer := int32(0)
+			drift := false
+			if benchmark.Tick >= 180 && benchmark.Tick < 330 {
+				steer = 650
+				drift = true
+			} else if benchmark.Tick >= 330 && benchmark.Tick < 420 {
+				steer = -500
+				drift = true
+			}
+			control := benchmark.cruiseControl(16.6667, steer)
+			control.Drift = drift
+			return control
 		default:
 			return KartControl{}
 	}
@@ -217,9 +240,14 @@ func (benchmark *BlockKartHandlingBenchmark) Step(fixedTickNanos uint64) {
 	steerTarget := blockKartVehicleSteeringInput(float64(control.Steer_milli) / 1000.0, -1, 1)
 	throttle := blockKartVehicleClamp(float64(control.Throttle_milli) / 1000.0, 0, 1)
 	brake := blockKartVehicleClamp(float64(control.Brake_milli) / 1000.0, 0, 1)
+	drifting := benchmark.Scenario == blockKartHandlingScenarioDrift && control.Drift
+	driftDirection := int32(0)
+	if drifting {
+		driftDirection = 1
+	}
 	substepSeconds := deltaSeconds / float64(blockKartVehicleSubsteps)
 	for substep := uint32(0); substep < blockKartVehicleSubsteps; substep++ {
-		benchmark.Vehicle.stepDynamics(road, steerTarget, throttle, brake, false, false, false, 0, substepSeconds)
+		benchmark.Vehicle.stepDynamics(road, steerTarget, throttle, brake, false, false, drifting, driftDirection, substepSeconds)
 		benchmark.integratePosition(substepSeconds)
 	}
 	benchmark.sample()
@@ -231,6 +259,11 @@ func (benchmark *BlockKartHandlingBenchmark) Step(fixedTickNanos uint64) {
 	}
 	if benchmark.Scenario == blockKartHandlingScenarioRecovery && benchmark.Road_return_tick != 0 &&
 		benchmark.Tick >= benchmark.Road_return_tick + 30 {
+		benchmark.finish()
+		return
+	}
+	if benchmark.Scenario == blockKartHandlingScenarioDrift && benchmark.Drift_recovery_tick != 0 &&
+		benchmark.Tick >= benchmark.Drift_recovery_tick + 30 {
 		benchmark.finish()
 		return
 	}
@@ -356,6 +389,18 @@ func (benchmark *BlockKartHandlingBenchmark) sample() {
 			benchmark.Impact_recovery_tick = benchmark.Tick + 1
 		}
 	}
+	if benchmark.Scenario == blockKartHandlingScenarioDrift {
+		if benchmark.Tick >= 330 && benchmark.Tick < 420 {
+			benchmark.Drift_countersteer_slip_sum += slip
+			benchmark.Drift_countersteer_samples++
+		}
+		if benchmark.Tick == 420 {
+			benchmark.Drift_release_tick = benchmark.Tick + 1
+		}
+		if benchmark.Tick >= 420 && benchmark.Drift_recovery_tick == 0 && slip <= 0.052 && yaw <= 0.15 {
+			benchmark.Drift_recovery_tick = benchmark.Tick + 1
+		}
+	}
 }
 
 func (benchmark *BlockKartHandlingBenchmark) finish() {
@@ -405,6 +450,20 @@ func (benchmark *BlockKartHandlingBenchmark) finish() {
 				benchmark.Impact_recovery_tick <= benchmark.Impact_tick + 180
 			if !recoveredWithinWindow || benchmark.Peak_impact_heading_step_radians > 0.06 {
 				benchmark.Failure_mask |= blockKartHandlingFailureImpact
+			}
+		case blockKartHandlingScenarioDrift:
+			countersteerSlip := 1.0
+			if benchmark.Drift_countersteer_samples != 0 {
+				countersteerSlip = benchmark.Drift_countersteer_slip_sum /
+					float64(benchmark.Drift_countersteer_samples)
+			}
+			recoveredWithinWindow := benchmark.Drift_release_tick != 0 &&
+				benchmark.Drift_recovery_tick >= benchmark.Drift_release_tick &&
+				benchmark.Drift_recovery_tick <= benchmark.Drift_release_tick + 120
+			if benchmark.Peak_slip_radians < 0.087 || benchmark.Peak_slip_radians > 0.244 ||
+				countersteerSlip > benchmark.Peak_slip_radians * 0.80 ||
+				!recoveredWithinWindow {
+				benchmark.Failure_mask |= blockKartHandlingFailureDrift
 			}
 	}
 	if benchmark.Maximum_heading_step_radians > 0.06 {

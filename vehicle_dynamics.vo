@@ -85,6 +85,9 @@ func (vehicle *BlockKartVehicleController) stepDynamics(road BlockKartRoadSample
 	} else if road.Surface == blockKartRoadSurfaceGrass {
 		lateralSpeedRatio = 0.26
 	}
+	if vehicle.Drift_blend > 0 {
+		lateralSpeedRatio = blockKartVehicleLerp(lateralSpeedRatio, 0.24, vehicle.Drift_blend)
+	}
 	maximumLateralSpeed := math.Max(math.Abs(u) * lateralSpeedRatio, 1.5)
 	v = blockKartVehicleClamp(v, -maximumLateralSpeed, maximumLateralSpeed)
 	// Bound yaw by the lateral acceleration available from the current
@@ -93,6 +96,9 @@ func (vehicle *BlockKartVehicleController) stepDynamics(road BlockKartRoadSample
 	// from accumulating an unrecoverable spin.
 	frictionYawLimit := road.Friction * blockKartVehicleGravity * 2.0 / math.Max(math.Abs(u), 4.0)
 	maximumYawRate := blockKartVehicleClamp(frictionYawLimit, 0.85, 2.55)
+	if vehicle.Drift_blend > 0 {
+		maximumYawRate = math.Min(maximumYawRate, blockKartVehicleLerp(2.55, 1.35, vehicle.Drift_blend))
+	}
 	r = blockKartVehicleClamp(r, -maximumYawRate, maximumYawRate)
 	vehicle.Forward_speed = u * 1000.0
 	vehicle.Lateral_speed = v * 1000.0
