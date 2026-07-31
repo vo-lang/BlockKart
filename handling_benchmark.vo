@@ -13,6 +13,7 @@ const (
 	blockKartHandlingScenarioRecovery uint32 = 5
 	blockKartHandlingScenarioImpact uint32 = 6
 	blockKartHandlingScenarioDrift uint32 = 7
+	blockKartHandlingScenarioSteerRelease uint32 = 8
 	blockKartHandlingFailureAcceleration uint32 = 1
 	blockKartHandlingFailureStraightLine uint32 = 2
 	blockKartHandlingFailureBraking uint32 = 4
@@ -25,12 +26,14 @@ const (
 	blockKartHandlingFailureRecovery uint32 = 512
 	blockKartHandlingFailureImpact uint32 = 1024
 	blockKartHandlingFailureDrift uint32 = 2048
+	blockKartHandlingFailureSteerRelease uint32 = 4096
 )
 
 // BlockKartHandlingBenchmark runs the vehicle model against an isolated flat
 // asphalt reference. It shares the shipping dynamics implementation while
-// removing track geometry, collision, camera and player variability from the
-// measurement. One benchmark step runs per fixed simulation tick.
+// removing track geometry, collision and player variability from the
+// measurement. The shipping chase-camera model remains in the loop so yaw
+// settlement and visual settlement are evaluated together.
 type BlockKartHandlingBenchmark struct {
 	Active bool
 	Completed bool
@@ -42,6 +45,7 @@ type BlockKartHandlingBenchmark struct {
 	Position_x_meters float64
 	Position_z_meters float64
 	Last_heading_radians float64
+	Last_camera_heading_radians float64
 	Peak_speed_meters_per_second float64
 	Peak_yaw_rate_radians_per_second float64
 	Peak_slip_radians float64
@@ -73,6 +77,14 @@ type BlockKartHandlingBenchmark struct {
 	Drift_countersteer_samples uint32
 	Drift_release_tick uint32
 	Drift_recovery_tick uint32
+	Steer_release_tick uint32
+	Steer_release_recovery_tick uint32
+	Steer_release_yaw_sign_changes uint32
+	Steer_release_camera_sign_changes uint32
+	Last_release_yaw_sign int32
+	Last_release_camera_sign int32
+	Peak_camera_heading_error_radians float64
+	Maximum_camera_heading_step_radians float64
 }
 
 func (benchmark *BlockKartHandlingBenchmark) StartNext() {
@@ -80,7 +92,7 @@ func (benchmark *BlockKartHandlingBenchmark) StartNext() {
 		return
 	}
 	scenario := benchmark.Scenario + 1
-	if scenario < blockKartHandlingScenarioStraightBrake || scenario > blockKartHandlingScenarioDrift {
+	if scenario < blockKartHandlingScenarioStraightBrake || scenario > blockKartHandlingScenarioSteerRelease {
 		scenario = blockKartHandlingScenarioStraightBrake
 	}
 	benchmark.Start(scenario)
@@ -90,12 +102,13 @@ func (benchmark *BlockKartHandlingBenchmark) Start(scenario uint32) {
 	if benchmark == nil {
 		return
 	}
-	if scenario < blockKartHandlingScenarioStraightBrake || scenario > blockKartHandlingScenarioDrift {
+	if scenario < blockKartHandlingScenarioStraightBrake || scenario > blockKartHandlingScenarioSteerRelease {
 		scenario = blockKartHandlingScenarioStraightBrake
 	}
 	*benchmark = BlockKartHandlingBenchmark{Active: true, Scenario: scenario}
 	benchmark.Vehicle.Reset(Transform{})
 	benchmark.Last_heading_radians = benchmark.Vehicle.Heading_radians
+	benchmark.Last_camera_heading_radians = benchmark.Vehicle.Camera_heading_radians
 }
 
 func (benchmark *BlockKartHandlingBenchmark) ScenarioName() []byte {
@@ -117,6 +130,8 @@ func (benchmark *BlockKartHandlingBenchmark) ScenarioName() []byte {
 			return []byte("BARRIER IMPACT")
 		case blockKartHandlingScenarioDrift:
 			return []byte("DRIFT CONTROL")
+		case blockKartHandlingScenarioSteerRelease:
+			return []byte("STEER RELEASE")
 		default:
 			return []byte("IDLE")
 	}
@@ -139,6 +154,8 @@ func (benchmark *BlockKartHandlingBenchmark) DurationTicks() uint32 {
 			return 540
 		case blockKartHandlingScenarioDrift:
 			return 540
+		case blockKartHandlingScenarioSteerRelease:
+			return 480
 		default:
 			return 0
 	}
@@ -199,6 +216,12 @@ func (benchmark *BlockKartHandlingBenchmark) Control() KartControl {
 			control := benchmark.cruiseControl(16.6667, steer)
 			control.Drift = drift
 			return control
+		case blockKartHandlingScenarioSteerRelease:
+			steer := int32(0)
+			if benchmark.Tick >= 180 && benchmark.Tick < 300 {
+				steer = 700
+			}
+			return benchmark.cruiseControl(13.8889, steer)
 		default:
 			return KartControl{}
 	}
@@ -250,6 +273,7 @@ func (benchmark *BlockKartHandlingBenchmark) Step(fixedTickNanos uint64) {
 		benchmark.Vehicle.stepDynamics(road, steerTarget, throttle, brake, false, false, drifting, driftDirection, substepSeconds)
 		benchmark.integratePosition(substepSeconds)
 	}
+	benchmark.Vehicle.stepCamera(drifting, road, deltaSeconds)
 	benchmark.sample()
 	benchmark.Tick++
 	if benchmark.Scenario == blockKartHandlingScenarioStraightBrake && benchmark.Stop_tick != 0 &&
@@ -321,7 +345,12 @@ func (benchmark *BlockKartHandlingBenchmark) sample() {
 	lateralAcceleration := math.Abs(benchmark.Vehicle.Lateral_acceleration) / 1000.0
 	headingStep := math.Abs(blockKartVehicleWrapRadians(benchmark.Vehicle.Heading_radians -
 		benchmark.Last_heading_radians))
+	cameraHeadingStep := math.Abs(blockKartVehicleWrapRadians(benchmark.Vehicle.Camera_heading_radians -
+		benchmark.Last_camera_heading_radians))
+	cameraHeadingError := math.Abs(blockKartVehicleWrapRadians(benchmark.Vehicle.Heading_radians -
+		benchmark.Vehicle.Camera_heading_radians))
 	benchmark.Last_heading_radians = benchmark.Vehicle.Heading_radians
+	benchmark.Last_camera_heading_radians = benchmark.Vehicle.Camera_heading_radians
 	benchmark.Peak_speed_meters_per_second = math.Max(benchmark.Peak_speed_meters_per_second, speed)
 	if yaw > benchmark.Peak_yaw_rate_radians_per_second {
 		benchmark.Peak_yaw_rate_radians_per_second = yaw
@@ -331,6 +360,10 @@ func (benchmark *BlockKartHandlingBenchmark) sample() {
 	benchmark.Peak_slip_radians = math.Max(benchmark.Peak_slip_radians, slip)
 	benchmark.Peak_lateral_acceleration_meters_per_second_squared = math.Max(benchmark.Peak_lateral_acceleration_meters_per_second_squared, lateralAcceleration)
 	benchmark.Maximum_heading_step_radians = math.Max(benchmark.Maximum_heading_step_radians, headingStep)
+	benchmark.Maximum_camera_heading_step_radians = math.Max(benchmark.Maximum_camera_heading_step_radians,
+		cameraHeadingStep)
+	benchmark.Peak_camera_heading_error_radians = math.Max(benchmark.Peak_camera_heading_error_radians,
+		cameraHeadingError)
 	benchmark.Maximum_lateral_drift_meters = math.Max(benchmark.Maximum_lateral_drift_meters, math.Abs(benchmark.Position_x_meters))
 	if benchmark.Reached_sixty_tick == 0 && speed >= 16.6667 {
 		benchmark.Reached_sixty_tick = benchmark.Tick + 1
@@ -401,6 +434,45 @@ func (benchmark *BlockKartHandlingBenchmark) sample() {
 			benchmark.Drift_recovery_tick = benchmark.Tick + 1
 		}
 	}
+	if benchmark.Scenario == blockKartHandlingScenarioSteerRelease && benchmark.Tick >= 300 {
+		if benchmark.Steer_release_tick == 0 {
+			benchmark.Steer_release_tick = benchmark.Tick + 1
+		}
+		yawSign := int32(0)
+		if benchmark.Vehicle.Yaw_rate > 0.03 {
+			yawSign = 1
+		} else if benchmark.Vehicle.Yaw_rate < -0.03 {
+			yawSign = -1
+		}
+		if yawSign != 0 {
+			if benchmark.Last_release_yaw_sign != 0 && benchmark.Last_release_yaw_sign != yawSign {
+				benchmark.Steer_release_yaw_sign_changes++
+			}
+			benchmark.Last_release_yaw_sign = yawSign
+		}
+		signedCameraError := blockKartVehicleWrapRadians(benchmark.Vehicle.Heading_radians -
+			benchmark.Vehicle.Camera_heading_radians)
+		cameraSign := int32(0)
+		if signedCameraError > 0.003 {
+			cameraSign = 1
+		} else if signedCameraError < -0.003 {
+			cameraSign = -1
+		}
+		if cameraSign != 0 {
+			if benchmark.Last_release_camera_sign != 0 &&
+				benchmark.Last_release_camera_sign != cameraSign {
+				benchmark.Steer_release_camera_sign_changes++
+			}
+			benchmark.Last_release_camera_sign = cameraSign
+		}
+		if benchmark.Steer_release_recovery_tick == 0 &&
+			math.Abs(benchmark.Vehicle.Wheel_angle_radians) <= 0.012 &&
+			math.Abs(benchmark.Vehicle.Yaw_rate) <= 0.05 &&
+			math.Abs(benchmark.Vehicle.Lateral_speed) <= 250 &&
+			cameraHeadingError <= 0.012 {
+			benchmark.Steer_release_recovery_tick = benchmark.Tick + 1
+		}
+	}
 }
 
 func (benchmark *BlockKartHandlingBenchmark) finish() {
@@ -464,6 +536,17 @@ func (benchmark *BlockKartHandlingBenchmark) finish() {
 				countersteerSlip > benchmark.Peak_slip_radians * 0.80 ||
 				!recoveredWithinWindow {
 				benchmark.Failure_mask |= blockKartHandlingFailureDrift
+			}
+		case blockKartHandlingScenarioSteerRelease:
+			recoveredWithinWindow := benchmark.Steer_release_tick != 0 &&
+				benchmark.Steer_release_recovery_tick >= benchmark.Steer_release_tick &&
+				benchmark.Steer_release_recovery_tick <= benchmark.Steer_release_tick + 90
+			if !recoveredWithinWindow ||
+				benchmark.Steer_release_yaw_sign_changes != 0 ||
+				benchmark.Steer_release_camera_sign_changes != 0 ||
+				benchmark.Peak_camera_heading_error_radians > 0.11 ||
+				benchmark.Maximum_camera_heading_step_radians > 0.06 {
+				benchmark.Failure_mask |= blockKartHandlingFailureSteerRelease
 			}
 	}
 	if benchmark.Maximum_heading_step_radians > 0.06 {

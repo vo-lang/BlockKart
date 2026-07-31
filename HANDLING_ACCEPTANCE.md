@@ -28,6 +28,7 @@ All items are hard gates:
 - Wheel contact does not penetrate the road by more than 20 mm in steady
   driving and does not visibly alternate above/below the road.
 - Releasing steering converges toward zero without oscillation.
+- Chase-camera orbit and aim converge monotonically after steering release.
 
 ## G1: controllability
 
@@ -84,6 +85,7 @@ Every vehicle-model change records before/after telemetry for:
 5. `recovery`: road-to-grass excursion, countersteer, road re-entry.
 6. `impact`: 55 km/h shallow-angle barrier contact and recovery.
 7. `drift`: 60 km/h initiation, sustained steering, countersteer, and release.
+8. `steer-release`: 50 km/h constant steering followed by a clean release.
 
 Required telemetry:
 
@@ -101,8 +103,9 @@ Required telemetry:
 
 Press `B` to start the next isolated handling scenario. The runner cycles
 through `straight`, `circle-left`, `circle-right`, `slalom`, `recovery`, and
-`impact`, then `drift`, uses the shipping vehicle controller at the shipping
-60 Hz fixed step, and displays its result in the F3 telemetry panel.
+`impact`, `drift`, then `steer-release`, uses the shipping vehicle controller
+at the shipping 60 Hz fixed step, and displays its result in the F3 telemetry
+panel.
 
 The result is a hard pass only when every scenario-specific threshold and the
 per-tick heading-jump threshold pass. The failure mask is additive:
@@ -111,7 +114,8 @@ per-tick heading-jump threshold pass. The failure mask is additive:
 - `8`: heading discontinuity; `16`: direction; `32`: steering response;
 - `64`: grip slip; `128`: yaw overshoot; `256`: slalom reversal count;
 - `512`: grass recovery; `1024`: barrier-impact recovery;
-- `2048`: drift control and grip recovery.
+- `2048`: drift control and grip recovery;
+- `4096`: steering and chase-camera release settlement.
 
 Reference result for the current asphalt and grass setup:
 
@@ -121,6 +125,8 @@ Reference result for the current asphalt and grass setup:
 - Grass-to-road recovery: 173 ticks (2.88 s).
 - Shallow barrier-impact recovery: 10 ticks (0.17 s).
 - Drift: 0.235 rad peak slip and 8-tick grip recovery after release.
+- Steering release: 13-tick (0.22 s) vehicle/camera settlement with zero
+  yaw-direction or camera-error reversals.
 
 ## Playability gate
 

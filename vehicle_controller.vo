@@ -21,7 +21,7 @@ type BlockKartVehicleController struct {
 	Initialized bool
 	Heading_radians float64
 	Camera_heading_radians float64
-	Camera_yaw_velocity float64
+	Camera_focus_offset_milli float64
 	Camera_edge_blend float64
 	Steer_command float64
 	Wheel_angle_radians float64
@@ -57,7 +57,7 @@ func (vehicle *BlockKartVehicleController) Reset(transform Transform) {
 	vehicle.Initialized = true
 	vehicle.Heading_radians = float64(transform.Yaw_milliradians) / 1000.0
 	vehicle.Camera_heading_radians = vehicle.Heading_radians
-	vehicle.Camera_yaw_velocity = 0
+	vehicle.Camera_focus_offset_milli = 0
 	vehicle.Camera_edge_blend = 0
 	vehicle.Steer_command = 0
 	vehicle.Wheel_angle_radians = 0
@@ -200,31 +200,47 @@ func (game *BlockKart) holdVehicle(velocity Velocity, transform Transform, state
 }
 
 func (vehicle *BlockKartVehicleController) stepCamera(drifting bool, road BlockKartRoadSample, deltaSeconds float64) {
-	speedMps := math.Abs(vehicle.Forward_speed) / 1000.0
-	speedForSlip := math.Max(speedMps, 1.5)
-	slipAngle := math.Atan2(vehicle.Lateral_speed / 1000.0, speedForSlip)
-	velocityLead := blockKartVehicleClamp(vehicle.Yaw_rate * 0.055 + slipAngle * 0.20, -0.09, 0.09)
-	target := blockKartVehicleWrapRadians(vehicle.Heading_radians + velocityLead)
+	// The chase rig has one authoritative yaw state. A monotonic first-order
+	// pursuit cannot overshoot after steering release, and deriving the look
+	// direction from this same state keeps orbit and aim from fighting.
+	driftLead := 0.0
+	if drifting || vehicle.Drift_blend > 0.2 {
+		driftLead = blockKartVehicleClamp(vehicle.Body_slip_radians * 0.24, -0.055, 0.055) *
+			vehicle.Drift_blend
+	}
+	target := blockKartVehicleWrapRadians(vehicle.Heading_radians + driftLead)
 	maximumLag := 0.105
-	springFrequency := 15.0
+	followRate := 13.0
 	if drifting || vehicle.Drift_blend > 0.2 {
 		maximumLag = 0.17
-		springFrequency = 11.5
+		followRate = 9.5
 	}
 	error := blockKartVehicleWrapRadians(target - vehicle.Camera_heading_radians)
-	error = blockKartVehicleClamp(error, -maximumLag, maximumLag)
-	acceleration := error * springFrequency * springFrequency -
-		vehicle.Camera_yaw_velocity * 2.0 * springFrequency
-	vehicle.Camera_yaw_velocity += acceleration * deltaSeconds
-	vehicle.Camera_yaw_velocity = blockKartVehicleClamp(vehicle.Camera_yaw_velocity, -4.2, 4.2)
-	vehicle.Camera_heading_radians = blockKartVehicleWrapRadians(vehicle.Camera_heading_radians +
-		vehicle.Camera_yaw_velocity * deltaSeconds)
-	remaining := blockKartVehicleWrapRadians(target - vehicle.Camera_heading_radians)
-	if remaining > maximumLag {
+	if error > maximumLag {
 		vehicle.Camera_heading_radians = blockKartVehicleWrapRadians(target - maximumLag)
-	} else if remaining < -maximumLag {
+		error = maximumLag
+	} else if error < -maximumLag {
 		vehicle.Camera_heading_radians = blockKartVehicleWrapRadians(target + maximumLag)
+		error = -maximumLag
 	}
+	followAmount := blockKartVehicleClamp(followRate * deltaSeconds, 0, 1)
+	vehicle.Camera_heading_radians = blockKartVehicleWrapRadians(vehicle.Camera_heading_radians +
+		error * followAmount)
+
+	// A single, low-amplitude focus offset provides corner anticipation. It is
+	// filtered here and reused for both camera position and aim.
+	focusTarget := vehicle.Steer_command * 260.0
+	if drifting || vehicle.Drift_blend > 0.2 {
+		focusTarget += blockKartVehicleClamp(vehicle.Body_slip_radians * 2100.0, -420.0, 420.0) *
+			vehicle.Drift_blend
+	}
+	focusRate := 10.0
+	if math.Abs(focusTarget) < math.Abs(vehicle.Camera_focus_offset_milli) {
+		focusRate = 15.0
+	}
+	focusAmount := blockKartVehicleClamp(focusRate * deltaSeconds, 0, 1)
+	vehicle.Camera_focus_offset_milli += (focusTarget - vehicle.Camera_focus_offset_milli) *
+		focusAmount
 	halfWidthMeters := math.Max(float64(road.Half_width_milli) / 1000.0, 1.0)
 	offsetMeters := math.Abs(float64(road.Signed_offset_milli)) / 1000.0
 	edgeTarget := blockKartVehicleSmoothstep(0.55, 0.92, offsetMeters / halfWidthMeters)
@@ -302,19 +318,24 @@ func (game *BlockKart) publishVehiclePresentation(deltaSeconds float64) {
 	game.Steering_milli = int32(-game.Vehicle.Wheel_angle_radians * 1000.0)
 	speedRatio := blockKartVehicleClamp(math.Abs(game.Vehicle.Forward_speed) /
 		blockKartVehicleNormalMaximumSpeed, 0, 1)
-	dynamicRoll := -game.Vehicle.Lateral_acceleration / 1000.0 * 0.0065
-	leanRadians := game.Vehicle.Road_roll_radians + dynamicRoll
-	leanTarget := blockKartClampInt32(int32(leanRadians * 1000.0), -145, 145)
-	game.ChassisLean_milliradians = blockKartApproachInt32(game.ChassisLean_milliradians, leanTarget, int32(420.0 *
+	// A kart has short suspension travel and responds as one planted mass.
+	// Road bank remains readable while acceleration contributes only a brief,
+	// tightly bounded load-transfer cue.
+	roadRoll := blockKartVehicleClamp(game.Vehicle.Road_roll_radians, -0.085, 0.085)
+	dynamicRoll := -game.Vehicle.Lateral_acceleration / 1000.0 * 0.0024
+	leanRadians := roadRoll + dynamicRoll
+	leanTarget := blockKartClampInt32(int32(leanRadians * 1000.0), -95, 95)
+	game.ChassisLean_milliradians = blockKartApproachInt32(game.ChassisLean_milliradians, leanTarget, int32(900.0 *
 		deltaSeconds))
-	dynamicPitch := -game.Vehicle.Longitudinal_acceleration / 1000.0 * 0.0042
-	pitchRadians := game.Vehicle.Road_pitch_radians + dynamicPitch
-	pitchTarget := blockKartClampInt32(int32(pitchRadians * 1000.0), -115, 115)
-	game.ChassisPitch_milliradians = blockKartApproachInt32(game.ChassisPitch_milliradians, pitchTarget, int32(360.0 *
+	roadPitch := blockKartVehicleClamp(game.Vehicle.Road_pitch_radians, -0.050, 0.050)
+	dynamicPitch := -game.Vehicle.Longitudinal_acceleration / 1000.0 * 0.0018
+	pitchRadians := roadPitch + dynamicPitch
+	pitchTarget := blockKartClampInt32(int32(pitchRadians * 1000.0), -60, 60)
+	game.ChassisPitch_milliradians = blockKartApproachInt32(game.ChassisPitch_milliradians, pitchTarget, int32(780.0 *
 		deltaSeconds))
-	suspensionTarget := int32(game.Vehicle.Suspension_offset_milli)
-	suspensionTarget = blockKartClampInt32(suspensionTarget, -110, 95)
-	game.SuspensionHeave_milli = blockKartApproachInt32(game.SuspensionHeave_milli, suspensionTarget, int32(1100.0 *
+	suspensionTarget := int32(game.Vehicle.Suspension_offset_milli * 0.42)
+	suspensionTarget = blockKartClampInt32(suspensionTarget, -45, 38)
+	game.SuspensionHeave_milli = blockKartApproachInt32(game.SuspensionHeave_milli, suspensionTarget, int32(1800.0 *
 		deltaSeconds))
 	spinStep := int32(game.Vehicle.Forward_speed * deltaSeconds / blockKartVehicleWheelRadiusMilli *
 		1000.0)

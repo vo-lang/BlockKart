@@ -519,6 +519,11 @@ func (game *BlockKart) hudPackets(includeStatic bool) []render.SnapshotObject {
 			responseValue = uint64(game.HandlingBenchmark.Drift_release_tick)
 			stopLabel = []byte("RECOVER TICK")
 			stopValue = uint64(game.HandlingBenchmark.Drift_recovery_tick)
+		} else if game.HandlingBenchmark.Scenario == blockKartHandlingScenarioSteerRelease {
+			responseLabel = []byte("RELEASE TICK")
+			responseValue = uint64(game.HandlingBenchmark.Steer_release_tick)
+			stopLabel = []byte("SETTLE TICK ")
+			stopValue = uint64(game.HandlingBenchmark.Steer_release_recovery_tick)
 		}
 		if game.HandlingBenchmark.Steady_yaw_samples != 0 {
 			steadyYaw := game.HandlingBenchmark.Steady_yaw_sum /

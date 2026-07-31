@@ -1560,24 +1560,17 @@ func (game *BlockKart) cameraPacket(kart Transform, tick uint64) []byte {
 	if game.Vehicle.Initialized {
 		cameraHeading = game.Vehicle.Camera_heading_radians
 	}
-	lookHeading := heading
-	if game.Vehicle.Initialized {
-		lookHeading = blockKartVehicleWrapRadians(game.Vehicle.Heading_radians +
-			blockKartVehicleClamp(game.Vehicle.Yaw_rate * 0.10, -0.09, 0.09))
-	}
+	headingError := blockKartVehicleWrapRadians(heading - cameraHeading)
+	lookHeading := blockKartVehicleWrapRadians(cameraHeading + headingError * 0.72)
 	distance := 6700.0 + speedRatio * 3200.0
 	height := int64(3000.0 + speedRatio * 760.0)
 	lookAhead := 10800.0 + speedRatio * 11200.0
 	edgeCameraBlend := blockKartVehicleClamp(game.Vehicle.Camera_edge_blend, 0, 1)
-	distance = blockKartVehicleLerp(distance, 3200.0, edgeCameraBlend)
-	height += int64(edgeCameraBlend * 3800.0)
-	lookAhead = blockKartVehicleLerp(lookAhead, 7600.0, edgeCameraBlend)
-	lateralLook := float64(game.Steering_milli) * 0.52 - game.Vehicle.Yaw_rate * 610.0
-	cameraSide := -float64(game.Steering_milli) * 0.105 - game.Vehicle.Lateral_speed * 0.028
-	if game.Drifting {
-		lateralLook += float64(game.DriftDirection) * 720.0
-		cameraSide -= float64(game.DriftDirection) * 180.0
-	}
+	distance = blockKartVehicleLerp(distance, 5200.0, edgeCameraBlend)
+	height += int64(edgeCameraBlend * 1450.0)
+	lookAhead = blockKartVehicleLerp(lookAhead, 9000.0, edgeCameraBlend)
+	lateralLook := game.Vehicle.Camera_focus_offset_milli
+	cameraSide := -game.Vehicle.Camera_focus_offset_milli * 0.16
 	cameraShake := 0.0
 	if game.BoostPressed {
 		cameraShake = math.Sin(float64(tick) * 1.91) * 38.0 * speedRatio
