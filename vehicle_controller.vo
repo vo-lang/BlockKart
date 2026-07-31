@@ -25,6 +25,7 @@ type BlockKartVehicleController struct {
 	Camera_edge_blend float64
 	Steer_command float64
 	Wheel_angle_radians float64
+	Desired_yaw_rate float64
 	Forward_speed float64
 	Lateral_speed float64
 	Yaw_rate float64
@@ -61,6 +62,7 @@ func (vehicle *BlockKartVehicleController) Reset(transform Transform) {
 	vehicle.Camera_edge_blend = 0
 	vehicle.Steer_command = 0
 	vehicle.Wheel_angle_radians = 0
+	vehicle.Desired_yaw_rate = 0
 	vehicle.Forward_speed = 0
 	vehicle.Lateral_speed = 0
 	vehicle.Yaw_rate = 0
@@ -117,6 +119,10 @@ func (game *BlockKart) drive(tick voplay.TickBatch) error {
 		game.StartFlash_ticks--
 	}
 	road := game.nearestRoadSample(transform)
+	game.Track.PrepareDrivingReference(
+		&road,
+		math.Abs(game.Vehicle.Forward_speed)/1000.0,
+	)
 	game.OffRoad = road.Surface == blockKartRoadSurfaceGrass
 	game.updateVehicleDrift(control, deltaSeconds)
 	miniTurbo := game.MiniTurbo_ticks != 0

@@ -126,7 +126,23 @@ func (vehicle *BlockKartVehicleController) longitudinalForce(speedMps float64, t
 	} else if road.Surface == blockKartRoadSurfaceGrass {
 		engineForce *= 0.62
 	}
-	force := throttle * engineForce
+	cornerThrottle := 1.0
+	cornerBrake := 0.0
+	if speedMps > 0 && road.Corner_speed_limit_meters_per_second > 0 {
+		cornerLimit := road.Corner_speed_limit_meters_per_second
+		cornerThrottle = 1.0 - blockKartVehicleSmoothstep(
+			cornerLimit-0.5,
+			cornerLimit+2.0,
+			absoluteSpeed,
+		)
+		cornerBrake = blockKartVehicleSmoothstep(
+			cornerLimit+0.75,
+			cornerLimit+6.0,
+			absoluteSpeed,
+		)
+	}
+	force := throttle * engineForce * cornerThrottle
+	force -= cornerBrake * 6200.0
 	if brake > 0 {
 		if speedMps > 0.45 {
 			force -= brake * 9200.0
