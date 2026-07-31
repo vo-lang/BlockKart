@@ -1132,27 +1132,11 @@ func (game *BlockKart) kartRenderPackets(transform Transform, tick uint64) ([][]
 			}
 		}
 	}
-	return game.kartRenderPacketsStyledMotion(
-		previousTransform, previousTick, transform, tick, 102,
-		previousSteering, game.Steering_milli,
-		previousWheelSpin, game.WheelSpin_milliradians,
-		previousLean, game.ChassisLean_milliradians,
-		previousPitch, game.ChassisPitch_milliradians,
-		previousHeave, game.SuspensionHeave_milli,
-		true,
-	)
+	return game.kartRenderPacketsStyledMotion(previousTransform, previousTick, transform, tick, 102, previousSteering, game.Steering_milli, previousWheelSpin, game.WheelSpin_milliradians, previousLean, game.ChassisLean_milliradians, previousPitch, game.ChassisPitch_milliradians, previousHeave, game.SuspensionHeave_milli, true)
 }
 
 func (game *BlockKart) kartRenderPacketsStyled(transform Transform, tick uint64, primaryMaterial uint64, steering_milli int32, wheelSpin_milliradians int32, chassisLean_milliradians int32, chassisPitch_milliradians int32, suspensionHeave_milli int32, includeWheels bool) ([][]byte, bool) {
-	return game.kartRenderPacketsStyledMotion(
-		transform, tick, transform, tick, primaryMaterial,
-		steering_milli, steering_milli,
-		wheelSpin_milliradians, wheelSpin_milliradians,
-		chassisLean_milliradians, chassisLean_milliradians,
-		chassisPitch_milliradians, chassisPitch_milliradians,
-		suspensionHeave_milli, suspensionHeave_milli,
-		includeWheels,
-	)
+	return game.kartRenderPacketsStyledMotion(transform, tick, transform, tick, primaryMaterial, steering_milli, steering_milli, wheelSpin_milliradians, wheelSpin_milliradians, chassisLean_milliradians, chassisLean_milliradians, chassisPitch_milliradians, chassisPitch_milliradians, suspensionHeave_milli, suspensionHeave_milli, includeWheels)
 }
 
 func (game *BlockKart) kartRenderPacketsStyledMotion(previousTransform Transform, previousTick uint64, transform Transform, tick uint64, primaryMaterial uint64, previousSteering_milli int32, steering_milli int32, previousWheelSpin_milliradians int32, wheelSpin_milliradians int32, previousChassisLean_milliradians int32, chassisLean_milliradians int32, previousChassisPitch_milliradians int32, chassisPitch_milliradians int32, previousSuspensionHeave_milli int32, suspensionHeave_milli int32, includeWheels bool) ([][]byte, bool) {
@@ -1168,12 +1152,7 @@ func (game *BlockKart) kartRenderPacketsStyledMotion(previousTransform Transform
 	previousBodyTransform := previousVisualTransform
 	previousBodyTransform.Y += int64(previousSuspensionHeave_milli)
 	packets := make([][]byte, 0, 1 + len(game.KartWheelLocations))
-	bodyPacket := game.retainedGameplayMeshPartsMotionObject(
-		bodyTransform, previousTick, tick, game.KartBodyParts,
-		blockKartAuthoredBodyMatrix(previousBodyTransform, previousChassisLean_milliradians, previousChassisPitch_milliradians),
-		blockKartAuthoredBodyMatrix(bodyTransform, chassisLean_milliradians, chassisPitch_milliradians),
-		2250, 2200, 2250,
-	)
+	bodyPacket := game.retainedGameplayMeshPartsMotionObject(bodyTransform, previousTick, tick, game.KartBodyParts, blockKartAuthoredBodyMatrix(previousBodyTransform, previousChassisLean_milliradians, previousChassisPitch_milliradians), blockKartAuthoredBodyMatrix(bodyTransform, chassisLean_milliradians, chassisPitch_milliradians), 2250, 2200, 2250)
 	if len(bodyPacket) == 0 {
 		return nil, false
 	}
@@ -1191,12 +1170,7 @@ func (game *BlockKart) kartRenderPacketsStyledMotion(previousTransform Transform
 		}
 		steer_milliradians := blockKartAuthoredWheelSteering(location, steering_milli)
 		previousSteer_milliradians := blockKartAuthoredWheelSteering(location, previousSteering_milli)
-		packet := game.retainedGameplayMeshPartsMotionObject(
-			partTransform, previousTick, tick, game.KartWheelParts,
-			blockKartAuthoredWheelMatrix(previousPartTransform, previousSteer_milliradians, previousWheelSpin_milliradians),
-			blockKartAuthoredWheelMatrix(partTransform, steer_milliradians, wheelSpin_milliradians),
-			480, 480, 480,
-		)
+		packet := game.retainedGameplayMeshPartsMotionObject(partTransform, previousTick, tick, game.KartWheelParts, blockKartAuthoredWheelMatrix(previousPartTransform, previousSteer_milliradians, previousWheelSpin_milliradians), blockKartAuthoredWheelMatrix(partTransform, steer_milliradians, wheelSpin_milliradians), 480, 480, 480)
 		if len(packet) == 0 {
 			return nil, false
 		}
@@ -1247,8 +1221,7 @@ func (game *BlockKart) rivalRenderObjects(tick uint64) ([]render.SnapshotObject,
 		if !ok {
 			return nil, false
 		}
-		previousTransform, previousSteering, previousWheelSpin, previousLean, previousPitch, previousOk :=
-			game.rivalVisualState(rivalPreviousTick, rivalIndex)
+		previousTransform, previousSteering, previousWheelSpin, previousLean, previousPitch, previousOk := game.rivalVisualState(rivalPreviousTick, rivalIndex)
 		if !previousOk || blockKartRenderTeleport(previousTransform, transform) {
 			previousTransform = transform
 			previousSteering = steering
@@ -1263,15 +1236,8 @@ func (game *BlockKart) rivalRenderObjects(tick uint64) ([]render.SnapshotObject,
 		if distanceSquared > rivalCullDistanceSquared {
 			continue
 		}
-		packets, encoded := game.kartRenderPacketsStyledMotion(
-			previousTransform, rivalPreviousTick, transform, tick, material,
-			previousSteering, steering,
-			previousWheelSpin, wheelSpin,
-			previousLean, lean,
-			previousPitch, pitch,
-			0, 0,
-			distanceSquared <= rivalWheelDistanceSquared,
-		)
+		packets, encoded := game.kartRenderPacketsStyledMotion(previousTransform, rivalPreviousTick, transform, tick, material, previousSteering, steering, previousWheelSpin, wheelSpin, previousLean, lean, previousPitch, pitch, 0, 0, distanceSquared <=
+			rivalWheelDistanceSquared)
 		if !encoded {
 			return nil, false
 		}
@@ -1305,22 +1271,17 @@ func (game *BlockKart) rivalVisualState(tick uint64, rivalIndex int) (Transform,
 	sample := game.Track.SampleAtS(travel)
 	heading := math.Atan2(sample.Tangent_x, sample.Tangent_z)
 	transform := Transform{
-		X: sample.X + int64(sample.Right_x*lateralPosition),
-		Y: sample.Y + int64(sample.Right_y*lateralPosition) +
-			blockKartTrackRideHeightMilli,
-		Z: sample.Z + int64(sample.Right_z*lateralPosition),
-		Yaw_milliradians: int32(heading * 1000.0),
+		X: sample.X + int64(sample.Right_x * lateralPosition),
+		Y: sample.Y + int64(sample.Right_y * lateralPosition) + blockKartTrackRideHeightMilli,
+		Z: sample.Z + int64(sample.Right_z * lateralPosition), Yaw_milliradians: int32(heading * 1000.0),
 	}
-	steering := blockKartClampInt32(
-		int32(-sample.Curvature_per_meter*blockKartVehicleWheelbaseMeters*1000.0),
-		-760, 760,
-	)
-	spin := blockKartWrapMilliRadians(
-		int32(raceDistance%2765*1000/int64(blockKartVehicleWheelRadiusMilli)),
-	)
-	lean := int32(sample.Bank_radians*1000.0+float64(steering)*0.04+
-		math.Sin(float64(tick)*0.18+float64(rivalIndex))*6.0)
-	pitch := blockKartClampInt32(int32(math.Atan(sample.Grade)*1000.0), -95, 95)
+	steering := blockKartClampInt32(int32(-sample.Curvature_per_meter * blockKartVehicleWheelbaseMeters *
+		1000.0), -760, 760)
+	spin := blockKartWrapMilliRadians(int32(raceDistance % 2765 * 1000 /
+		int64(blockKartVehicleWheelRadiusMilli)))
+	lean := int32(sample.Bank_radians * 1000.0 + float64(steering) * 0.04 +
+		math.Sin(float64(tick) * 0.18 + float64(rivalIndex)) * 6.0)
+	pitch := blockKartClampInt32(int32(math.Atan(sample.Grade) * 1000.0), -95, 95)
 	return transform, steering, spin, lean, pitch, true
 }
 
@@ -1577,16 +1538,13 @@ func (game *BlockKart) cameraPacket(kart Transform, tick uint64) []byte {
 	speedRatio := 0.0
 	state, ok := game.KartStates.Get(game.KartEntity)
 	if ok {
-		speedRatio = math.Abs(float64(state.Speed_per_second)) /
-			blockKartVehicleNormalMaximumSpeed
+		speedRatio = math.Abs(float64(state.Speed_per_second)) / blockKartVehicleNormalMaximumSpeed
 		if speedRatio > 1 {
 			speedRatio = 1
 		}
 	}
-	accelerationKick := blockKartVehicleClamp(
-		game.Vehicle.Longitudinal_acceleration/18000.0, -0.12, 0.22,
-	)
-	verticalFov := uint32(54000 + speedRatio*15000 + accelerationKick*7000)
+	accelerationKick := blockKartVehicleClamp(game.Vehicle.Longitudinal_acceleration / 18000.0, -0.12, 0.22)
+	verticalFov := uint32(54000 + speedRatio * 15000 + accelerationKick * 7000)
 	camera := render3d.EncodeCamera(render3d.Camera3d{
 		Projection: render3d.CameraProjection{
 			Kind: render3d.CameraPerspective, VerticalFovMillidegrees: verticalFov, NearMilli: 80,
@@ -1607,13 +1565,15 @@ func (game *BlockKart) cameraPacket(kart Transform, tick uint64) []byte {
 		lookHeading = blockKartVehicleWrapRadians(game.Vehicle.Heading_radians +
 			blockKartVehicleClamp(game.Vehicle.Yaw_rate * 0.10, -0.09, 0.09))
 	}
-	distance := 6700.0 + speedRatio*3200.0
-	height := int64(3000.0 + speedRatio*760.0)
-	lookAhead := 10800.0 + speedRatio*11200.0
-	lateralLook := float64(game.Steering_milli)*0.52 -
-		game.Vehicle.Yaw_rate*610.0
-	cameraSide := -float64(game.Steering_milli)*0.105 -
-		game.Vehicle.Lateral_speed*0.028
+	distance := 6700.0 + speedRatio * 3200.0
+	height := int64(3000.0 + speedRatio * 760.0)
+	lookAhead := 10800.0 + speedRatio * 11200.0
+	edgeCameraBlend := blockKartVehicleClamp(game.Vehicle.Camera_edge_blend, 0, 1)
+	distance = blockKartVehicleLerp(distance, 3200.0, edgeCameraBlend)
+	height += int64(edgeCameraBlend * 3800.0)
+	lookAhead = blockKartVehicleLerp(lookAhead, 7600.0, edgeCameraBlend)
+	lateralLook := float64(game.Steering_milli) * 0.52 - game.Vehicle.Yaw_rate * 610.0
+	cameraSide := -float64(game.Steering_milli) * 0.105 - game.Vehicle.Lateral_speed * 0.028
 	if game.Drifting {
 		lateralLook += float64(game.DriftDirection) * 720.0
 		cameraSide -= float64(game.DriftDirection) * 180.0
@@ -1861,18 +1821,15 @@ func (game *BlockKart) recoverToTrack() error {
 	transform.X = road.X
 	transform.Y = road.Y + blockKartTrackRideHeightMilli
 	transform.Z = road.Z
-	transform.Yaw_milliradians = int32(math.Atan2(
-		road.Tangent_x, road.Tangent_z,
-	) * 1000.0)
+	transform.Yaw_milliradians = int32(math.Atan2(road.Tangent_x, road.Tangent_z) * 1000.0)
 	game.Vehicle.Reset(transform)
-	rescueSpeed := blockKartVehicleClamp(entrySpeed*0.45, 7200, 10800)
+	rescueSpeed := blockKartVehicleClamp(entrySpeed * 0.45, 7200, 10800)
 	game.Vehicle.Forward_speed = rescueSpeed
 	game.LastSafeTransform = transform
 	forwardX := math.Sin(game.Vehicle.Heading_radians)
 	forwardZ := math.Cos(game.Vehicle.Heading_radians)
 	velocity := Velocity{
-		X_per_second: int64(forwardX * rescueSpeed),
-		Z_per_second: int64(forwardZ * rescueSpeed),
+		X_per_second: int64(forwardX * rescueSpeed), Z_per_second: int64(forwardZ * rescueSpeed),
 	}
 	if game.Physics != nil && game.KartBody.Valid() &&
 		!game.Physics.Submit(physics3d.Command{
@@ -1933,8 +1890,7 @@ func blockKartTransformFromBytes(input []byte) (Transform, bool) {
 		return Transform{}, false
 	}
 	return Transform{
-		X: int64(BlockKartReadU64(input, 0)),
-		Y: int64(BlockKartReadU64(input, 8)),
+		X: int64(BlockKartReadU64(input, 0)), Y: int64(BlockKartReadU64(input, 8)),
 		Z: int64(BlockKartReadU64(input, 16)),
 		Yaw_milliradians: int32(int64(BlockKartReadU64(input, 24))),
 	}, true
@@ -1950,6 +1906,7 @@ func blockKartRenderTeleport(previous Transform, current Transform) bool {
 		return true
 	}
 	headingDelta := blockKartVehicleWrapRadians(float64(current.Yaw_milliradians -
-		previous.Yaw_milliradians) / 1000.0)
+		previous.Yaw_milliradians) /
+		1000.0)
 	return math.Abs(headingDelta) > 1.2
 }

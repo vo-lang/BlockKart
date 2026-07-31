@@ -22,6 +22,7 @@ type BlockKartVehicleController struct {
 	Heading_radians float64
 	Camera_heading_radians float64
 	Camera_yaw_velocity float64
+	Camera_edge_blend float64
 	Steer_command float64
 	Wheel_angle_radians float64
 	Forward_speed float64
@@ -57,6 +58,7 @@ func (vehicle *BlockKartVehicleController) Reset(transform Transform) {
 	vehicle.Heading_radians = float64(transform.Yaw_milliradians) / 1000.0
 	vehicle.Camera_heading_radians = vehicle.Heading_radians
 	vehicle.Camera_yaw_velocity = 0
+	vehicle.Camera_edge_blend = 0
 	vehicle.Steer_command = 0
 	vehicle.Wheel_angle_radians = 0
 	vehicle.Forward_speed = 0
@@ -156,7 +158,7 @@ func (game *BlockKart) drive(tick voplay.TickBatch) error {
 	if game.CollisionShake_ticks != 0 {
 		game.CollisionShake_ticks--
 	}
-	game.Vehicle.stepCamera(game.Drifting, deltaSeconds)
+	game.Vehicle.stepCamera(game.Drifting, road, deltaSeconds)
 	game.publishVehiclePresentation(deltaSeconds)
 	if !game.Transforms.Upsert(game.KartEntity, transform) ||
 		!game.Velocities.Upsert(game.KartEntity, velocity) ||
@@ -197,7 +199,7 @@ func (game *BlockKart) holdVehicle(velocity Velocity, transform Transform, state
 	return nil
 }
 
-func (vehicle *BlockKartVehicleController) stepCamera(drifting bool, deltaSeconds float64) {
+func (vehicle *BlockKartVehicleController) stepCamera(drifting bool, road BlockKartRoadSample, deltaSeconds float64) {
 	speedMps := math.Abs(vehicle.Forward_speed) / 1000.0
 	speedForSlip := math.Max(speedMps, 1.5)
 	slipAngle := math.Atan2(vehicle.Lateral_speed / 1000.0, speedForSlip)
@@ -223,6 +225,18 @@ func (vehicle *BlockKartVehicleController) stepCamera(drifting bool, deltaSecond
 	} else if remaining < -maximumLag {
 		vehicle.Camera_heading_radians = blockKartVehicleWrapRadians(target + maximumLag)
 	}
+	halfWidthMeters := math.Max(float64(road.Half_width_milli) / 1000.0, 1.0)
+	offsetMeters := math.Abs(float64(road.Signed_offset_milli)) / 1000.0
+	edgeTarget := blockKartVehicleSmoothstep(0.55, 0.92, offsetMeters / halfWidthMeters)
+	if road.Surface == blockKartRoadSurfaceGrass {
+		edgeTarget = math.Max(edgeTarget, 0.84)
+	}
+	edgeRate := 3.2
+	if edgeTarget > vehicle.Camera_edge_blend {
+		edgeRate = 6.5
+	}
+	vehicle.Camera_edge_blend = blockKartVehicleApproach(vehicle.Camera_edge_blend, edgeTarget, edgeRate *
+		deltaSeconds)
 }
 
 func (game *BlockKart) updateVehicleDrift(control KartControl, deltaSeconds float64) {
