@@ -26,13 +26,18 @@ func (vehicle *BlockKartVehicleController) stepSteering(target float64, surface 
 		commandRate = 7.8
 	} else if reversing {
 		commandRate = 7.2
+		if surface == blockKartRoadSurfaceGrass {
+			commandRate = 9.5
+		}
 	}
 	vehicle.Steer_command = blockKartVehicleApproach(vehicle.Steer_command, target, commandRate *
 		deltaSeconds)
 	speedBlend := speedRatio * speedRatio * (3.0 - 2.0 * speedRatio)
 	maximumWheelAngle := blockKartVehicleLerp(0.49, 0.235, speedBlend)
 	if surface == blockKartRoadSurfaceGrass {
-		maximumWheelAngle *= 0.90
+		// Loose ground cannot support the same steering angle at speed without
+		// saturating the front tyres and turning a correction into a spin.
+		maximumWheelAngle *= 0.72
 	}
 	shaped := math.Pow(math.Abs(vehicle.Steer_command), 1.08)
 	if vehicle.Steer_command < 0 {
@@ -44,6 +49,9 @@ func (vehicle *BlockKartVehicleController) stepSteering(target float64, surface 
 		wheelRate = 7.0
 	} else if reversing {
 		wheelRate = 6.4
+		if surface == blockKartRoadSurfaceGrass {
+			wheelRate = 8.5
+		}
 	}
 	vehicle.Wheel_angle_radians = blockKartVehicleApproach(vehicle.Wheel_angle_radians, wheelTarget, wheelRate *
 		deltaSeconds)
@@ -105,8 +113,12 @@ func (vehicle *BlockKartVehicleController) computeAssists(longitudinalSpeed floa
 		output.Lateral_force_newtons *= 1.0 - driftBlend * 0.72
 	}
 	if road.Surface == blockKartRoadSurfaceGrass {
-		output.Yaw_moment_newton_meters *= 0.56
-		output.Lateral_force_newtons *= 0.45
+		// Steering grip falls on grass, while differential braking and the
+		// bounded centerline assist still retain useful authority. Keeping
+		// those effects above the tyre-grip scale lets the driver unwind an
+		// excursion without an invisible rail or a prolonged spin.
+		output.Yaw_moment_newton_meters *= 0.72
+		output.Lateral_force_newtons *= 0.58
 		output.Rear_friction_scale = math.Min(output.Rear_friction_scale, 0.90)
 	}
 	if brake > 0.4 {

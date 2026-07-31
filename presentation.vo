@@ -500,6 +500,21 @@ func (game *BlockKart) hudPackets(includeStatic bool) []render.SnapshotObject {
 		steadyYawMilli := int64(0)
 		steadySpeedCentimetersPerSecond := int64(0)
 		overshootPermille := int64(0)
+		responseLabel := []byte("RESPONSE    ")
+		responseValue := uint64(game.HandlingBenchmark.Steer_response_ticks)
+		stopLabel := []byte("STOP CM     ")
+		stopValue := uint64(game.HandlingBenchmark.Stop_distance_meters * 100.0)
+		if game.HandlingBenchmark.Scenario == blockKartHandlingScenarioRecovery {
+			responseLabel = []byte("GRASS TICK  ")
+			responseValue = uint64(game.HandlingBenchmark.Grass_entry_tick)
+			stopLabel = []byte("RECOVER DT  ")
+			stopValue = uint64(game.HandlingBenchmark.Recovery_ticks)
+		} else if game.HandlingBenchmark.Scenario == blockKartHandlingScenarioImpact {
+			responseLabel = []byte("IMPACT TICK ")
+			responseValue = uint64(game.HandlingBenchmark.Impact_tick)
+			stopLabel = []byte("RECOVER TICK")
+			stopValue = uint64(game.HandlingBenchmark.Impact_recovery_tick)
+		}
 		if game.HandlingBenchmark.Steady_yaw_samples != 0 {
 			steadyYaw := game.HandlingBenchmark.Steady_yaw_sum /
 				float64(game.HandlingBenchmark.Steady_yaw_samples)
@@ -588,14 +603,11 @@ func (game *BlockKart) hudPackets(includeStatic bool) []render.SnapshotObject {
 			Position: [2]int64{412000, 350000}, SizeMilli: 10500, Color: benchmarkStateColor, Z: 184,
 			Layers: 2,
 		}, render2d.TextRun{
-			Id: 716, Font: 1,
-			Text: append([]byte("RESPONSE    "), blockKartDecimalText(uint64(game.HandlingBenchmark.Steer_response_ticks), 3)...),
+			Id: 716, Font: 1, Text: append(responseLabel, blockKartDecimalText(responseValue, 4)...),
 			Position: [2]int64{412000, 376000}, SizeMilli: 10500, Color: [4]byte{225, 240, 248, 245}, Z: 184,
 			Layers: 2,
 		}, render2d.TextRun{
-			Id: 717, Font: 1,
-			Text: append([]byte("STOP CM     "), blockKartDecimalText(uint64(game.HandlingBenchmark.Stop_distance_meters *
-				100.0), 4)...),
+			Id: 717, Font: 1, Text: append(stopLabel, blockKartDecimalText(stopValue, 4)...),
 			Position: [2]int64{412000, 402000}, SizeMilli: 10500, Color: [4]byte{225, 240, 248, 245}, Z: 184,
 			Layers: 2,
 		}, render2d.TextRun{

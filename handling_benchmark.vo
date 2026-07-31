@@ -10,6 +10,8 @@ const (
 	blockKartHandlingScenarioCircleLeft uint32 = 2
 	blockKartHandlingScenarioCircleRight uint32 = 3
 	blockKartHandlingScenarioSlalom uint32 = 4
+	blockKartHandlingScenarioRecovery uint32 = 5
+	blockKartHandlingScenarioImpact uint32 = 6
 	blockKartHandlingFailureAcceleration uint32 = 1
 	blockKartHandlingFailureStraightLine uint32 = 2
 	blockKartHandlingFailureBraking uint32 = 4
@@ -19,6 +21,8 @@ const (
 	blockKartHandlingFailureSlip uint32 = 64
 	blockKartHandlingFailureOvershoot uint32 = 128
 	blockKartHandlingFailureSlalom uint32 = 256
+	blockKartHandlingFailureRecovery uint32 = 512
+	blockKartHandlingFailureImpact uint32 = 1024
 )
 
 // BlockKartHandlingBenchmark runs the vehicle model against an isolated flat
@@ -57,6 +61,12 @@ type BlockKartHandlingBenchmark struct {
 	Steady_yaw_samples uint32
 	Yaw_sign_changes uint32
 	Last_yaw_sign int32
+	Grass_entry_tick uint32
+	Road_return_tick uint32
+	Recovery_ticks uint32
+	Impact_tick uint32
+	Impact_recovery_tick uint32
+	Peak_impact_heading_step_radians float64
 }
 
 func (benchmark *BlockKartHandlingBenchmark) StartNext() {
@@ -64,7 +74,7 @@ func (benchmark *BlockKartHandlingBenchmark) StartNext() {
 		return
 	}
 	scenario := benchmark.Scenario + 1
-	if scenario < blockKartHandlingScenarioStraightBrake || scenario > blockKartHandlingScenarioSlalom {
+	if scenario < blockKartHandlingScenarioStraightBrake || scenario > blockKartHandlingScenarioImpact {
 		scenario = blockKartHandlingScenarioStraightBrake
 	}
 	benchmark.Start(scenario)
@@ -74,7 +84,7 @@ func (benchmark *BlockKartHandlingBenchmark) Start(scenario uint32) {
 	if benchmark == nil {
 		return
 	}
-	if scenario < blockKartHandlingScenarioStraightBrake || scenario > blockKartHandlingScenarioSlalom {
+	if scenario < blockKartHandlingScenarioStraightBrake || scenario > blockKartHandlingScenarioImpact {
 		scenario = blockKartHandlingScenarioStraightBrake
 	}
 	*benchmark = BlockKartHandlingBenchmark{Active: true, Scenario: scenario}
@@ -95,6 +105,10 @@ func (benchmark *BlockKartHandlingBenchmark) ScenarioName() []byte {
 			return []byte("CONSTANT RIGHT")
 		case blockKartHandlingScenarioSlalom:
 			return []byte("SLALOM")
+		case blockKartHandlingScenarioRecovery:
+			return []byte("GRASS RECOVERY")
+		case blockKartHandlingScenarioImpact:
+			return []byte("BARRIER IMPACT")
 		default:
 			return []byte("IDLE")
 	}
@@ -111,6 +125,10 @@ func (benchmark *BlockKartHandlingBenchmark) DurationTicks() uint32 {
 			return 660
 		case blockKartHandlingScenarioSlalom:
 			return 720
+		case blockKartHandlingScenarioRecovery:
+			return 720
+		case blockKartHandlingScenarioImpact:
+			return 540
 		default:
 			return 0
 	}
@@ -148,6 +166,16 @@ func (benchmark *BlockKartHandlingBenchmark) Control() KartControl {
 				}
 			}
 			return benchmark.cruiseControl(16.6667, steer)
+		case blockKartHandlingScenarioRecovery:
+			steer := int32(0)
+			if benchmark.Grass_entry_tick == 0 && benchmark.Tick >= 180 {
+				steer = 650
+			} else if benchmark.Grass_entry_tick != 0 && benchmark.Road_return_tick == 0 {
+				steer = -650
+			}
+			return benchmark.cruiseControl(13.8889, steer)
+		case blockKartHandlingScenarioImpact:
+			return benchmark.cruiseControl(15.2778, 0)
 		default:
 			return KartControl{}
 	}
@@ -182,6 +210,10 @@ func (benchmark *BlockKartHandlingBenchmark) Step(fixedTickNanos uint64) {
 		benchmark.Tick == 180 {
 		benchmark.Steer_start_speed_meters_per_second = math.Abs(benchmark.Vehicle.Forward_speed) / 1000.0
 	}
+	if benchmark.Scenario == blockKartHandlingScenarioImpact && benchmark.Tick == 180 {
+		benchmark.Vehicle.ApplyImpact(0.78, 0.62)
+		benchmark.Impact_tick = benchmark.Tick + 1
+	}
 	steerTarget := blockKartVehicleSteeringInput(float64(control.Steer_milli) / 1000.0, -1, 1)
 	throttle := blockKartVehicleClamp(float64(control.Throttle_milli) / 1000.0, 0, 1)
 	brake := blockKartVehicleClamp(float64(control.Brake_milli) / 1000.0, 0, 1)
@@ -197,12 +229,36 @@ func (benchmark *BlockKartHandlingBenchmark) Step(fixedTickNanos uint64) {
 		benchmark.finish()
 		return
 	}
+	if benchmark.Scenario == blockKartHandlingScenarioRecovery && benchmark.Road_return_tick != 0 &&
+		benchmark.Tick >= benchmark.Road_return_tick + 30 {
+		benchmark.finish()
+		return
+	}
 	if benchmark.Tick >= benchmark.DurationTicks() {
 		benchmark.finish()
 	}
 }
 
 func (benchmark *BlockKartHandlingBenchmark) syntheticRoad() BlockKartRoadSample {
+	if benchmark.Scenario == blockKartHandlingScenarioRecovery ||
+		benchmark.Scenario == blockKartHandlingScenarioImpact {
+		offsetMilli := int64(benchmark.Position_x_meters * 1000.0)
+		absoluteOffsetMilli := blockKartAbsInt64(offsetMilli)
+		surface := blockKartRoadSurfaceAsphalt
+		friction := 1.42
+		if absoluteOffsetMilli > 3550 {
+			surface = blockKartRoadSurfaceCurb
+			friction = 1.10
+		}
+		if absoluteOffsetMilli > 4950 {
+			surface = blockKartRoadSurfaceGrass
+			friction = 0.62
+		}
+		return BlockKartRoadSample{
+			Half_width_milli: 4000, Signed_offset_milli: offsetMilli, Surface: surface, Friction: friction,
+			Tangent_z: 1, Right_x: 1, Normal_y: 1, Tangent_z_milli: 1000,
+		}
+	}
 	heading := benchmark.Vehicle.Heading_radians
 	tangentX := math.Sin(heading)
 	tangentZ := math.Cos(heading)
@@ -280,6 +336,26 @@ func (benchmark *BlockKartHandlingBenchmark) sample() {
 		}
 		benchmark.Last_yaw_sign = sign
 	}
+	if benchmark.Scenario == blockKartHandlingScenarioRecovery {
+		road := benchmark.syntheticRoad()
+		if benchmark.Grass_entry_tick == 0 && road.Surface == blockKartRoadSurfaceGrass {
+			benchmark.Grass_entry_tick = benchmark.Tick + 1
+		}
+		if benchmark.Grass_entry_tick != 0 && benchmark.Road_return_tick == 0 &&
+			road.Surface == blockKartRoadSurfaceAsphalt {
+			benchmark.Road_return_tick = benchmark.Tick + 1
+			benchmark.Recovery_ticks = benchmark.Road_return_tick - benchmark.Grass_entry_tick
+		}
+	}
+	if benchmark.Scenario == blockKartHandlingScenarioImpact && benchmark.Impact_tick != 0 {
+		benchmark.Peak_impact_heading_step_radians = math.Max(benchmark.Peak_impact_heading_step_radians, headingStep)
+		if benchmark.Impact_recovery_tick == 0 && benchmark.Tick >= benchmark.Impact_tick &&
+			math.Abs(benchmark.Vehicle.Yaw_rate) <= 0.10 &&
+			math.Abs(benchmark.Vehicle.Lateral_speed) <= 400 &&
+			speed >= 12.0 {
+			benchmark.Impact_recovery_tick = benchmark.Tick + 1
+		}
+	}
 }
 
 func (benchmark *BlockKartHandlingBenchmark) finish() {
@@ -316,6 +392,19 @@ func (benchmark *BlockKartHandlingBenchmark) finish() {
 			}
 			if benchmark.Peak_slip_radians > 0.244 {
 				benchmark.Failure_mask |= blockKartHandlingFailureSlip
+			}
+		case blockKartHandlingScenarioRecovery:
+			recoveredWithinWindow := benchmark.Grass_entry_tick != 0 && benchmark.Road_return_tick != 0 &&
+				benchmark.Recovery_ticks <= 180
+			if !recoveredWithinWindow {
+				benchmark.Failure_mask |= blockKartHandlingFailureRecovery
+			}
+		case blockKartHandlingScenarioImpact:
+			recoveredWithinWindow := benchmark.Impact_tick != 0 &&
+				benchmark.Impact_recovery_tick >= benchmark.Impact_tick &&
+				benchmark.Impact_recovery_tick <= benchmark.Impact_tick + 180
+			if !recoveredWithinWindow || benchmark.Peak_impact_heading_step_radians > 0.06 {
+				benchmark.Failure_mask |= blockKartHandlingFailureImpact
 			}
 	}
 	if benchmark.Maximum_heading_step_radians > 0.06 {

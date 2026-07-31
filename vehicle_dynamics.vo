@@ -79,9 +79,21 @@ func (vehicle *BlockKartVehicleController) stepDynamics(road BlockKartRoadSample
 		maximumSpeed = blockKartVehicleOffRoadMaximumSpeed / 1000.0
 	}
 	u = blockKartVehicleClamp(u, -blockKartVehicleReverseMaximumSpeed / 1000.0, maximumSpeed)
-	maximumLateralSpeed := math.Max(math.Abs(u) * 0.55, 1.5)
+	lateralSpeedRatio := 0.55
+	if road.Surface == blockKartRoadSurfaceCurb {
+		lateralSpeedRatio = 0.42
+	} else if road.Surface == blockKartRoadSurfaceGrass {
+		lateralSpeedRatio = 0.26
+	}
+	maximumLateralSpeed := math.Max(math.Abs(u) * lateralSpeedRatio, 1.5)
 	v = blockKartVehicleClamp(v, -maximumLateralSpeed, maximumLateralSpeed)
-	r = blockKartVehicleClamp(r, -2.55, 2.55)
+	// Bound yaw by the lateral acceleration available from the current
+	// surface. The factor of two preserves an arcade handling reserve above
+	// the steady-state friction circle while preventing low-grip excursions
+	// from accumulating an unrecoverable spin.
+	frictionYawLimit := road.Friction * blockKartVehicleGravity * 2.0 / math.Max(math.Abs(u), 4.0)
+	maximumYawRate := blockKartVehicleClamp(frictionYawLimit, 0.85, 2.55)
+	r = blockKartVehicleClamp(r, -maximumYawRate, maximumYawRate)
 	vehicle.Forward_speed = u * 1000.0
 	vehicle.Lateral_speed = v * 1000.0
 	vehicle.Yaw_rate = r
