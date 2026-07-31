@@ -96,6 +96,26 @@ Required telemetry:
 - camera heading error;
 - present FPS, frame-time percentiles, managed growth, and GC-step timing.
 
+## In-game deterministic runner
+
+Press `B` to start the next isolated handling scenario. The runner cycles
+through `straight`, `circle-left`, `circle-right`, and `slalom`, uses the
+shipping vehicle controller at the shipping 60 Hz fixed step, and displays its
+result in the F3 telemetry panel.
+
+The result is a hard pass only when every scenario-specific threshold and the
+per-tick heading-jump threshold pass. The failure mask is additive:
+
+- `1`: acceleration; `2`: straight-line stability; `4`: braking;
+- `8`: heading discontinuity; `16`: direction; `32`: steering response;
+- `64`: grip slip; `128`: yaw overshoot; `256`: slalom reversal count.
+
+Reference result for the current asphalt setup:
+
+- 0-60 km/h: 150 ticks (2.50 s); 80-0 km/h: 28.68 m.
+- Constant left/right: 7-tick yaw response, 7.1% overshoot, 0.034 rad peak slip.
+- Slalom: passing reversal count and 0.059 rad peak slip.
+
 ## Playability gate
 
 After G0-G2 pass:

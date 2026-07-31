@@ -1,0 +1,342 @@
+package main
+
+import (
+	"math"
+)
+
+const (
+	blockKartHandlingScenarioIdle uint32 = 0
+	blockKartHandlingScenarioStraightBrake uint32 = 1
+	blockKartHandlingScenarioCircleLeft uint32 = 2
+	blockKartHandlingScenarioCircleRight uint32 = 3
+	blockKartHandlingScenarioSlalom uint32 = 4
+	blockKartHandlingFailureAcceleration uint32 = 1
+	blockKartHandlingFailureStraightLine uint32 = 2
+	blockKartHandlingFailureBraking uint32 = 4
+	blockKartHandlingFailureHeadingStep uint32 = 8
+	blockKartHandlingFailureDirection uint32 = 16
+	blockKartHandlingFailureResponse uint32 = 32
+	blockKartHandlingFailureSlip uint32 = 64
+	blockKartHandlingFailureOvershoot uint32 = 128
+	blockKartHandlingFailureSlalom uint32 = 256
+)
+
+// BlockKartHandlingBenchmark runs the vehicle model against an isolated flat
+// asphalt reference. It shares the shipping dynamics implementation while
+// removing track geometry, collision, camera and player variability from the
+// measurement. One benchmark step runs per fixed simulation tick.
+type BlockKartHandlingBenchmark struct {
+	Active bool
+	Completed bool
+	Passed bool
+	Scenario uint32
+	Tick uint32
+	Failure_mask uint32
+	Vehicle BlockKartVehicleController
+	Position_x_meters float64
+	Position_z_meters float64
+	Last_heading_radians float64
+	Peak_speed_meters_per_second float64
+	Peak_yaw_rate_radians_per_second float64
+	Peak_slip_radians float64
+	Peak_lateral_acceleration_meters_per_second_squared float64
+	Maximum_heading_step_radians float64
+	Maximum_lateral_drift_meters float64
+	Reached_sixty_tick uint32
+	Brake_started bool
+	Brake_start_x_meters float64
+	Brake_start_z_meters float64
+	Stop_distance_meters float64
+	Stop_tick uint32
+	Steer_response_ticks uint32
+	Steer_start_speed_meters_per_second float64
+	Peak_yaw_tick uint32
+	Peak_yaw_speed_meters_per_second float64
+	Steady_yaw_sum float64
+	Steady_speed_sum float64
+	Steady_yaw_samples uint32
+	Yaw_sign_changes uint32
+	Last_yaw_sign int32
+}
+
+func (benchmark *BlockKartHandlingBenchmark) StartNext() {
+	if benchmark == nil {
+		return
+	}
+	scenario := benchmark.Scenario + 1
+	if scenario < blockKartHandlingScenarioStraightBrake || scenario > blockKartHandlingScenarioSlalom {
+		scenario = blockKartHandlingScenarioStraightBrake
+	}
+	benchmark.Start(scenario)
+}
+
+func (benchmark *BlockKartHandlingBenchmark) Start(scenario uint32) {
+	if benchmark == nil {
+		return
+	}
+	if scenario < blockKartHandlingScenarioStraightBrake || scenario > blockKartHandlingScenarioSlalom {
+		scenario = blockKartHandlingScenarioStraightBrake
+	}
+	*benchmark = BlockKartHandlingBenchmark{Active: true, Scenario: scenario}
+	benchmark.Vehicle.Reset(Transform{})
+	benchmark.Last_heading_radians = benchmark.Vehicle.Heading_radians
+}
+
+func (benchmark *BlockKartHandlingBenchmark) ScenarioName() []byte {
+	if benchmark == nil {
+		return []byte("IDLE")
+	}
+	switch benchmark.Scenario {
+		case blockKartHandlingScenarioStraightBrake:
+			return []byte("STRAIGHT + BRAKE")
+		case blockKartHandlingScenarioCircleLeft:
+			return []byte("CONSTANT LEFT")
+		case blockKartHandlingScenarioCircleRight:
+			return []byte("CONSTANT RIGHT")
+		case blockKartHandlingScenarioSlalom:
+			return []byte("SLALOM")
+		default:
+			return []byte("IDLE")
+	}
+}
+
+func (benchmark *BlockKartHandlingBenchmark) DurationTicks() uint32 {
+	if benchmark == nil {
+		return 0
+	}
+	switch benchmark.Scenario {
+		case blockKartHandlingScenarioStraightBrake:
+			return 600
+		case blockKartHandlingScenarioCircleLeft, blockKartHandlingScenarioCircleRight:
+			return 660
+		case blockKartHandlingScenarioSlalom:
+			return 720
+		default:
+			return 0
+	}
+}
+
+func (benchmark *BlockKartHandlingBenchmark) Control() KartControl {
+	if benchmark == nil {
+		return KartControl{}
+	}
+	switch benchmark.Scenario {
+		case blockKartHandlingScenarioStraightBrake:
+			if !benchmark.Brake_started {
+				return KartControl{Throttle_milli: 1000}
+			}
+			return KartControl{Brake_milli: 1000}
+		case blockKartHandlingScenarioCircleLeft:
+			steer := int32(0)
+			if benchmark.Tick >= 180 {
+				steer = 700
+			}
+			return benchmark.cruiseControl(13.8889, steer)
+		case blockKartHandlingScenarioCircleRight:
+			steer := int32(0)
+			if benchmark.Tick >= 180 {
+				steer = -700
+			}
+			return benchmark.cruiseControl(13.8889, steer)
+		case blockKartHandlingScenarioSlalom:
+			steer := int32(0)
+			if benchmark.Tick >= 180 {
+				phase := (benchmark.Tick - 180) / 45
+				steer = 650
+				if phase % 2 != 0 {
+					steer = -650
+				}
+			}
+			return benchmark.cruiseControl(16.6667, steer)
+		default:
+			return KartControl{}
+	}
+}
+
+func (benchmark *BlockKartHandlingBenchmark) cruiseControl(targetSpeedMetersPerSecond float64, steerMilli int32) KartControl {
+	speed := benchmark.Vehicle.Forward_speed / 1000.0
+	error := targetSpeedMetersPerSecond - speed
+	control := KartControl{Steer_milli: steerMilli}
+	if error >= 0 {
+		control.Throttle_milli = int32(blockKartVehicleClamp(error * 220.0, 0, 1000))
+	} else {
+		control.Brake_milli = int32(blockKartVehicleClamp(-error * 260.0, 0, 1000))
+	}
+	return control
+}
+
+func (benchmark *BlockKartHandlingBenchmark) Step(fixedTickNanos uint64) {
+	if benchmark == nil || !benchmark.Active {
+		return
+	}
+	deltaSeconds := float64(fixedTickNanos) / 1000000000.0
+	if deltaSeconds <= 0 || deltaSeconds > 0.1 {
+		benchmark.Failure_mask |= blockKartHandlingFailureHeadingStep
+		benchmark.finish()
+		return
+	}
+	control := benchmark.Control()
+	road := benchmark.syntheticRoad()
+	if (benchmark.Scenario == blockKartHandlingScenarioCircleLeft ||
+		benchmark.Scenario == blockKartHandlingScenarioCircleRight) &&
+		benchmark.Tick == 180 {
+		benchmark.Steer_start_speed_meters_per_second = math.Abs(benchmark.Vehicle.Forward_speed) / 1000.0
+	}
+	steerTarget := blockKartVehicleSteeringInput(float64(control.Steer_milli) / 1000.0, -1, 1)
+	throttle := blockKartVehicleClamp(float64(control.Throttle_milli) / 1000.0, 0, 1)
+	brake := blockKartVehicleClamp(float64(control.Brake_milli) / 1000.0, 0, 1)
+	substepSeconds := deltaSeconds / float64(blockKartVehicleSubsteps)
+	for substep := uint32(0); substep < blockKartVehicleSubsteps; substep++ {
+		benchmark.Vehicle.stepDynamics(road, steerTarget, throttle, brake, false, false, false, 0, substepSeconds)
+		benchmark.integratePosition(substepSeconds)
+	}
+	benchmark.sample()
+	benchmark.Tick++
+	if benchmark.Scenario == blockKartHandlingScenarioStraightBrake && benchmark.Stop_tick != 0 &&
+		benchmark.Tick >= benchmark.Stop_tick + 30 {
+		benchmark.finish()
+		return
+	}
+	if benchmark.Tick >= benchmark.DurationTicks() {
+		benchmark.finish()
+	}
+}
+
+func (benchmark *BlockKartHandlingBenchmark) syntheticRoad() BlockKartRoadSample {
+	heading := benchmark.Vehicle.Heading_radians
+	tangentX := math.Sin(heading)
+	tangentZ := math.Cos(heading)
+	return BlockKartRoadSample{
+		Half_width_milli: 100000, Surface: blockKartRoadSurfaceAsphalt, Friction: 1.42,
+		Tangent_x: tangentX, Tangent_z: tangentZ, Right_x: math.Cos(heading), Right_z: -math.Sin(heading),
+		Normal_y: 1, Tangent_x_milli: int32(tangentX * 1000.0), Tangent_z_milli: int32(tangentZ * 1000.0),
+	}
+}
+
+func (benchmark *BlockKartHandlingBenchmark) integratePosition(deltaSeconds float64) {
+	heading := benchmark.Vehicle.Heading_radians
+	forwardX := math.Sin(heading)
+	forwardZ := math.Cos(heading)
+	rightX := math.Cos(heading)
+	rightZ := -math.Sin(heading)
+	forwardSpeed := benchmark.Vehicle.Forward_speed / 1000.0
+	lateralSpeed := benchmark.Vehicle.Lateral_speed / 1000.0
+	benchmark.Position_x_meters += (forwardX * forwardSpeed + rightX * lateralSpeed) * deltaSeconds
+	benchmark.Position_z_meters += (forwardZ * forwardSpeed + rightZ * lateralSpeed) * deltaSeconds
+}
+
+func (benchmark *BlockKartHandlingBenchmark) sample() {
+	speed := math.Abs(benchmark.Vehicle.Forward_speed) / 1000.0
+	yaw := math.Abs(benchmark.Vehicle.Yaw_rate)
+	slip := math.Abs(benchmark.Vehicle.Body_slip_radians)
+	lateralAcceleration := math.Abs(benchmark.Vehicle.Lateral_acceleration) / 1000.0
+	headingStep := math.Abs(blockKartVehicleWrapRadians(benchmark.Vehicle.Heading_radians -
+		benchmark.Last_heading_radians))
+	benchmark.Last_heading_radians = benchmark.Vehicle.Heading_radians
+	benchmark.Peak_speed_meters_per_second = math.Max(benchmark.Peak_speed_meters_per_second, speed)
+	if yaw > benchmark.Peak_yaw_rate_radians_per_second {
+		benchmark.Peak_yaw_rate_radians_per_second = yaw
+		benchmark.Peak_yaw_tick = benchmark.Tick + 1
+		benchmark.Peak_yaw_speed_meters_per_second = speed
+	}
+	benchmark.Peak_slip_radians = math.Max(benchmark.Peak_slip_radians, slip)
+	benchmark.Peak_lateral_acceleration_meters_per_second_squared = math.Max(benchmark.Peak_lateral_acceleration_meters_per_second_squared, lateralAcceleration)
+	benchmark.Maximum_heading_step_radians = math.Max(benchmark.Maximum_heading_step_radians, headingStep)
+	benchmark.Maximum_lateral_drift_meters = math.Max(benchmark.Maximum_lateral_drift_meters, math.Abs(benchmark.Position_x_meters))
+	if benchmark.Reached_sixty_tick == 0 && speed >= 16.6667 {
+		benchmark.Reached_sixty_tick = benchmark.Tick + 1
+	}
+	if benchmark.Scenario == blockKartHandlingScenarioStraightBrake {
+		if !benchmark.Brake_started && speed >= 22.2222 {
+			benchmark.Brake_started = true
+			benchmark.Brake_start_x_meters = benchmark.Position_x_meters
+			benchmark.Brake_start_z_meters = benchmark.Position_z_meters
+		}
+		if benchmark.Brake_started && benchmark.Stop_tick == 0 && speed <= 0.5 {
+			deltaX := benchmark.Position_x_meters - benchmark.Brake_start_x_meters
+			deltaZ := benchmark.Position_z_meters - benchmark.Brake_start_z_meters
+			benchmark.Stop_distance_meters = math.Sqrt(deltaX * deltaX + deltaZ * deltaZ)
+			benchmark.Stop_tick = benchmark.Tick + 1
+		}
+	}
+	if benchmark.Scenario == blockKartHandlingScenarioCircleLeft ||
+		benchmark.Scenario == blockKartHandlingScenarioCircleRight {
+		if benchmark.Tick >= 180 && benchmark.Steer_response_ticks == 0 && yaw >= 0.35 {
+			benchmark.Steer_response_ticks = benchmark.Tick - 180 + 1
+		}
+		if benchmark.Tick + 60 >= benchmark.DurationTicks() {
+			benchmark.Steady_yaw_sum += yaw
+			benchmark.Steady_speed_sum += speed
+			benchmark.Steady_yaw_samples++
+		}
+	}
+	if benchmark.Scenario == blockKartHandlingScenarioSlalom && benchmark.Tick >= 180 && yaw >= 0.12 {
+		sign := int32(1)
+		if benchmark.Vehicle.Yaw_rate < 0 {
+			sign = -1
+		}
+		if benchmark.Last_yaw_sign != 0 && benchmark.Last_yaw_sign != sign {
+			benchmark.Yaw_sign_changes++
+		}
+		benchmark.Last_yaw_sign = sign
+	}
+}
+
+func (benchmark *BlockKartHandlingBenchmark) finish() {
+	if benchmark == nil {
+		return
+	}
+	benchmark.Active = false
+	benchmark.Completed = true
+	switch benchmark.Scenario {
+		case blockKartHandlingScenarioStraightBrake:
+			if benchmark.Reached_sixty_tick < 144 || benchmark.Reached_sixty_tick > 192 {
+				benchmark.Failure_mask |= blockKartHandlingFailureAcceleration
+			}
+			if benchmark.Maximum_lateral_drift_meters > 0.35 {
+				benchmark.Failure_mask |= blockKartHandlingFailureStraightLine
+			}
+			if benchmark.Stop_tick == 0 || benchmark.Stop_distance_meters < 24 ||
+				benchmark.Stop_distance_meters > 36 {
+				benchmark.Failure_mask |= blockKartHandlingFailureBraking
+			}
+		case blockKartHandlingScenarioCircleLeft:
+			if benchmark.Vehicle.Yaw_rate <= 0 {
+				benchmark.Failure_mask |= blockKartHandlingFailureDirection
+			}
+			benchmark.evaluateCircle()
+		case blockKartHandlingScenarioCircleRight:
+			if benchmark.Vehicle.Yaw_rate >= 0 {
+				benchmark.Failure_mask |= blockKartHandlingFailureDirection
+			}
+			benchmark.evaluateCircle()
+		case blockKartHandlingScenarioSlalom:
+			if benchmark.Yaw_sign_changes < 8 {
+				benchmark.Failure_mask |= blockKartHandlingFailureSlalom
+			}
+			if benchmark.Peak_slip_radians > 0.244 {
+				benchmark.Failure_mask |= blockKartHandlingFailureSlip
+			}
+	}
+	if benchmark.Maximum_heading_step_radians > 0.06 {
+		benchmark.Failure_mask |= blockKartHandlingFailureHeadingStep
+	}
+	benchmark.Passed = benchmark.Failure_mask == 0
+}
+
+func (benchmark *BlockKartHandlingBenchmark) evaluateCircle() {
+	if benchmark.Steer_response_ticks < 7 || benchmark.Steer_response_ticks > 25 {
+		benchmark.Failure_mask |= blockKartHandlingFailureResponse
+	}
+	if benchmark.Peak_slip_radians > 0.244 {
+		benchmark.Failure_mask |= blockKartHandlingFailureSlip
+	}
+	if benchmark.Steady_yaw_samples == 0 {
+		benchmark.Failure_mask |= blockKartHandlingFailureOvershoot
+		return
+	}
+	steadyYaw := benchmark.Steady_yaw_sum / float64(benchmark.Steady_yaw_samples)
+	if steadyYaw < 0.01 || (benchmark.Peak_yaw_rate_radians_per_second - steadyYaw) / steadyYaw > 0.08 {
+		benchmark.Failure_mask |= blockKartHandlingFailureOvershoot
+	}
+}

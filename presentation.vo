@@ -330,6 +330,10 @@ func (game *BlockKart) hudPackets(includeStatic bool) []render.SnapshotObject {
 			Id: 700, Kind: render2d.ShapeRoundedRect, Bounds: [4]int64{22000, 164000, 354000, 224000},
 			RadiusMilli: 15000, Fill: [4]byte{2, 9, 17, 230}, StrokeMilli: 1800,
 			Stroke: [4]byte{31, 213, 255, 205}, Z: 168, Layers: 2,
+		}, render2d.Shape{
+			Id: 701, Kind: render2d.ShapeRoundedRect, Bounds: [4]int64{392000, 164000, 390000, 408000},
+			RadiusMilli: 15000, Fill: [4]byte{2, 9, 17, 230}, StrokeMilli: 1800,
+			Stroke: [4]byte{255, 190, 41, 205}, Z: 168, Layers: 2,
 		})
 	}
 	if game.RenderWidth <= 1000 || game.RenderHeight > game.RenderWidth {
@@ -481,6 +485,34 @@ func (game *BlockKart) hudPackets(includeStatic bool) []render.SnapshotObject {
 			surface = []byte("SURFACE GRASS")
 		}
 		lateralMilliG := int64(game.Vehicle.Lateral_acceleration / blockKartVehicleGravity)
+		benchmarkState := []byte("READY")
+		benchmarkStateColor := [4]byte{180, 207, 221, 245}
+		if game.HandlingBenchmark.Active {
+			benchmarkState = []byte("RUNNING")
+			benchmarkStateColor = [4]byte{38, 220, 255, 255}
+		} else if game.HandlingBenchmark.Completed && game.HandlingBenchmark.Passed {
+			benchmarkState = []byte("PASS")
+			benchmarkStateColor = [4]byte{92, 236, 142, 255}
+		} else if game.HandlingBenchmark.Completed {
+			benchmarkState = []byte("FAIL")
+			benchmarkStateColor = [4]byte{255, 91, 65, 255}
+		}
+		steadyYawMilli := int64(0)
+		steadySpeedCentimetersPerSecond := int64(0)
+		overshootPermille := int64(0)
+		if game.HandlingBenchmark.Steady_yaw_samples != 0 {
+			steadyYaw := game.HandlingBenchmark.Steady_yaw_sum /
+				float64(game.HandlingBenchmark.Steady_yaw_samples)
+			steadyYawMilli = int64(steadyYaw * 1000.0)
+			steadySpeedCentimetersPerSecond = int64(game.HandlingBenchmark.Steady_speed_sum /
+				float64(game.HandlingBenchmark.Steady_yaw_samples) *
+				100.0)
+			if steadyYaw > 0.001 {
+				overshootPermille = int64((game.HandlingBenchmark.Peak_yaw_rate_radians_per_second - steadyYaw) /
+					steadyYaw *
+					1000.0)
+			}
+		}
 		texts = append(texts, render2d.TextRun{
 			Id: 700, Font: 1, Text: []byte("VEHICLE TELEMETRY  F3"), Position: [2]int64{42000, 190000},
 			SizeMilli: 11500, Color: [4]byte{38, 220, 255, 255}, Z: 184, Layers: 2,
@@ -518,6 +550,84 @@ func (game *BlockKart) hudPackets(includeStatic bool) []render.SnapshotObject {
 		}, render2d.TextRun{
 			Id: 707, Font: 1, Text: surface, Position: [2]int64{226000, 350000}, SizeMilli: 10500,
 			Color: [4]byte{255, 194, 47, 250}, Z: 184, Layers: 2,
+		}, render2d.TextRun{
+			Id: 708, Font: 1, Text: []byte("HANDLING BENCHMARK  B"), Position: [2]int64{412000, 190000},
+			SizeMilli: 11500, Color: [4]byte{255, 194, 47, 255}, Z: 184, Layers: 2,
+		}, render2d.TextRun{
+			Id: 709, Font: 1, Text: game.HandlingBenchmark.ScenarioName(),
+			Position: [2]int64{412000, 220000}, SizeMilli: 10500, Color: [4]byte{225, 240, 248, 245}, Z: 184,
+			Layers: 2,
+		}, render2d.TextRun{
+			Id: 710, Font: 1, Text: benchmarkState, Position: [2]int64{662000, 220000}, SizeMilli: 10500,
+			Color: benchmarkStateColor, Z: 184, Layers: 2,
+		}, render2d.TextRun{
+			Id: 711, Font: 1,
+			Text: append([]byte("TICK        "), blockKartDecimalText(uint64(game.HandlingBenchmark.Tick), 4)...),
+			Position: [2]int64{412000, 246000}, SizeMilli: 10500, Color: [4]byte{225, 240, 248, 245}, Z: 184,
+			Layers: 2,
+		}, render2d.TextRun{
+			Id: 712, Font: 1,
+			Text: blockKartSignedMetricText([]byte("PEAK YAW    "), int64(game.HandlingBenchmark.Peak_yaw_rate_radians_per_second *
+				1000.0), 4),
+			Position: [2]int64{412000, 272000}, SizeMilli: 10500, Color: [4]byte{225, 240, 248, 245}, Z: 184,
+			Layers: 2,
+		}, render2d.TextRun{
+			Id: 713, Font: 1,
+			Text: blockKartSignedMetricText([]byte("PEAK SLIP   "), int64(game.HandlingBenchmark.Peak_slip_radians *
+				1000.0), 4),
+			Position: [2]int64{412000, 298000}, SizeMilli: 10500, Color: [4]byte{225, 240, 248, 245}, Z: 184,
+			Layers: 2,
+		}, render2d.TextRun{
+			Id: 714, Font: 1,
+			Text: append([]byte("0-60 TICK   "), blockKartDecimalText(uint64(game.HandlingBenchmark.Reached_sixty_tick), 4)...),
+			Position: [2]int64{412000, 324000}, SizeMilli: 10500, Color: [4]byte{225, 240, 248, 245}, Z: 184,
+			Layers: 2,
+		}, render2d.TextRun{
+			Id: 715, Font: 1,
+			Text: append([]byte("FAIL MASK   "), blockKartDecimalText(uint64(game.HandlingBenchmark.Failure_mask), 3)...),
+			Position: [2]int64{412000, 350000}, SizeMilli: 10500, Color: benchmarkStateColor, Z: 184,
+			Layers: 2,
+		}, render2d.TextRun{
+			Id: 716, Font: 1,
+			Text: append([]byte("RESPONSE    "), blockKartDecimalText(uint64(game.HandlingBenchmark.Steer_response_ticks), 3)...),
+			Position: [2]int64{412000, 376000}, SizeMilli: 10500, Color: [4]byte{225, 240, 248, 245}, Z: 184,
+			Layers: 2,
+		}, render2d.TextRun{
+			Id: 717, Font: 1,
+			Text: append([]byte("STOP CM     "), blockKartDecimalText(uint64(game.HandlingBenchmark.Stop_distance_meters *
+				100.0), 4)...),
+			Position: [2]int64{412000, 402000}, SizeMilli: 10500, Color: [4]byte{225, 240, 248, 245}, Z: 184,
+			Layers: 2,
+		}, render2d.TextRun{
+			Id: 718, Font: 1, Text: blockKartSignedMetricText([]byte("STEADY YAW  "), steadyYawMilli, 4),
+			Position: [2]int64{412000, 428000}, SizeMilli: 10500, Color: [4]byte{225, 240, 248, 245}, Z: 184,
+			Layers: 2,
+		}, render2d.TextRun{
+			Id: 719, Font: 1, Text: blockKartSignedMetricText([]byte("OVERSHOOT   "), overshootPermille, 4),
+			Position: [2]int64{412000, 454000}, SizeMilli: 10500, Color: [4]byte{225, 240, 248, 245}, Z: 184,
+			Layers: 2,
+		}, render2d.TextRun{
+			Id: 720, Font: 1,
+			Text: append([]byte("TURN IN CM/S "), blockKartDecimalText(uint64(game.HandlingBenchmark.Steer_start_speed_meters_per_second *
+				100.0), 4)...),
+			Position: [2]int64{412000, 480000}, SizeMilli: 10500, Color: [4]byte{225, 240, 248, 245}, Z: 184,
+			Layers: 2,
+		}, render2d.TextRun{
+			Id: 721, Font: 1,
+			Text: append([]byte("PEAK TICK    "), blockKartDecimalText(uint64(game.HandlingBenchmark.Peak_yaw_tick), 4)...),
+			Position: [2]int64{412000, 506000}, SizeMilli: 10500, Color: [4]byte{225, 240, 248, 245}, Z: 184,
+			Layers: 2,
+		}, render2d.TextRun{
+			Id: 722, Font: 1,
+			Text: append([]byte("PEAK CM/S    "), blockKartDecimalText(uint64(game.HandlingBenchmark.Peak_yaw_speed_meters_per_second *
+				100.0), 4)...),
+			Position: [2]int64{412000, 532000}, SizeMilli: 10500, Color: [4]byte{225, 240, 248, 245}, Z: 184,
+			Layers: 2,
+		}, render2d.TextRun{
+			Id: 723, Font: 1,
+			Text: append([]byte("STEADY CM/S  "), blockKartDecimalText(uint64(steadySpeedCentimetersPerSecond), 4)...),
+			Position: [2]int64{412000, 558000}, SizeMilli: 10500, Color: [4]byte{225, 240, 248, 245}, Z: 184,
+			Layers: 2,
 		})
 	}
 	objects := make([]render.SnapshotObject, 0, len(shapes) + len(texts))

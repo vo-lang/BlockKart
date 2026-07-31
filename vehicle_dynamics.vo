@@ -1,6 +1,8 @@
 package main
 
-import "math"
+import (
+	"math"
+)
 
 const (
 	blockKartVehicleMassKg float64 = 285.0
@@ -15,65 +17,44 @@ const (
 	blockKartVehicleGravity float64 = 9.81
 )
 
-func (vehicle *BlockKartVehicleController) stepDynamics(
-	road BlockKartRoadSample,
-	steerTarget float64,
-	throttle float64,
-	brake float64,
-	boosting bool,
-	miniTurbo bool,
-	drifting bool,
-	driftDirection int32,
-	deltaSeconds float64,
-) {
+func (vehicle *BlockKartVehicleController) stepDynamics(road BlockKartRoadSample, steerTarget float64, throttle float64, brake float64, boosting bool, miniTurbo bool, drifting bool, driftDirection int32, deltaSeconds float64) {
 	vehicle.stepSteering(steerTarget, road.Surface, deltaSeconds)
 	vehicle.stepDriftBlend(drifting, deltaSeconds)
 	u := vehicle.Forward_speed / 1000.0
 	v := vehicle.Lateral_speed / 1000.0
 	r := vehicle.Yaw_rate
-	assist := vehicle.computeAssists(
-		u, v, r, road, throttle, brake, drifting, driftDirection,
-	)
+	assist := vehicle.computeAssists(u, v, r, road, throttle, brake, drifting, driftDirection)
 	delta := vehicle.Wheel_angle_radians + assist.Countersteer_radians
 	delta = blockKartVehicleClamp(delta, -0.52, 0.52)
-	longitudinalForce := vehicle.longitudinalForce(
-		u, throttle, brake, boosting, miniTurbo, road,
-	)
+	longitudinalForce := vehicle.longitudinalForce(u, throttle, brake, boosting, miniTurbo, road)
 	estimatedAcceleration := longitudinalForce / blockKartVehicleMassKg
 	frontLoad, rearLoad := blockKartVehicleAxleLoads(estimatedAcceleration)
 	frontMu := road.Friction
 	rearMu := road.Friction * assist.Rear_friction_scale
 	speedForSlip := math.Max(math.Abs(u), 2.2)
-	frontSlip := math.Atan2(v+blockKartVehicleFrontAxleMeters*r, speedForSlip) - delta
-	rearSlip := math.Atan2(v-blockKartVehicleRearAxleMeters*r, speedForSlip)
+	frontSlip := math.Atan2(v + blockKartVehicleFrontAxleMeters * r, speedForSlip) - delta
+	rearSlip := math.Atan2(v - blockKartVehicleRearAxleMeters * r, speedForSlip)
 	if u < -0.1 {
 		frontSlip = -frontSlip
 		rearSlip = -rearSlip
 	}
-	frontLateral := blockKartFialaLateralForce(
-		frontSlip, blockKartVehicleFrontCorneringStiffness, frontMu, frontLoad,
-	)
-	rearLateral := blockKartFialaLateralForce(
-		rearSlip, blockKartVehicleRearCorneringStiffness, rearMu, rearLoad,
-	)
+	frontLateral := blockKartFialaLateralForce(frontSlip, blockKartVehicleFrontCorneringStiffness, frontMu, frontLoad)
+	rearLateral := blockKartFialaLateralForce(rearSlip, blockKartVehicleRearCorneringStiffness, rearMu, rearLoad)
 	frontDriveForce := 0.0
 	rearDriveForce := longitudinalForce
 	if brake > 0 && u > 0.5 {
 		frontDriveForce = longitudinalForce * 0.58
 		rearDriveForce = longitudinalForce * 0.42
 	}
-	frontLateral = blockKartCombinedSlipLateral(
-		frontLateral, frontDriveForce, frontMu*frontLoad,
-	)
-	rearLateral = blockKartCombinedSlipLateral(
-		rearLateral, rearDriveForce, rearMu*rearLoad,
-	)
+	frontLateral = blockKartCombinedSlipLateral(frontLateral, frontDriveForce, frontMu * frontLoad)
+	rearLateral = blockKartCombinedSlipLateral(rearLateral, rearDriveForce, rearMu * rearLoad)
 	totalLateral := frontLateral + rearLateral + assist.Lateral_force_newtons
-	du := (frontDriveForce+rearDriveForce)/blockKartVehicleMassKg + v*r
-	dv := totalLateral/blockKartVehicleMassKg - u*r
-	dr := (blockKartVehicleFrontAxleMeters*frontLateral -
-		blockKartVehicleRearAxleMeters*rearLateral +
-		assist.Yaw_moment_newton_meters) / blockKartVehicleYawInertiaKgM2
+	du := (frontDriveForce + rearDriveForce) / blockKartVehicleMassKg + v * r
+	dv := totalLateral / blockKartVehicleMassKg - u * r
+	dr := (blockKartVehicleFrontAxleMeters * frontLateral -
+		blockKartVehicleRearAxleMeters * rearLateral +
+		assist.Yaw_moment_newton_meters) /
+		blockKartVehicleYawInertiaKgM2
 	dynamicBlend := blockKartVehicleSmoothstep(2.5, 7.0, math.Abs(u))
 	kinematicYaw := 0.0
 	if math.Abs(delta) > 0.0001 {
@@ -97,16 +78,14 @@ func (vehicle *BlockKartVehicleController) stepDynamics(
 	if road.Surface == blockKartRoadSurfaceGrass {
 		maximumSpeed = blockKartVehicleOffRoadMaximumSpeed / 1000.0
 	}
-	u = blockKartVehicleClamp(u, -blockKartVehicleReverseMaximumSpeed/1000.0,
-		maximumSpeed)
-	maximumLateralSpeed := math.Max(math.Abs(u)*0.55, 1.5)
+	u = blockKartVehicleClamp(u, -blockKartVehicleReverseMaximumSpeed / 1000.0, maximumSpeed)
+	maximumLateralSpeed := math.Max(math.Abs(u) * 0.55, 1.5)
 	v = blockKartVehicleClamp(v, -maximumLateralSpeed, maximumLateralSpeed)
 	r = blockKartVehicleClamp(r, -2.55, 2.55)
 	vehicle.Forward_speed = u * 1000.0
 	vehicle.Lateral_speed = v * 1000.0
 	vehicle.Yaw_rate = r
-	vehicle.Heading_radians =
-		blockKartVehicleWrapRadians(vehicle.Heading_radians + r*deltaSeconds)
+	vehicle.Heading_radians = blockKartVehicleWrapRadians(vehicle.Heading_radians + r * deltaSeconds)
 	vehicle.Lateral_acceleration = (totalLateral / blockKartVehicleMassKg) * 1000.0
 	vehicle.Body_slip_radians = math.Atan2(v, math.Max(math.Abs(u), 1.0))
 	vehicle.Front_slip_radians = frontSlip
@@ -116,22 +95,14 @@ func (vehicle *BlockKartVehicleController) stepDynamics(
 	vehicle.Drive_force_newtons = longitudinalForce
 	vehicle.Front_normal_load_newtons = frontLoad
 	vehicle.Rear_normal_load_newtons = rearLoad
-	vehicle.Stability_yaw_moment_newton_meters =
-		assist.Yaw_moment_newton_meters
+	vehicle.Stability_yaw_moment_newton_meters = assist.Yaw_moment_newton_meters
 	vehicle.Surface_friction = road.Friction
 }
 
-func (vehicle *BlockKartVehicleController) longitudinalForce(
-	speedMps float64,
-	throttle float64,
-	brake float64,
-	boosting bool,
-	miniTurbo bool,
-	road BlockKartRoadSample,
-) float64 {
+func (vehicle *BlockKartVehicleController) longitudinalForce(speedMps float64, throttle float64, brake float64, boosting bool, miniTurbo bool, road BlockKartRoadSample) float64 {
 	absoluteSpeed := math.Abs(speedMps)
-	speedRatio := blockKartVehicleClamp(absoluteSpeed/30.0, 0, 1)
-	engineForce := 5200.0 + (1650.0-5200.0)*speedRatio
+	speedRatio := blockKartVehicleClamp(absoluteSpeed / 30.0, 0, 1)
+	engineForce := 5200.0 + (1650.0 - 5200.0) * speedRatio
 	if road.Surface == blockKartRoadSurfaceCurb {
 		engineForce *= 0.92
 	} else if road.Surface == blockKartRoadSurfaceGrass {
@@ -163,31 +134,36 @@ func (vehicle *BlockKartVehicleController) longitudinalForce(
 		if speedMps < 0 {
 			direction = -1.0
 		}
-		force -= direction * rollingCoefficient *
-			blockKartVehicleMassKg * blockKartVehicleGravity
+		force -= direction * rollingCoefficient * blockKartVehicleMassKg * blockKartVehicleGravity
 		force -= direction * 0.49 * absoluteSpeed * absoluteSpeed
 	}
 	force -= blockKartVehicleMassKg * blockKartVehicleGravity * road.Grade
-	maximumTireForce := road.Friction *
-		blockKartVehicleMassKg * blockKartVehicleGravity * 0.72
+	// Rear-drive launch traction and four-wheel braking have different usable
+	// force envelopes. Keeping them separate prevents the old launch behavior
+	// from reaching 60 km/h in roughly 1.7 seconds while retaining decisive,
+	// stable braking.
+	usableWeightFraction := 0.48
+	if boosting {
+		usableWeightFraction = 0.58
+	}
+	if brake > 0 {
+		usableWeightFraction = 0.62
+	}
+	maximumTireForce := road.Friction * blockKartVehicleMassKg * blockKartVehicleGravity *
+		usableWeightFraction
 	return blockKartVehicleClamp(force, -maximumTireForce, maximumTireForce)
 }
 
 func blockKartVehicleAxleLoads(longitudinalAcceleration float64) (float64, float64) {
 	weight := blockKartVehicleMassKg * blockKartVehicleGravity
-	front := (weight*blockKartVehicleRearAxleMeters -
-		blockKartVehicleMassKg*longitudinalAcceleration*
-			blockKartVehicleCgHeightMeters) / blockKartVehicleWheelbaseMeters
-	front = blockKartVehicleClamp(front, weight*0.25, weight*0.72)
+	front := (weight * blockKartVehicleRearAxleMeters -
+		blockKartVehicleMassKg * longitudinalAcceleration * blockKartVehicleCgHeightMeters) /
+		blockKartVehicleWheelbaseMeters
+	front = blockKartVehicleClamp(front, weight * 0.25, weight * 0.72)
 	return front, weight - front
 }
 
-func blockKartFialaLateralForce(
-	slipAngle float64,
-	corneringStiffness float64,
-	friction float64,
-	normalLoad float64,
-) float64 {
+func blockKartFialaLateralForce(slipAngle float64, corneringStiffness float64, friction float64, normalLoad float64) float64 {
 	if normalLoad <= 0 || friction <= 0 {
 		return 0
 	}
@@ -204,24 +180,18 @@ func blockKartFialaLateralForce(
 	}
 	stiffness2 := corneringStiffness * corneringStiffness
 	stiffness3 := stiffness2 * corneringStiffness
-	return -corneringStiffness*tangent +
-		stiffness2/(3.0*frictionLoad)*absoluteTangent*tangent -
-		stiffness3/(27.0*frictionLoad*frictionLoad)*tangent*tangent*tangent
+	return -corneringStiffness * tangent +
+		stiffness2 / (3.0 * frictionLoad) * absoluteTangent * tangent -
+		stiffness3 / (27.0 * frictionLoad * frictionLoad) * tangent * tangent * tangent
 }
 
-func blockKartCombinedSlipLateral(
-	lateralForce float64,
-	longitudinalForce float64,
-	frictionLimit float64,
-) float64 {
+func blockKartCombinedSlipLateral(lateralForce float64, longitudinalForce float64, frictionLimit float64) float64 {
 	if frictionLimit <= 0 {
 		return 0
 	}
-	longitudinalRatio := blockKartVehicleClamp(
-		longitudinalForce/frictionLimit, -1, 1,
-	)
+	longitudinalRatio := blockKartVehicleClamp(longitudinalForce / frictionLimit, -1, 1)
 	lateralCapacity := frictionLimit *
-		math.Sqrt(math.Max(0, 1.0-longitudinalRatio*longitudinalRatio))
+		math.Sqrt(math.Max(0, 1.0 - longitudinalRatio * longitudinalRatio))
 	return blockKartVehicleClamp(lateralForce, -lateralCapacity, lateralCapacity)
 }
 
@@ -229,18 +199,15 @@ func blockKartVehicleSmoothstep(minimum float64, maximum float64, value float64)
 	if maximum <= minimum {
 		return 0
 	}
-	t := blockKartVehicleClamp((value-minimum)/(maximum-minimum), 0, 1)
-	return t * t * (3.0 - 2.0*t)
+	t := blockKartVehicleClamp((value - minimum) / (maximum - minimum), 0, 1)
+	return t * t * (3.0 - 2.0 * t)
 }
 
 func blockKartVehicleLerp(from float64, to float64, amount float64) float64 {
-	return from + (to-from)*amount
+	return from + (to - from) * amount
 }
 
-func (vehicle *BlockKartVehicleController) ApplyImpact(
-	obstacleDirectionX float64,
-	obstacleDirectionZ float64,
-) float64 {
+func (vehicle *BlockKartVehicleController) ApplyImpact(obstacleDirectionX float64, obstacleDirectionZ float64) float64 {
 	if vehicle == nil {
 		return 0
 	}
@@ -249,15 +216,10 @@ func (vehicle *BlockKartVehicleController) ApplyImpact(
 	forwardZ := math.Cos(heading)
 	rightX := math.Cos(heading)
 	rightZ := -math.Sin(heading)
-	forwardImpact := blockKartVehicleClamp(
-		obstacleDirectionX*forwardX+obstacleDirectionZ*forwardZ, -1, 1,
-	)
-	sideImpact := blockKartVehicleClamp(
-		obstacleDirectionX*rightX+obstacleDirectionZ*rightZ, -1, 1,
-	)
-	retainedSpeed := blockKartVehicleClamp(
-		0.88-math.Abs(forwardImpact)*0.24, 0.56, 0.88,
-	)
+	forwardImpact := blockKartVehicleClamp(obstacleDirectionX * forwardX +
+		obstacleDirectionZ * forwardZ, -1, 1)
+	sideImpact := blockKartVehicleClamp(obstacleDirectionX * rightX + obstacleDirectionZ * rightZ, -1, 1)
+	retainedSpeed := blockKartVehicleClamp(0.88 - math.Abs(forwardImpact) * 0.24, 0.56, 0.88)
 	vehicle.Forward_speed *= retainedSpeed
 	vehicle.Lateral_speed -= sideImpact * 2200.0
 	vehicle.Yaw_rate -= sideImpact * 0.42
