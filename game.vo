@@ -146,7 +146,7 @@ type BlockKart struct {
 	GamepadBrake int32
 	GamepadDrift bool
 	GamepadBoost bool
-	Vehicle BlockKartVehicleController
+	Vehicle BlockKartKartPhysics
 	HandlingBenchmark BlockKartHandlingBenchmark
 	Steering_milli int32
 	WheelSpin_milliradians int32
@@ -808,8 +808,8 @@ func (game *BlockKart) stepPhysics(tick voplay.TickBatch) error {
 		transform.Z = body.Position[2]
 		road := game.nearestRoadSample(transform)
 		deltaSeconds := float64(tick.FixedTickNanos) / 1000000000.0
-		game.Vehicle.stepSuspension(&game.Track, transform, deltaSeconds)
-		transform.Y = int64(game.Vehicle.Suspended_height_milli)
+		game.Vehicle.stepRoadContact(&game.Track, transform, deltaSeconds)
+		transform.Y = int64(game.Vehicle.Ride_height_milli)
 		if game.shouldRecoverVehicle(road) {
 			return game.recoverToTrack()
 		}

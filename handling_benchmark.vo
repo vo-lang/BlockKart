@@ -45,7 +45,7 @@ type BlockKartHandlingBenchmark struct {
 	Scenario uint32
 	Tick uint32
 	Failure_mask uint32
-	Vehicle BlockKartVehicleController
+	Vehicle BlockKartKartPhysics
 	Position_x_meters float64
 	Position_z_meters float64
 	Last_heading_radians float64
@@ -298,13 +298,18 @@ func (benchmark *BlockKartHandlingBenchmark) Step(fixedTickNanos uint64) {
 	throttle := blockKartVehicleClamp(float64(control.Throttle_milli) / 1000.0, 0, 1)
 	brake := blockKartVehicleClamp(float64(control.Brake_milli) / 1000.0, 0, 1)
 	drifting := benchmark.Scenario == blockKartHandlingScenarioDrift && control.Drift
-	driftDirection := int32(0)
-	if drifting {
-		driftDirection = 1
-	}
 	substepSeconds := deltaSeconds / float64(blockKartVehicleSubsteps)
 	for substep := uint32(0); substep < blockKartVehicleSubsteps; substep++ {
-		benchmark.Vehicle.stepDynamics(road, steerTarget, throttle, brake, false, false, drifting, driftDirection, substepSeconds)
+		benchmark.Vehicle.Step(
+			road,
+			steerTarget,
+			throttle,
+			brake,
+			false,
+			false,
+			drifting,
+			substepSeconds,
+		)
 		benchmark.integratePosition(substepSeconds)
 	}
 	benchmark.Vehicle.stepCamera(drifting, road, deltaSeconds)

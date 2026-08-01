@@ -1,0 +1,100 @@
+package main
+
+import "math"
+
+const (
+	blockKartRideHeightMilli float64 = 720.0
+	blockKartTireComplianceMilli float64 = 48.0
+)
+
+// stepRoadContact aligns the rigid kart chassis with the road frame. A kart
+// has no sprung suspension state: height follows tyre compliance through a
+// first-order contact response, so there is no roll/heave oscillator that can
+// store energy and rock the chassis from side to side.
+func (body *BlockKartKartPhysics) stepRoadContact(
+	track *BlockKartTrackModel,
+	transform Transform,
+	deltaSeconds float64,
+) {
+	if body == nil || track == nil || deltaSeconds <= 0 {
+		return
+	}
+	center := track.Query(transform.X, transform.Z)
+	targetHeight := float64(center.Y) + blockKartRideHeightMilli
+	if !body.Initialized || body.Ride_height_milli == 0 {
+		body.Ride_height_milli = targetHeight
+	}
+	contactResponse := 1.0 - math.Exp(-22.0*deltaSeconds)
+	body.Ride_height_milli += (targetHeight-body.Ride_height_milli)*contactResponse
+	body.Ride_height_milli = blockKartVehicleClamp(
+		body.Ride_height_milli,
+		targetHeight-blockKartTireComplianceMilli,
+		targetHeight+blockKartTireComplianceMilli,
+	)
+	body.Ride_offset_milli = body.Ride_height_milli - targetHeight
+	body.Road_pitch_radians = math.Atan(center.Grade)
+	body.Road_bank_radians = center.Bank_radians
+	heading := body.Heading_radians
+	forwardX := math.Sin(heading)
+	forwardZ := math.Cos(heading)
+	rightX := math.Cos(heading)
+	rightZ := -math.Sin(heading)
+	wheelX := [4]float64{
+		blockKartVehicleFrontAxleMeters,
+		blockKartVehicleFrontAxleMeters,
+		-blockKartVehicleRearAxleMeters,
+		-blockKartVehicleRearAxleMeters,
+	}
+	wheelY := [4]float64{
+		blockKartVehicleHalfTrackMeters,
+		-blockKartVehicleHalfTrackMeters,
+		blockKartVehicleHalfTrackMeters,
+		-blockKartVehicleHalfTrackMeters,
+	}
+	wheelResponse := 1.0 - math.Exp(-30.0*deltaSeconds)
+	weight := blockKartVehicleMassKg * blockKartVehicleGravity
+	staticRearWheelLoad := (weight - weight*blockKartVehicleRearAxleMeters/
+		blockKartVehicleWheelbaseMeters) * 0.5
+	for index := 0; index < 4; index++ {
+		localX := wheelX[index] * 1000.0
+		localY := wheelY[index] * 1000.0
+		contactX := float64(transform.X) + forwardX*localX - rightX*localY
+		contactZ := float64(transform.Z) + forwardZ*localX - rightZ*localY
+		road := track.Query(int64(contactX), int64(contactZ))
+		nominalCenter := body.Ride_height_milli - 220.0
+		desiredCenter := float64(road.Y) + blockKartVehicleWheelRadiusMilli
+		offset := blockKartVehicleClamp(
+			desiredCenter-nominalCenter,
+			-blockKartTireComplianceMilli,
+			blockKartTireComplianceMilli,
+		)
+		if index >= blockKartWheelRearLeft && staticRearWheelLoad > 0 {
+			unloaded := blockKartVehicleClamp(
+				1.0-body.Wheel_normal_load_newtons[index]/staticRearWheelLoad,
+				0,
+				1,
+			)
+			offset += blockKartVehicleSmoothstep(0.55, 0.94, unloaded) * 24.0
+		}
+		body.Wheel_contact_offset_milli[index] +=
+			(offset-body.Wheel_contact_offset_milli[index])*wheelResponse
+	}
+}
+
+func (body *BlockKartKartPhysics) visualWheelOffset(index int) int64 {
+	if body == nil || index < 0 || index >= 4 {
+		return 0
+	}
+	// Authored wheel order is rear-left, rear-right, front-left, front-right.
+	physicsIndex := index
+	if index == 0 {
+		physicsIndex = blockKartWheelRearLeft
+	} else if index == 1 {
+		physicsIndex = blockKartWheelRearRight
+	} else if index == 2 {
+		physicsIndex = blockKartWheelFrontLeft
+	} else if index == 3 {
+		physicsIndex = blockKartWheelFrontRight
+	}
+	return int64(body.Wheel_contact_offset_milli[physicsIndex])
+}

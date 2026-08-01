@@ -1,0 +1,13 @@
+package main
+
+func blockKartVehicleSmoothstep(minimum float64, maximum float64, value float64) float64 {
+	if maximum <= minimum {
+		return 0
+	}
+	t := blockKartVehicleClamp((value-minimum)/(maximum-minimum), 0, 1)
+	return t * t * (3.0 - 2.0*t)
+}
+
+func blockKartVehicleLerp(from float64, to float64, amount float64) float64 {
+	return from + (to-from)*amount
+}

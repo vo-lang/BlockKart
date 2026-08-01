@@ -1,0 +1,570 @@
+package main
+
+import "math"
+
+const (
+	blockKartVehicleSubsteps uint32 = 4
+	blockKartVehicleMassKg float64 = 220.0
+	blockKartVehicleYawInertiaKgM2 float64 = 168.0
+	blockKartVehicleFrontAxleMeters float64 = 1.18
+	blockKartVehicleRearAxleMeters float64 = 1.06
+	blockKartVehicleWheelbaseMeters float64 = 2.24
+	blockKartVehicleHalfTrackMeters float64 = 0.82
+	blockKartVehicleCgHeightMeters float64 = 0.34
+	blockKartVehicleGravity float64 = 9.81
+	blockKartVehicleWheelRadiusMilli float64 = 480.0
+	blockKartVehicleNormalMaximumSpeed float64 = 30000.0
+	blockKartVehicleBoostMaximumSpeed float64 = 36000.0
+	blockKartVehicleOffRoadMaximumSpeed float64 = 18000.0
+	blockKartVehicleReverseMaximumSpeed float64 = 9500.0
+	blockKartFrontTireStiffnessPerLoad float64 = 18.0
+	blockKartRearTireStiffnessPerLoad float64 = 22.0
+	blockKartLockedAxleStiffnessNewtonsPerMps float64 = 140.0
+	blockKartFrontTireFrictionScale float64 = 0.96
+	blockKartRearTireFrictionScale float64 = 1.05
+	blockKartWheelFrontLeft int = 0
+	blockKartWheelFrontRight int = 1
+	blockKartWheelRearLeft int = 2
+	blockKartWheelRearRight int = 3
+)
+
+// BlockKartKartPhysics is the complete shipping vehicle state. The model is
+// one planar rigid body acted on at four tyre contact patches. Each contact
+// derives velocity from the same body momentum; wheels do not own independent
+// chassis motion and no controller applies a desired yaw or lateral velocity.
+type BlockKartKartPhysics struct {
+	Initialized bool
+	Heading_radians float64
+	Camera_heading_radians float64
+	Camera_focus_offset_milli float64
+	Camera_edge_blend float64
+	Steer_input float64
+	Wheel_angle_radians float64
+	Forward_speed float64
+	Lateral_speed float64
+	Yaw_rate float64
+	Longitudinal_acceleration float64
+	Lateral_acceleration float64
+	Body_slip_radians float64
+	Front_slip_radians float64
+	Rear_slip_radians float64
+	Drift_blend float64
+	Surface_friction float64
+	Wheel_normal_load_newtons [4]float64
+	Wheel_longitudinal_force_newtons [4]float64
+	Wheel_lateral_force_newtons [4]float64
+	Wheel_slip_radians [4]float64
+	Ride_height_milli float64
+	Ride_offset_milli float64
+	Road_pitch_radians float64
+	Road_bank_radians float64
+	Wheel_contact_offset_milli [4]float64
+}
+
+type BlockKartPlanarVelocity struct {
+	Forward_meters_per_second float64
+	Lateral_meters_per_second float64
+	Yaw_radians_per_second float64
+}
+
+func (body *BlockKartKartPhysics) Reset(transform Transform) {
+	if body == nil {
+		return
+	}
+	*body = BlockKartKartPhysics{
+		Initialized: true,
+		Heading_radians: float64(transform.Yaw_milliradians) / 1000.0,
+		Camera_heading_radians: float64(transform.Yaw_milliradians) / 1000.0,
+		Surface_friction: 1.42,
+		Ride_height_milli: float64(transform.Y),
+	}
+	weight := blockKartVehicleMassKg * blockKartVehicleGravity
+	frontAxleLoad := weight * blockKartVehicleRearAxleMeters / blockKartVehicleWheelbaseMeters
+	rearAxleLoad := weight - frontAxleLoad
+	body.Wheel_normal_load_newtons = [4]float64{
+		frontAxleLoad * 0.5,
+		frontAxleLoad * 0.5,
+		rearAxleLoad * 0.5,
+		rearAxleLoad * 0.5,
+	}
+}
+
+// Step advances the four-contact rigid body by one physics substep. The order
+// is fixed: steering geometry, normal loads, tyre forces, body momentum, then
+// the low-speed contact constraint. This keeps the solver deterministic and
+// allocation-free.
+func (body *BlockKartKartPhysics) Step(
+	road BlockKartRoadSample,
+	steerInput float64,
+	throttle float64,
+	brake float64,
+	boosting bool,
+	miniTurbo bool,
+	drifting bool,
+	deltaSeconds float64,
+) {
+	if body == nil || deltaSeconds <= 0 {
+		return
+	}
+	body.stepRoadWheelAngle(steerInput, deltaSeconds)
+	body.stepPhysicalDrift(drifting, deltaSeconds)
+	oldU := body.Forward_speed / 1000.0
+	oldV := body.Lateral_speed / 1000.0
+	oldR := body.Yaw_rate
+	wheelX := [4]float64{
+		blockKartVehicleFrontAxleMeters,
+		blockKartVehicleFrontAxleMeters,
+		-blockKartVehicleRearAxleMeters,
+		-blockKartVehicleRearAxleMeters,
+	}
+	wheelY := [4]float64{
+		blockKartVehicleHalfTrackMeters,
+		-blockKartVehicleHalfTrackMeters,
+		blockKartVehicleHalfTrackMeters,
+		-blockKartVehicleHalfTrackMeters,
+	}
+	frontLeftAngle, frontRightAngle := blockKartAckermannAngles(body.Wheel_angle_radians)
+	wheelAngle := [4]float64{frontLeftAngle, frontRightAngle, 0, 0}
+	loads := blockKartWheelLoads(
+		body.Longitudinal_acceleration/1000.0,
+		body.Lateral_acceleration/1000.0,
+	)
+	body.Wheel_normal_load_newtons = loads
+	baseLongitudinal := blockKartPowertrainForces(
+		oldU,
+		throttle,
+		brake,
+		boosting,
+		miniTurbo,
+		road,
+		loads,
+	)
+	rearLeftSpeed := oldU - oldR*wheelY[blockKartWheelRearLeft]
+	rearRightSpeed := oldU - oldR*wheelY[blockKartWheelRearRight]
+	lockedAxleStrength := blockKartLockedAxleStiffnessNewtonsPerMps *
+		blockKartVehicleLerp(1.0, 0.55, body.Drift_blend)
+	// With one solid shaft, longitudinal scrub is an equal-and-opposite force
+	// pair. The inside contact limits the pair: once that tyre unloads, it cannot
+	// make the loaded outside tyre waste the same share of its friction circle.
+	rearAxleMeanSpeed := (rearLeftSpeed + rearRightSpeed) * 0.5
+	lockedAxleDemand := -(rearLeftSpeed-rearAxleMeanSpeed) * lockedAxleStrength
+	lockedAxlePairLimit := math.Min(
+		loads[blockKartWheelRearLeft],
+		loads[blockKartWheelRearRight],
+	) * road.Friction * blockKartRearTireFrictionScale * 0.58
+	lockedAxleForce := blockKartVehicleClamp(
+		lockedAxleDemand,
+		-lockedAxlePairLimit,
+		lockedAxlePairLimit,
+	)
+	baseLongitudinal[blockKartWheelRearLeft] += lockedAxleForce
+	baseLongitudinal[blockKartWheelRearRight] -= lockedAxleForce
+	forceForward := 0.0
+	forceLateral := 0.0
+	yawMoment := 0.0
+	absForwardSpeed := math.Abs(oldU)
+	dynamicTireBlend := blockKartVehicleSmoothstep(1.0, 4.0, absForwardSpeed)
+	for index := 0; index < 4; index++ {
+		x := wheelX[index]
+		y := wheelY[index]
+		angle := wheelAngle[index]
+		cosine := math.Cos(angle)
+		sine := math.Sin(angle)
+		pointForward := oldU - oldR*y
+		pointLateral := oldV + oldR*x
+		wheelForward := cosine*pointForward + sine*pointLateral
+		wheelLateral := -sine*pointForward + cosine*pointLateral
+		load := math.Max(loads[index], 0)
+		friction := road.Friction
+		stiffnessPerLoad := blockKartFrontTireStiffnessPerLoad
+		if index >= blockKartWheelRearLeft {
+			friction *= blockKartRearTireFrictionScale
+			stiffnessPerLoad = blockKartRearTireStiffnessPerLoad *
+				blockKartVehicleLerp(1.0, 0.53, body.Drift_blend)
+		} else {
+			friction *= blockKartFrontTireFrictionScale
+		}
+		frictionLimit := math.Max(friction*load, 0)
+		longitudinalForce := baseLongitudinal[index]
+		slipAngle := 0.0
+		if math.Abs(wheelForward) > 0.05 || math.Abs(wheelLateral) > 0.05 {
+			slipAngle = math.Atan2(wheelLateral, math.Max(math.Abs(wheelForward), 0.75))
+			slipAngle = blockKartVehicleClamp(slipAngle, -0.62, 0.62)
+		}
+		corneringStiffness := stiffnessPerLoad * load
+		linearLateralForce := -corneringStiffness * math.Tan(slipAngle)
+		lateralForce := linearLateralForce * dynamicTireBlend
+		combinedForce := math.Sqrt(
+			longitudinalForce*longitudinalForce+lateralForce*lateralForce,
+		)
+		if combinedForce > frictionLimit && combinedForce > 0 {
+			frictionScale := frictionLimit / combinedForce
+			longitudinalForce *= frictionScale
+			lateralForce *= frictionScale
+		}
+		bodyForwardForce := cosine*longitudinalForce - sine*lateralForce
+		bodyLateralForce := sine*longitudinalForce + cosine*lateralForce
+		forceForward += bodyForwardForce
+		forceLateral += bodyLateralForce
+		yawMoment += x*bodyLateralForce - y*bodyForwardForce
+		body.Wheel_longitudinal_force_newtons[index] = longitudinalForce
+		body.Wheel_lateral_force_newtons[index] = lateralForce
+		body.Wheel_slip_radians[index] = slipAngle
+	}
+	dragForce := blockKartBodyDragForce(oldU, road)
+	forceForward += dragForce
+	velocity := BlockKartPlanarVelocity{
+		Forward_meters_per_second: oldU,
+		Lateral_meters_per_second: oldV,
+		Yaw_radians_per_second: oldR,
+	}
+	velocity.Forward_meters_per_second +=
+		(forceForward/blockKartVehicleMassKg+oldV*oldR)*deltaSeconds
+	velocity.Lateral_meters_per_second +=
+		(forceLateral/blockKartVehicleMassKg-oldU*oldR)*deltaSeconds
+	velocity.Yaw_radians_per_second +=
+		yawMoment/blockKartVehicleYawInertiaKgM2*deltaSeconds
+	stickyBlend := (1.0 - blockKartVehicleSmoothstep(
+		1.0,
+		4.0,
+		math.Abs(velocity.Forward_meters_per_second),
+	)) * (1.0 - body.Drift_blend)
+	if stickyBlend > 0 {
+		frontFrictionImpulse := road.Friction * blockKartFrontTireFrictionScale *
+			(loads[blockKartWheelFrontLeft]+loads[blockKartWheelFrontRight]) * deltaSeconds
+		frontLongitudinalImpulse := (body.Wheel_longitudinal_force_newtons[blockKartWheelFrontLeft] +
+			body.Wheel_longitudinal_force_newtons[blockKartWheelFrontRight]) * deltaSeconds
+		frontLateralBudget := math.Sqrt(math.Max(
+			frontFrictionImpulse*frontFrictionImpulse-
+				frontLongitudinalImpulse*frontLongitudinalImpulse,
+			0,
+		)) * stickyBlend
+		rearFriction := road.Friction * blockKartRearTireFrictionScale
+		rearFrictionImpulse := rearFriction *
+			(loads[blockKartWheelRearLeft]+loads[blockKartWheelRearRight]) * deltaSeconds
+		rearLongitudinalImpulse := (body.Wheel_longitudinal_force_newtons[blockKartWheelRearLeft] +
+			body.Wheel_longitudinal_force_newtons[blockKartWheelRearRight]) * deltaSeconds
+		rearLateralBudget := math.Sqrt(math.Max(
+			rearFrictionImpulse*rearFrictionImpulse-
+				rearLongitudinalImpulse*rearLongitudinalImpulse,
+			0,
+		)) * stickyBlend
+		frontImpulse := 0.0
+		rearImpulse := 0.0
+		// At low speed, the front and rear axle centres provide the two
+		// non-holonomic rolling constraints of the bicycle model. Four tyre
+		// forces remain active; collapsing only the sticky constraints removes
+		// redundant Ackermann equations that can fight each other near rest.
+		for iteration := 0; iteration < 4; iteration++ {
+			rearImpulse = blockKartSolveLateralContact(
+				&velocity,
+				-blockKartVehicleRearAxleMeters,
+				0,
+				0,
+				rearImpulse,
+				rearLateralBudget,
+			)
+			frontImpulse = blockKartSolveLateralContact(
+				&velocity,
+				blockKartVehicleFrontAxleMeters,
+				0,
+				body.Wheel_angle_radians,
+				frontImpulse,
+				frontLateralBudget,
+			)
+		}
+	}
+	maximumForwardSpeed := blockKartVehicleNormalMaximumSpeed / 1000.0
+	if boosting {
+		maximumForwardSpeed = blockKartVehicleBoostMaximumSpeed / 1000.0
+	}
+	if road.Surface == blockKartRoadSurfaceGrass {
+		maximumForwardSpeed = blockKartVehicleOffRoadMaximumSpeed / 1000.0
+	}
+	velocity.Forward_meters_per_second = blockKartVehicleClamp(
+		velocity.Forward_meters_per_second,
+		-blockKartVehicleReverseMaximumSpeed/1000.0,
+		maximumForwardSpeed,
+	)
+	// These are corruption guards outside the reachable tyre envelope. They do
+	// not shape normal handling and only prevent collision faults from feeding
+	// non-finite scale momentum into the game world.
+	velocity.Lateral_meters_per_second = blockKartVehicleClamp(
+		velocity.Lateral_meters_per_second,
+		-45.0,
+		45.0,
+	)
+	velocity.Yaw_radians_per_second = blockKartVehicleClamp(
+		velocity.Yaw_radians_per_second,
+		-5.0,
+		5.0,
+	)
+	if math.Sqrt(
+		velocity.Forward_meters_per_second*velocity.Forward_meters_per_second+
+			velocity.Lateral_meters_per_second*velocity.Lateral_meters_per_second,
+	) < 0.06 && math.Abs(velocity.Yaw_radians_per_second) < 0.025 &&
+		throttle == 0 && brake == 0 {
+		velocity = BlockKartPlanarVelocity{}
+	}
+	body.Forward_speed = velocity.Forward_meters_per_second * 1000.0
+	body.Lateral_speed = velocity.Lateral_meters_per_second * 1000.0
+	body.Yaw_rate = velocity.Yaw_radians_per_second
+	body.Heading_radians = blockKartVehicleWrapRadians(
+		body.Heading_radians+body.Yaw_rate*deltaSeconds,
+	)
+	lateralAcceleration := (velocity.Lateral_meters_per_second-oldV)/deltaSeconds +
+		velocity.Forward_meters_per_second*velocity.Yaw_radians_per_second
+	body.Lateral_acceleration = lateralAcceleration * 1000.0
+	if math.Abs(velocity.Forward_meters_per_second) < 0.10 {
+		body.Body_slip_radians = 0
+	} else {
+		body.Body_slip_radians = math.Atan2(
+			velocity.Lateral_meters_per_second,
+			math.Abs(velocity.Forward_meters_per_second),
+		)
+	}
+	body.Front_slip_radians = (body.Wheel_slip_radians[blockKartWheelFrontLeft] +
+		body.Wheel_slip_radians[blockKartWheelFrontRight]) * 0.5
+	body.Rear_slip_radians = (body.Wheel_slip_radians[blockKartWheelRearLeft] +
+		body.Wheel_slip_radians[blockKartWheelRearRight]) * 0.5
+	body.Surface_friction = road.Friction
+}
+
+func (body *BlockKartKartPhysics) stepRoadWheelAngle(
+	target float64,
+	deltaSeconds float64,
+) {
+	target = blockKartVehicleClamp(target, -1, 1)
+	body.Steer_input = target
+	speed := math.Abs(body.Forward_speed) / 1000.0
+	// The steering rack exposes the full mechanical lock while manoeuvring,
+	// then progressively raises its ratio so full input stays inside the tyre
+	// acceleration envelope. Curvature therefore still comes from wheel
+	// geometry; saturated tyres cannot turn a high-speed key press into a spin.
+	// The rack has no knowledge of the current surface. Its high-speed ratio is
+	// designed around the kart's normal asphalt envelope; grass and kerbs then
+	// reduce actual tyre force without taking steering authority from the driver.
+	availableLateralAcceleration := 12.5
+	gripLimitedAngle := math.Atan(
+		availableLateralAcceleration*blockKartVehicleWheelbaseMeters /
+			math.Max(speed*speed, 1.0),
+	) * 1.22
+	maximumAngle := math.Min(0.48, gripLimitedAngle)
+	shaped := target * (0.72 + math.Abs(target)*math.Abs(target)*0.28)
+	targetAngle := shaped * maximumAngle
+	speedBlend := blockKartVehicleSmoothstep(4.0, 18.0, speed)
+	rate := blockKartVehicleLerp(2.8, 1.35, speedBlend)
+	if target == 0 {
+		rate = blockKartVehicleLerp(3.4, 2.35, speedBlend)
+	} else if body.Wheel_angle_radians != 0 &&
+		(body.Wheel_angle_radians < 0) != (targetAngle < 0) {
+		rate = blockKartVehicleLerp(3.8, 2.75, speedBlend)
+	}
+	body.Wheel_angle_radians = blockKartVehicleApproach(
+		body.Wheel_angle_radians,
+		targetAngle,
+		rate*deltaSeconds,
+	)
+	if math.Abs(body.Wheel_angle_radians) < 0.0001 {
+		body.Wheel_angle_radians = 0
+	}
+}
+
+func (body *BlockKartKartPhysics) stepPhysicalDrift(drifting bool, deltaSeconds float64) {
+	target := 0.0
+	rate := 4.5
+	if drifting && math.Abs(body.Forward_speed) > 8500 {
+		target = 1.0
+		rate = 5.5
+	}
+	body.Drift_blend = blockKartVehicleApproach(body.Drift_blend, target, rate*deltaSeconds)
+}
+
+func blockKartAckermannAngles(centerAngle float64) (float64, float64) {
+	if math.Abs(centerAngle) < 0.000001 {
+		return 0, 0
+	}
+	radius := blockKartVehicleWheelbaseMeters / math.Abs(math.Tan(centerAngle))
+	innerRadius := math.Max(radius-blockKartVehicleHalfTrackMeters, 0.35)
+	outerRadius := radius + blockKartVehicleHalfTrackMeters
+	innerAngle := math.Atan(blockKartVehicleWheelbaseMeters / innerRadius)
+	outerAngle := math.Atan(blockKartVehicleWheelbaseMeters / outerRadius)
+	if centerAngle > 0 {
+		return innerAngle, outerAngle
+	}
+	return -outerAngle, -innerAngle
+}
+
+func blockKartWheelLoads(longitudinalAcceleration float64, lateralAcceleration float64) [4]float64 {
+	weight := blockKartVehicleMassKg * blockKartVehicleGravity
+	frontAxleLoad := (weight*blockKartVehicleRearAxleMeters -
+		blockKartVehicleMassKg*longitudinalAcceleration*blockKartVehicleCgHeightMeters) /
+		blockKartVehicleWheelbaseMeters
+	frontAxleLoad = blockKartVehicleClamp(frontAxleLoad, weight*0.30, weight*0.65)
+	rearAxleLoad := weight - frontAxleLoad
+	totalSideDifference := blockKartVehicleMassKg * lateralAcceleration *
+		blockKartVehicleCgHeightMeters / blockKartVehicleHalfTrackMeters
+	frontDifference := totalSideDifference * frontAxleLoad / weight
+	rearDifference := totalSideDifference - frontDifference
+	loads := [4]float64{
+		(frontAxleLoad - frontDifference) * 0.5,
+		(frontAxleLoad + frontDifference) * 0.5,
+		(rearAxleLoad - rearDifference) * 0.5,
+		(rearAxleLoad + rearDifference) * 0.5,
+	}
+	// A solid rear axle needs the inside rear contact unloaded to corner. This
+	// is the planar equivalent of kingpin jacking and chassis torsional flex.
+	jackLoad := rearAxleLoad * blockKartVehicleSmoothstep(
+		3.2,
+		10.5,
+		math.Abs(lateralAcceleration),
+	) * 0.08
+	if lateralAcceleration > 0 {
+		loads[blockKartWheelRearLeft] -= jackLoad
+		loads[blockKartWheelRearRight] += jackLoad
+	} else if lateralAcceleration < 0 {
+		loads[blockKartWheelRearRight] -= jackLoad
+		loads[blockKartWheelRearLeft] += jackLoad
+	}
+	minimumLoad := weight * 0.004
+	total := 0.0
+	for index := 0; index < 4; index++ {
+		loads[index] = math.Max(loads[index], minimumLoad)
+		total += loads[index]
+	}
+	if total > 0 {
+		scale := weight / total
+		for index := 0; index < 4; index++ {
+			loads[index] *= scale
+		}
+	}
+	return loads
+}
+
+func blockKartPowertrainForces(
+	forwardSpeed float64,
+	throttle float64,
+	brake float64,
+	boosting bool,
+	miniTurbo bool,
+	road BlockKartRoadSample,
+	loads [4]float64,
+) [4]float64 {
+	forces := [4]float64{}
+	absSpeed := math.Abs(forwardSpeed)
+	speedRatio := blockKartVehicleClamp(absSpeed/30.0, 0, 1)
+	driveTotal := throttle * blockKartVehicleLerp(2050.0, 920.0, speedRatio)
+	if boosting && forwardSpeed >= 0 {
+		boostForce := 720.0
+		if miniTurbo {
+			boostForce = 980.0
+		}
+		driveTotal += boostForce
+	}
+	if road.Surface == blockKartRoadSurfaceCurb {
+		driveTotal *= 0.90
+	} else if road.Surface == blockKartRoadSurfaceGrass {
+		driveTotal *= 0.60
+	}
+	if brake > 0 && forwardSpeed > 0.35 {
+		brakeTotal := -brake * 4300.0
+		frontBrake := brakeTotal * 0.58
+		rearBrake := brakeTotal - frontBrake
+		frontLoad := math.Max(loads[0]+loads[1], 1)
+		rearLoad := math.Max(loads[2]+loads[3], 1)
+		forces[0] += frontBrake * loads[0] / frontLoad
+		forces[1] += frontBrake * loads[1] / frontLoad
+		forces[2] += rearBrake * loads[2] / rearLoad
+		forces[3] += rearBrake * loads[3] / rearLoad
+	} else if brake > 0 {
+		driveTotal -= brake * 1120.0
+	}
+	rearLoad := math.Max(loads[2]+loads[3], 1)
+	forces[2] += driveTotal * loads[2] / rearLoad
+	forces[3] += driveTotal * loads[3] / rearLoad
+	return forces
+}
+
+func blockKartBodyDragForce(forwardSpeed float64, road BlockKartRoadSample) float64 {
+	force := -blockKartVehicleMassKg * blockKartVehicleGravity * road.Grade
+	absSpeed := math.Abs(forwardSpeed)
+	if absSpeed <= 0.04 {
+		return force
+	}
+	direction := 1.0
+	if forwardSpeed < 0 {
+		direction = -1.0
+	}
+	rollingCoefficient := 0.014
+	if road.Surface == blockKartRoadSurfaceCurb {
+		rollingCoefficient = 0.032
+	} else if road.Surface == blockKartRoadSurfaceGrass {
+		rollingCoefficient = 0.11
+	}
+	force -= direction * rollingCoefficient * blockKartVehicleMassKg * blockKartVehicleGravity
+	force -= direction * 0.43 * absSpeed * absSpeed
+	return force
+}
+
+func blockKartSolveLateralContact(
+	velocity *BlockKartPlanarVelocity,
+	x float64,
+	y float64,
+	wheelAngle float64,
+	accumulatedImpulse float64,
+	maximumImpulse float64,
+) float64 {
+	if velocity == nil || maximumImpulse <= 0 {
+		return accumulatedImpulse
+	}
+	lateralX := -math.Sin(wheelAngle)
+	lateralY := math.Cos(wheelAngle)
+	pointForward := velocity.Forward_meters_per_second - velocity.Yaw_radians_per_second*y
+	pointLateral := velocity.Lateral_meters_per_second + velocity.Yaw_radians_per_second*x
+	relativeLateralSpeed := pointForward*lateralX + pointLateral*lateralY
+	momentArm := x*lateralY - y*lateralX
+	inverseEffectiveMass := 1.0/blockKartVehicleMassKg +
+		momentArm*momentArm/blockKartVehicleYawInertiaKgM2
+	if inverseEffectiveMass <= 0 {
+		return accumulatedImpulse
+	}
+	desiredImpulse := -relativeLateralSpeed / inverseEffectiveMass
+	nextImpulse := blockKartVehicleClamp(
+		accumulatedImpulse+desiredImpulse,
+		-maximumImpulse,
+		maximumImpulse,
+	)
+	impulseDelta := nextImpulse - accumulatedImpulse
+	velocity.Forward_meters_per_second += impulseDelta * lateralX / blockKartVehicleMassKg
+	velocity.Lateral_meters_per_second += impulseDelta * lateralY / blockKartVehicleMassKg
+	velocity.Yaw_radians_per_second += impulseDelta * momentArm / blockKartVehicleYawInertiaKgM2
+	return nextImpulse
+}
+
+func (body *BlockKartKartPhysics) ApplyImpact(obstacleDirectionX float64, obstacleDirectionZ float64) float64 {
+	if body == nil {
+		return 0
+	}
+	heading := body.Heading_radians
+	forwardX := math.Sin(heading)
+	forwardZ := math.Cos(heading)
+	rightX := math.Cos(heading)
+	rightZ := -math.Sin(heading)
+	worldVelocityX := forwardX*body.Forward_speed/1000.0 + rightX*body.Lateral_speed/1000.0
+	worldVelocityZ := forwardZ*body.Forward_speed/1000.0 + rightZ*body.Lateral_speed/1000.0
+	closingSpeed := worldVelocityX*obstacleDirectionX + worldVelocityZ*obstacleDirectionZ
+	if closingSpeed > 0 {
+		worldVelocityX -= obstacleDirectionX * closingSpeed * 1.16
+		worldVelocityZ -= obstacleDirectionZ * closingSpeed * 1.16
+	}
+	body.Forward_speed = (worldVelocityX*forwardX + worldVelocityZ*forwardZ) * 1000.0
+	body.Lateral_speed = (worldVelocityX*rightX + worldVelocityZ*rightZ) * 1000.0
+	impactSide := blockKartVehicleClamp(
+		obstacleDirectionX*rightX+obstacleDirectionZ*rightZ,
+		-1,
+		1,
+	)
+	body.Yaw_rate *= 0.58
+	body.Drift_blend = 0
+	return impactSide
+}

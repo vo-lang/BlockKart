@@ -6,88 +6,6 @@ import (
 	"github.com/vo-lang/voplay"
 )
 
-const (
-	blockKartVehicleSubsteps uint32 = 3
-	blockKartVehicleNormalMaximumSpeed float64 = 30000.0
-	blockKartVehicleBoostMaximumSpeed float64 = 36000.0
-	blockKartVehicleOffRoadMaximumSpeed float64 = 18000.0
-	blockKartVehicleReverseMaximumSpeed float64 = 9500.0
-)
-
-// BlockKartVehicleController stores the complete planar dynamics, road-contact,
-// suspension and camera state. Values exposed to the game use milli-units;
-// the dynamics integrator converts them to SI units at its boundary.
-type BlockKartVehicleController struct {
-	Initialized bool
-	Heading_radians float64
-	Camera_heading_radians float64
-	Camera_focus_offset_milli float64
-	Camera_edge_blend float64
-	Steer_command float64
-	Wheel_angle_radians float64
-	Desired_yaw_rate float64
-	Forward_speed float64
-	Lateral_speed float64
-	Yaw_rate float64
-	Longitudinal_acceleration float64
-	Lateral_acceleration float64
-	Body_slip_radians float64
-	Front_slip_radians float64
-	Rear_slip_radians float64
-	Front_lateral_force_newtons float64
-	Rear_lateral_force_newtons float64
-	Drive_force_newtons float64
-	Front_normal_load_newtons float64
-	Rear_normal_load_newtons float64
-	Stability_yaw_moment_newton_meters float64
-	Drift_blend float64
-	Surface_friction float64
-	Suspended_height_milli float64
-	Suspension_velocity_milli_per_second float64
-	Suspension_offset_milli float64
-	Road_pitch_radians float64
-	Road_roll_radians float64
-	Wheel_compression_milli [4]float64
-	Wheel_visual_offset_milli [4]float64
-}
-
-func (vehicle *BlockKartVehicleController) Reset(transform Transform) {
-	if vehicle == nil {
-		return
-	}
-	vehicle.Initialized = true
-	vehicle.Heading_radians = float64(transform.Yaw_milliradians) / 1000.0
-	vehicle.Camera_heading_radians = vehicle.Heading_radians
-	vehicle.Camera_focus_offset_milli = 0
-	vehicle.Camera_edge_blend = 0
-	vehicle.Steer_command = 0
-	vehicle.Wheel_angle_radians = 0
-	vehicle.Desired_yaw_rate = 0
-	vehicle.Forward_speed = 0
-	vehicle.Lateral_speed = 0
-	vehicle.Yaw_rate = 0
-	vehicle.Longitudinal_acceleration = 0
-	vehicle.Lateral_acceleration = 0
-	vehicle.Body_slip_radians = 0
-	vehicle.Front_slip_radians = 0
-	vehicle.Rear_slip_radians = 0
-	vehicle.Front_lateral_force_newtons = 0
-	vehicle.Rear_lateral_force_newtons = 0
-	vehicle.Drive_force_newtons = 0
-	vehicle.Front_normal_load_newtons = blockKartVehicleMassKg * 9.81 * 0.53
-	vehicle.Rear_normal_load_newtons = blockKartVehicleMassKg * 9.81 * 0.47
-	vehicle.Stability_yaw_moment_newton_meters = 0
-	vehicle.Drift_blend = 0
-	vehicle.Surface_friction = 1.42
-	vehicle.Suspended_height_milli = float64(transform.Y)
-	vehicle.Suspension_velocity_milli_per_second = 0
-	vehicle.Suspension_offset_milli = 0
-	vehicle.Road_pitch_radians = 0
-	vehicle.Road_roll_radians = 0
-	vehicle.Wheel_compression_milli = [4]float64{}
-	vehicle.Wheel_visual_offset_milli = [4]float64{}
-}
-
 func (game *BlockKart) drive(tick voplay.TickBatch) error {
 	control, ok := game.Controls.Get(game.KartEntity)
 	if !ok {
@@ -134,7 +52,16 @@ func (game *BlockKart) drive(tick voplay.TickBatch) error {
 	previousSpeed := game.Vehicle.Forward_speed
 	substepSeconds := deltaSeconds / float64(blockKartVehicleSubsteps)
 	for substep := uint32(0); substep < blockKartVehicleSubsteps; substep++ {
-		game.Vehicle.stepDynamics(road, steerTarget, throttle, brake, boosting, miniTurbo, game.Drifting, game.DriftDirection, substepSeconds)
+		game.Vehicle.Step(
+			road,
+			steerTarget,
+			throttle,
+			brake,
+			boosting,
+			miniTurbo,
+			game.Drifting,
+			substepSeconds,
+		)
 	}
 	game.Vehicle.Longitudinal_acceleration = (game.Vehicle.Forward_speed - previousSpeed) /
 		deltaSeconds
@@ -201,7 +128,7 @@ func (game *BlockKart) holdVehicle(velocity Velocity, transform Transform, state
 	return nil
 }
 
-func (vehicle *BlockKartVehicleController) stepCamera(drifting bool, road BlockKartRoadSample, deltaSeconds float64) {
+func (vehicle *BlockKartKartPhysics) stepCamera(drifting bool, road BlockKartRoadSample, deltaSeconds float64) {
 	driftLead := 0.0
 	if drifting || vehicle.Drift_blend > 0.2 {
 		driftLead = blockKartVehicleClamp(vehicle.Body_slip_radians * 0.24, -0.055, 0.055) *
@@ -318,7 +245,7 @@ func (game *BlockKart) publishVehiclePresentation(deltaSeconds float64) {
 	// A kart has short suspension travel and responds as one planted mass.
 	// Road bank remains readable while acceleration contributes only a brief,
 	// tightly bounded load-transfer cue.
-	roadRoll := blockKartVehicleClamp(game.Vehicle.Road_roll_radians, -0.055, 0.055)
+	roadRoll := blockKartVehicleClamp(game.Vehicle.Road_bank_radians, -0.055, 0.055)
 	// Grip-driving validation keeps the body planted. A later presentation
 	// pass may derive load-transfer animation from suspension state once the
 	// planar controller has been accepted in isolation.
@@ -332,7 +259,7 @@ func (game *BlockKart) publishVehiclePresentation(deltaSeconds float64) {
 	pitchTarget := blockKartClampInt32(int32(pitchRadians * 1000.0), -60, 60)
 	game.ChassisPitch_milliradians = blockKartApproachInt32(game.ChassisPitch_milliradians, pitchTarget, int32(780.0 *
 		deltaSeconds))
-	suspensionTarget := int32(game.Vehicle.Suspension_offset_milli * 0.42)
+	suspensionTarget := int32(game.Vehicle.Ride_offset_milli * 0.42)
 	suspensionTarget = blockKartClampInt32(suspensionTarget, -45, 38)
 	game.SuspensionHeave_milli = blockKartApproachInt32(game.SuspensionHeave_milli, suspensionTarget, int32(1800.0 *
 		deltaSeconds))
